@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "LingoPulse",
+    "slug": "lingopulse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lingopulse.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "LingoPulse necesita acceso al micrófono para tus sesiones de práctica hablada en Voice Arena."
+      }
+    },
+    "android": {
+      "package": "com.lingopulse.app",
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

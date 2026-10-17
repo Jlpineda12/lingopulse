@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VoiceArenaTurnResponseV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["speak", "action", "observation", "reason_code"],
+  "properties": {
+    "speak": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "action": { "type": "string", "enum": ["ask", "request_repeat", "close"] },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["communicative_success", "target_use", "grammar_use", "evidence"],
+      "properties": {
+        "communicative_success": {
+          "type": "string",
+          "enum": ["achieved", "partial", "not_achieved", "uncertain", "not_observed"]
+        },
+        "target_use": {
+          "type": "string",
+          "enum": ["correct", "incorrect", "not_observed", "uncertain"]
+        },
+        "grammar_use": {
+          "type": "string",
+          "enum": ["correct", "incorrect", "not_applicable", "uncertain"]
+        },
+        "evidence": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["turn_id", "quote"],
+              "properties": {
+                "turn_id": { "type": "string", "format": "uuid" },
+                "quote": { "type": "string", "minLength": 1, "maxLength": 2000 }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "reason_code": {
+      "type": "string",
+      "enum": ["opening", "contextual_reframe", "complication", "clarification", "audio_retry", "redirect", "budget_end", "learner_stop", "completed"]
+    }
+  }
+}

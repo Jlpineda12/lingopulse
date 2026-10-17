@@ -1,0 +1,44 @@
+{
+  "name": "@lingopulse/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~4.0.1",
+    "@expo/vector-icons": "~14.0.4",
+    "@lingopulse/shared": "*",
+    "@react-native-async-storage/async-storage": "^1.23.1",
+    "expo": "~52.0.0",
+    "expo-av": "~15.0.2",
+    "expo-blur": "~14.0.3",
+    "expo-constants": "~17.0.8",
+    "expo-file-system": "~18.0.12",
+    "expo-gl": "~15.0.5",
+    "expo-haptics": "~14.0.1",
+    "expo-linear-gradient": "~14.0.2",
+    "expo-notifications": "~0.29.14",
+    "expo-sharing": "~13.0.1",
+    "expo-speech": "~13.0.1",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-svg": "15.8.0",
+    "react-native-view-shot": "~4.0.3",
+    "react-native-web": "~0.19.13",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~18.3.12",
+    "@types/three": "^0.170.0",
+    "typescript": "~5.8.2"
+  }
+}

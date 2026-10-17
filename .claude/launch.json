@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lingopulse-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd ~/Projects/EnglishApp/apps/mobile && BROWSER=none EXPO_NO_TELEMETRY=1 npx expo start --web --port 8090"
+      ],
+      "port": 8090
+    }
+  ]
+}

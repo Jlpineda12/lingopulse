@@ -1,0 +1,538 @@
+<!-- ... existing code ... -->
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js 3D Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- ... existing code ... -->
+          <!-- Soft Pastel Ambient Glow Behind Pip -->
+          <div id="pipAura" class="w-40 h-40 rounded-full bg-sky-200/75 blur-2xl absolute top-2 aura-pulse pointer-events-none transition-colors duration-500"></div>
+
+          <!-- Interactive 3D Mascot Stage ("Pip 3D") -->
+          <div id="pipWrapper" class="relative w-48 h-44 flex items-center justify-center cursor-grab active:cursor-grabbing select-none" title="Arrastra para girar en 3D o toca a Pip">
+            <canvas id="pip3DCanvas" class="w-full h-full block"></canvas>
+            <span class="pointer-events-none absolute bottom-1 right-2 text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full liquid-pill text-inkMuted flex items-center gap-1 shadow-sm">
+              <i class="fa-solid fa-cube text-accent text-[9px]"></i> 3D · 360°
+            </span>
+          </div>
+
+          <!-- Apple-Style Speech Bubble -->
+          <div onclick="pipSpeakHint()" id="pipBubbleCard" class="mt-0.5 px-4 py-2.5 rounded-2xl apple-card text-center max-w-xs cursor-pointer hover:scale-[1.02] btn-spring">
+<!-- ... existing code ... -->
+      document.getElementById('navLabelClub').textContent = L.navClub;
+    }
+
+    // =========================================================
+    // THREE.JS 3D MASCOT ENGINE ("PIP 3D")
+    // =========================================================
+    let pipScene, pipCamera, pipRenderer, pipRootGroup, pipBodyGroup;
+    let pipEarLMesh, pipEarRMesh, pipPawLMesh, pipPawRMesh;
+    let pipEyesMeshGroup, pipCheekLMesh, pipCheekRMesh, pipMouthMesh;
+    let pipUkAccessoryGroup, pipUsAccessoryGroup, pipGroundShadow;
+
+    // 3D Animation & Interaction State
+    let pipTargetRotY = 0;
+    let pipTargetRotX = 0;
+    let pipJumpVelocity = 0;
+    let pipJumpY = 0;
+    let pipSquashScale = 1;
+    let pipHappyTimer = 0;
+    let pipWaveTimer = 0;
+    let pipIsSpeaking = false;
+    let pipHatBounce = 1;
+
+    function initPip3D() {
+      const container = document.getElementById('pipWrapper');
+      const canvas = document.getElementById('pip3DCanvas');
+      if (!container || !canvas || typeof THREE === 'undefined') return;
+
+      const width = container.clientWidth || 192;
+      const height = container.clientHeight || 176;
+
+      pipScene = new THREE.Scene();
+
+      pipCamera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
+      pipCamera.position.set(0, 0.15, 5.2);
+
+      pipRenderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        alpha: true,
+        antialias: true
+      });
+      pipRenderer.setSize(width, height);
+      pipRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      // Studio Soft Lighting (Apple Memoji / Toy Aesthetic)
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+      pipScene.add(ambientLight);
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      keyLight.position.set(3, 5, 4);
+      pipScene.add(keyLight);
+
+      const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.55);
+      rimLight.position.set(-4, 3, -3);
+      pipScene.add(rimLight);
+
+      const bottomFill = new THREE.DirectionalLight(0xe0f2fe, 0.35);
+      bottomFill.position.set(0, -4, 2);
+      pipScene.add(bottomFill);
+
+      // Root group for rotation & floating
+      pipRootGroup = new THREE.Group();
+      pipScene.add(pipRootGroup);
+
+      // Squash & Stretch group
+      pipBodyGroup = new THREE.Group();
+      pipRootGroup.add(pipBodyGroup);
+
+      // Shared Glossy Toy Materials
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x3b82f6,
+        roughness: 0.28,
+        metalness: 0.05
+      });
+      const lightBlueMat = new THREE.MeshStandardMaterial({
+        color: 0x60a5fa,
+        roughness: 0.3,
+        metalness: 0.05
+      });
+      const earInnerMat = new THREE.MeshStandardMaterial({
+        color: 0xe0f2fe,
+        roughness: 0.35
+      });
+      const bellyMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.25,
+        metalness: 0.02
+      });
+      const darkEyeMat = new THREE.MeshStandardMaterial({
+        color: 0x1d1d1f,
+        roughness: 0.1,
+        metalness: 0.1
+      });
+      const whiteHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const blushMat = new THREE.MeshStandardMaterial({
+        color: 0xff2d55,
+        roughness: 0.4,
+        transparent: true,
+        opacity: 0.65
+      });
+      const feetMat = new THREE.MeshStandardMaterial({
+        color: 0x1d4ed8,
+        roughness: 0.35
+      });
+
+      // 1. Main Chubby Body (Ellipsoid Sphere)
+      const bodyGeo = new THREE.SphereGeometry(1.05, 40, 40);
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.scale.set(1.06, 0.98, 0.92);
+      pipBodyGroup.add(bodyMesh);
+
+      // 2. Soft Cream Belly Patch
+      const bellyGeo = new THREE.SphereGeometry(0.76, 32, 32);
+      const bellyMesh = new THREE.Mesh(bellyGeo, bellyMat);
+      bellyMesh.scale.set(0.95, 0.78, 0.45);
+      bellyMesh.position.set(0, -0.24, 0.73);
+      pipBodyGroup.add(bellyMesh);
+
+      // 3. Cute Stubby Ears (Left & Right)
+      pipEarLMesh = new THREE.Group();
+      pipEarLMesh.position.set(-0.68, 0.86, 0);
+      const earOuterGeo = new THREE.SphereGeometry(0.27, 24, 24);
+      const earInnerGeo = new THREE.SphereGeometry(0.15, 20, 20);
+      const earLOuter = new THREE.Mesh(earOuterGeo, lightBlueMat);
+      const earLInner = new THREE.Mesh(earInnerGeo, earInnerMat);
+      earLInner.position.set(0, 0, 0.16);
+      pipEarLMesh.add(earLOuter, earLInner);
+      pipBodyGroup.add(pipEarLMesh);
+
+      pipEarRMesh = new THREE.Group();
+      pipEarRMesh.position.set(0.68, 0.86, 0);
+      const earROuter = new THREE.Mesh(earOuterGeo, lightBlueMat);
+      const earRInner = new THREE.Mesh(earInnerGeo, earInnerMat);
+      earRInner.position.set(0, 0, 0.16);
+      pipEarRMesh.add(earROuter, earRInner);
+      pipBodyGroup.add(pipEarRMesh);
+
+      // 4. Bouncy Flippers / Arms (Left & Right)
+      const pawGeo = new THREE.SphereGeometry(0.24, 24, 24);
+      pipPawLMesh = new THREE.Mesh(pawGeo, lightBlueMat);
+      pipPawLMesh.scale.set(0.65, 1.35, 0.75);
+      pipPawLMesh.position.set(-1.08, -0.05, 0.15);
+      pipPawLMesh.rotation.z = 0.42;
+      pipBodyGroup.add(pipPawLMesh);
+
+      pipPawRMesh = new THREE.Mesh(pawGeo, lightBlueMat);
+      pipPawRMesh.scale.set(0.65, 1.35, 0.75);
+      pipPawRMesh.position.set(1.08, -0.05, 0.15);
+      pipPawRMesh.rotation.z = -0.42;
+      pipBodyGroup.add(pipPawRMesh);
+
+      // 5. Little Rounded Feet
+      const footGeo = new THREE.SphereGeometry(0.23, 24, 24);
+      const footL = new THREE.Mesh(footGeo, feetMat);
+      footL.scale.set(1.1, 0.55, 1.35);
+      footL.position.set(-0.42, -0.96, 0.22);
+      pipBodyGroup.add(footL);
+
+      const footR = new THREE.Mesh(footGeo, feetMat);
+      footR.scale.set(1.1, 0.55, 1.35);
+      footR.position.set(0.42, -0.96, 0.22);
+      pipBodyGroup.add(footR);
+
+      // 6. Big Kawaii Glossy Eyes with Specular Highlights
+      pipEyesMeshGroup = new THREE.Group();
+      pipEyesMeshGroup.position.set(0, 0.18, 0.92);
+
+      const eyeSphereGeo = new THREE.SphereGeometry(0.145, 24, 24);
+      const shineBigGeo = new THREE.SphereGeometry(0.048, 16, 16);
+      const shineSmallGeo = new THREE.SphereGeometry(0.024, 12, 12);
+
+      // Left Eye
+      const leftEyeGroup = new THREE.Group();
+      leftEyeGroup.position.set(-0.38, 0, 0);
+      const eyeL = new THREE.Mesh(eyeSphereGeo, darkEyeMat);
+      eyeL.scale.set(1, 1.08, 0.65);
+      const shineL1 = new THREE.Mesh(shineBigGeo, whiteHighlightMat);
+      shineL1.position.set(-0.045, 0.05, 0.085);
+      const shineL2 = new THREE.Mesh(shineSmallGeo, whiteHighlightMat);
+      shineL2.position.set(0.04, -0.04, 0.085);
+      leftEyeGroup.add(eyeL, shineL1, shineL2);
+
+      // Right Eye
+      const rightEyeGroup = new THREE.Group();
+      rightEyeGroup.position.set(0.38, 0, 0);
+      const eyeR = new THREE.Mesh(eyeSphereGeo, darkEyeMat);
+      eyeR.scale.set(1, 1.08, 0.65);
+      const shineR1 = new THREE.Mesh(shineBigGeo, whiteHighlightMat);
+      shineR1.position.set(-0.045, 0.05, 0.085);
+      const shineR2 = new THREE.Mesh(shineSmallGeo, whiteHighlightMat);
+      shineR2.position.set(0.04, -0.04, 0.085);
+      rightEyeGroup.add(eyeR, shineR1, shineR2);
+
+      pipEyesMeshGroup.add(leftEyeGroup, rightEyeGroup);
+      pipBodyGroup.add(pipEyesMeshGroup);
+
+      // 7. Rosy 3D Blush Cheeks
+      const cheekGeo = new THREE.SphereGeometry(0.14, 20, 20);
+      pipCheekLMesh = new THREE.Mesh(cheekGeo, blushMat);
+      pipCheekLMesh.scale.set(1.3, 0.75, 0.4);
+      pipCheekLMesh.position.set(-0.58, -0.02, 0.85);
+      pipBodyGroup.add(pipCheekLMesh);
+
+      pipCheekRMesh = new THREE.Mesh(cheekGeo, blushMat);
+      pipCheekRMesh.scale.set(1.3, 0.75, 0.4);
+      pipCheekRMesh.position.set(0.58, -0.02, 0.85);
+      pipBodyGroup.add(pipCheekRMesh);
+
+      // 8. Cute 3D Smile / Talking Mouth
+      const mouthGeo = new THREE.TorusGeometry(0.095, 0.028, 16, 32, Math.PI);
+      pipMouthMesh = new THREE.Mesh(mouthGeo, darkEyeMat);
+      pipMouthMesh.rotation.z = Math.PI; // Curve downwards like a happy smile
+      pipMouthMesh.position.set(0, 0.05, 0.97);
+      pipBodyGroup.add(pipMouthMesh);
+
+      // 9. UK 3D Accessory Group (London Beret + Red Bowtie)
+      pipUkAccessoryGroup = new THREE.Group();
+      const beretMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+      const coralMat = new THREE.MeshStandardMaterial({ color: 0xff2d55, roughness: 0.25 });
+
+      const beretBase = new THREE.Mesh(new THREE.SphereGeometry(0.56, 32, 24), beretMat);
+      beretBase.scale.set(1.12, 0.32, 1.05);
+      beretBase.position.set(0, 0.98, 0.05);
+      beretBase.rotation.z = -0.08;
+
+      const beretStem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 12), beretMat);
+      beretStem.position.set(0, 1.15, 0.05);
+
+      // Cute 3D Bowtie on chest
+      const bowtieGroup = new THREE.Group();
+      bowtieGroup.position.set(0, -0.18, 0.96);
+      const bowLeft = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.22, 16), coralMat);
+      bowLeft.rotation.z = -Math.PI / 2;
+      bowLeft.position.x = -0.09;
+      const bowRight = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.22, 16), coralMat);
+      bowRight.rotation.z = Math.PI / 2;
+      bowRight.position.x = 0.09;
+      const bowKnot = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), coralMat);
+      bowtieGroup.add(bowLeft, bowRight, bowKnot);
+
+      pipUkAccessoryGroup.add(beretBase, beretStem, bowtieGroup);
+      pipBodyGroup.add(pipUkAccessoryGroup);
+
+      // 10. US 3D Accessory Group (NYC Streetwear Baseball Cap)
+      pipUsAccessoryGroup = new THREE.Group();
+      const capDome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.56, 32, 24, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        coralMat
+      );
+      capDome.scale.set(1.08, 0.65, 1.05);
+      capDome.position.set(0, 0.86, 0.04);
+
+      const capVisor = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.06, 28), coralMat);
+      capVisor.scale.set(1.0, 1, 0.72);
+      capVisor.position.set(0, 0.89, 0.42);
+      capVisor.rotation.x = 0.15;
+
+      const capButton = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), bellyMat);
+      capButton.position.set(0, 1.22, 0.04);
+
+      pipUsAccessoryGroup.add(capDome, capVisor, capButton);
+      pipUsAccessoryGroup.visible = false;
+      pipBodyGroup.add(pipUsAccessoryGroup);
+
+      // 11. Soft Ground Shadow Disc
+      const shadowGeo = new THREE.CircleGeometry(0.85, 32);
+      const shadowMat = new THREE.MeshBasicMaterial({
+        color: 0x64748b,
+        transparent: true,
+        opacity: 0.22
+      });
+      pipGroundShadow = new THREE.Mesh(shadowGeo, shadowMat);
+      pipGroundShadow.rotation.x = -Math.PI / 2;
+      pipGroundShadow.position.set(0, -1.18, 0);
+      pipScene.add(pipGroundShadow);
+
+      // Interactive Drag-to-Rotate & Tap-to-Pet Listeners
+      let isDraggingPip = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragDistance = 0;
+
+      const onPointerDown = (clientX, clientY) => {
+        isDraggingPip = true;
+        dragStartX = clientX;
+        dragStartY = clientY;
+        dragDistance = 0;
+      };
+
+      const onPointerMove = (clientX, clientY) => {
+        if (!isDraggingPip) return;
+        const dx = clientX - dragStartX;
+        const dy = clientY - dragStartY;
+        dragDistance += Math.abs(dx) + Math.abs(dy);
+        pipTargetRotY = Math.max(-1.35, Math.min(1.35, pipTargetRotY + dx * 0.015));
+        pipTargetRotX = Math.max(-0.45, Math.min(0.45, pipTargetRotX + dy * 0.01));
+        dragStartX = clientX;
+        dragStartY = clientY;
+      };
+
+      const onPointerUp = () => {
+        if (!isDraggingPip) return;
+        isDraggingPip = false;
+        if (dragDistance < 10) {
+          petPip();
+        }
+      };
+
+      container.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY));
+      window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY));
+      window.addEventListener('mouseup', onPointerUp);
+
+      container.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) {
+          onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchmove', e => {
+        if (isDraggingPip && e.touches.length === 1) {
+          onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchend', onPointerUp);
+
+      window.addEventListener('resize', () => {
+        if (!container || !pipRenderer || !pipCamera) return;
+        const w = container.clientWidth || 192;
+        const h = container.clientHeight || 176;
+        pipCamera.aspect = w / h;
+        pipCamera.updateProjectionMatrix();
+        pipRenderer.setSize(w, h);
+      });
+
+      // Start 60fps 3D Animation Loop
+      const clock = new THREE.Clock();
+      function animatePip3D() {
+        requestAnimationFrame(animatePip3D);
+        const t = clock.getElapsedTime();
+
+        if (pipRootGroup && pipBodyGroup) {
+          // Gentle breathing floating motion + jump physics
+          const breatheOffset = Math.sin(t * 2.4) * 0.055;
+          pipJumpY += pipJumpVelocity;
+          if (pipJumpY > 0) {
+            pipJumpVelocity -= 0.012; // Gravity
+          } else {
+            pipJumpY = 0;
+            pipJumpVelocity = 0;
+          }
+
+          pipRootGroup.position.y = breatheOffset + pipJumpY;
+
+          // Smooth spring return when not dragging
+          if (!isDraggingPip) {
+            pipTargetRotY *= 0.92;
+            pipTargetRotX *= 0.9;
+          }
+          pipRootGroup.rotation.y += (pipTargetRotY + Math.sin(t * 0.9) * 0.08 - pipRootGroup.rotation.y) * 0.14;
+          pipRootGroup.rotation.x += (pipTargetRotX - pipRootGroup.rotation.x) * 0.14;
+
+          // Elastic Squash & Stretch recovery
+          pipSquashScale += (1 - pipSquashScale) * 0.15;
+          const breatheScaleX = 1 + Math.sin(t * 2.4) * 0.015;
+          const breatheScaleY = 1 - Math.sin(t * 2.4) * 0.015;
+          pipBodyGroup.scale.set(
+            breatheScaleX / pipSquashScale,
+            breatheScaleY * pipSquashScale,
+            breatheScaleX / pipSquashScale
+          );
+
+          // Ground shadow reacts to height
+          if (pipGroundShadow) {
+            const shadowScale = Math.max(0.65, 1 - (pipRootGroup.position.y + 0.1) * 0.45);
+            pipGroundShadow.scale.set(shadowScale, shadowScale, 1);
+          }
+
+          // Natural Blinking & Happy Eye Squint
+          const blinkCycle = Math.sin(t * 1.7) > 0.985 ? 0.08 : 1;
+          if (pipHappyTimer > 0) {
+            pipHappyTimer -= 0.025;
+            pipEyesMeshGroup.scale.y = 0.25;
+            pipCheekLMesh.scale.set(1.55, 0.9, 0.45);
+            pipCheekRMesh.scale.set(1.55, 0.9, 0.45);
+          } else {
+            pipEyesMeshGroup.scale.y += (blinkCycle - pipEyesMeshGroup.scale.y) * 0.35;
+            pipCheekLMesh.scale.set(1.3, 0.75, 0.4);
+            pipCheekRMesh.scale.set(1.3, 0.75, 0.4);
+          }
+
+          // Ear Wiggle & Flipper Wave when excited or speaking
+          if (pipWaveTimer > 0 || pipIsSpeaking) {
+            pipWaveTimer = Math.max(0, pipWaveTimer - 0.025);
+            pipEarLMesh.rotation.z = Math.sin(t * 18) * 0.22;
+            pipEarRMesh.rotation.z = -Math.sin(t * 18) * 0.22;
+            pipPawLMesh.rotation.z = 0.42 - Math.abs(Math.sin(t * 15)) * 0.65;
+            pipPawRMesh.rotation.z = -0.42 + Math.abs(Math.sin(t * 15)) * 0.65;
+          } else {
+            pipEarLMesh.rotation.z = Math.sin(t * 1.8) * 0.04;
+            pipEarRMesh.rotation.z = -Math.sin(t * 1.8) * 0.04;
+            pipPawLMesh.rotation.z = 0.42 + Math.sin(t * 2.4) * 0.05;
+            pipPawRMesh.rotation.z = -0.42 - Math.sin(t * 2.4) * 0.05;
+          }
+
+          // Mouth Lip-Sync Animation
+          if (pipIsSpeaking) {
+            const talkOpen = 0.8 + Math.abs(Math.sin(t * 22)) * 1.3;
+            pipMouthMesh.scale.set(1.1, talkOpen, 1);
+          } else {
+            pipMouthMesh.scale.set(1, 1, 1);
+          }
+
+          // Hat Drop Bounce
+          pipHatBounce += (1 - pipHatBounce) * 0.16;
+          pipUkAccessoryGroup.scale.setScalar(pipHatBounce);
+          pipUsAccessoryGroup.scale.setScalar(pipHatBounce);
+        }
+
+        pipRenderer.render(pipScene, pipCamera);
+      }
+
+      animatePip3D();
+    }
+
+    function petPip() {
+      playSoftTone(660, 0.14);
+
+      // Trigger 3D Jump, Squash-and-Stretch, Ear Wiggle & Happy Eyes
+      pipJumpVelocity = 0.14;
+      pipSquashScale = 1.24;
+      pipHappyTimer = 1.1;
+      pipWaveTimer = 1.3;
+
+      // Multi-Particle Burst (Hearts & Sparkles)
+      const container = document.getElementById('heartContainer');
+      if (container) {
+        const icons = ['fa-heart text-coral', 'fa-star text-amber', 'fa-wand-magic-sparkles text-accent'];
+        for (let i = 0; i < 3; i++) {
+          const p = document.createElement('div');
+          const tx = (i - 1) * 28 + (Math.random() * 10 - 5);
+          const ty = -34 - Math.random() * 18;
+          const rot = (i - 1) * 20;
+          p.style.setProperty('--tx', `${tx}px`);
+          p.style.setProperty('--ty', `${ty}px`);
+          p.style.setProperty('--rot', `${rot}deg`);
+          p.className = 'particle-float absolute text-sm';
+          p.innerHTML = `<i class="fa-solid ${icons[i % icons.length]}"></i>`;
+          container.appendChild(p);
+          setTimeout(() => p.remove(), 1000);
+        }
+      }
+
+      const L = getLangPack();
+      const msgEl = document.getElementById('pipMessage');
+      if (msgEl) {
+        msgEl.innerHTML = L.pipPets[Math.floor(Math.random() * L.pipPets.length)];
+      }
+    }
+<!-- ... existing code ... -->
+    function toggleDialect() {
+      playSoftTone(480, 0.1);
+      currentDialect = currentDialect === 'UK' ? 'US' : 'UK';
+      const L = getLangPack();
+
+      document.getElementById('dialectFlag').textContent = currentDialect === 'UK' ? '🇬🇧' : '🇺🇸';
+      document.getElementById('dialectCode').textContent = currentDialect;
+
+      // Toggle 3D Accessories with Pop Bounce
+      pipHatBounce = 0.55;
+      pipWaveTimer = 0.8;
+      if (pipUkAccessoryGroup && pipUsAccessoryGroup) {
+        pipUkAccessoryGroup.visible = currentDialect === 'UK';
+        pipUsAccessoryGroup.visible = currentDialect === 'US';
+      }
+
+      if (currentDialect === 'UK') {
+        document.getElementById('step1Ipa').textContent = '/rʌn‿aʊt‿əv/';
+        document.getElementById('step1DialectTip').textContent = L.ukTip;
+        document.getElementById('arenaInterlocutor').textContent = 'Heathrow Gate Agent (UK)';
+        showToast(isBeginnerLevel() ? 'Acento Británico activado 🇬🇧' : 'Switched to British English 🇬🇧');
+      } else {
+        document.getElementById('step1Ipa').textContent = '/rʌn‿aʊɾ‿əv/';
+        document.getElementById('step1DialectTip').textContent = L.usTip;
+        document.getElementById('arenaInterlocutor').textContent = 'JFK Gate Agent (US)';
+        showToast(isBeginnerLevel() ? 'Acento Americano activado 🇺🇸' : 'Switched to American English 🇺🇸');
+      }
+    }
+
+    function speakPhrase(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = currentDialect === 'UK' ? 'en-GB' : 'en-US';
+      u.rate = 0.96;
+
+      u.onstart = () => {
+        pipIsSpeaking = true;
+      };
+      u.onend = () => {
+        pipIsSpeaking = false;
+      };
+      u.onerror = () => {
+        pipIsSpeaking = false;
+      };
+      window.speechSynthesis.speak(u);
+    }
+<!-- ... existing code ... -->
+    // Initialize Onboarding, Default Preview State & 3D Mascot
+    window.addEventListener('DOMContentLoaded', () => {
+      selectLevelPreview('B1');
+      applyLockedLevelUI('B1');
+      initPip3D();
+    });
+  </script>
+</body>
+</html>
