@@ -107,12 +107,21 @@ export function findTerm(example: string, term: string): string | null {
   const words = term.trim().split(/\s+/);
   const first = words[0]!.replace(/[^a-zA-Z'-]/g, '');
   if (!first) return null;
-  const rest = words.slice(1).map((w) => escapeRe(w));
+  // "someone / something / one's" del término aceptan cualquier palabra ("stand someone up" → "stood me up").
+  const PLACEHOLDER = /^(someone|somebody|something|sb|sth|one's|your)$/i;
+  const rest = words.slice(1).map((w) => (PLACEHOLDER.test(w) ? '\\S+' : escapeRe(w)));
   const head = `(?:${wordForms(first).map(escapeRe).join('|')})`;
-  // La última palabra puede ir en plural / conjugada si el término es de una sola palabra.
-  const pattern = rest.length ? `${head}\\s+${rest.join('\\s+')}(?:s|es)?` : head;
-  const m = example.match(new RegExp(`\\b${pattern}\\b`, 'i'));
-  return m ? m[0] : null;
+  if (!rest.length) {
+    const m = example.match(new RegExp(`\\b${head}\\b`, 'i'));
+    return m ? m[0] : null;
+  }
+  // Primero la frase seguida; si no, se permite un objeto en medio (phrasal verbs separables:
+  // "pick me up", "asked her out", "take the internet for granted").
+  for (const gap of ['\\s+', '(?:\\s+\\S+){1,3}?\\s+']) {
+    const m = example.match(new RegExp(`\\b${head}${gap}${rest.join('\\s+')}(?:s|es)?\\b`, 'i'));
+    if (m) return m[0];
+  }
+  return null;
 }
 
 /** Frase de ejemplo con el término en hueco ("___"), o null si el ejemplo no lo contiene. */
