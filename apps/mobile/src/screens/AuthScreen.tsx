@@ -1,14 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Animated, Easing, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path, Polygon } from 'react-native-svg';
@@ -437,7 +429,7 @@ export function AuthScreen() {
             <PressableScale
               onPress={() => {
                 speakWithPip(
-                  `Hi! I'm ${petName}. Pick your favorite 3D companion and let's conquer the islands!`
+                  `Hi! I'm ${petName.trim() || 'your new buddy'}. Pick your favorite 3D companion and let's conquer the islands!`
                 );
                 setReactKey((k) => k + 1);
               }}
@@ -446,7 +438,7 @@ export function AuthScreen() {
             >
               <Ionicons name="volume-high" size={16} color={THEME.blue} />
               <Text style={styles.floatingSpeechText}>
-                “Hi! I’m {petName}. Tap me or tilt your phone!”
+                “{petName.trim() ? `Hi! I’m ${petName.trim()}. ` : 'Hi! '}Tap me or tilt your phone!”
               </Text>
             </PressableScale>
 

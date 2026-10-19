@@ -1,3 +1,4 @@
+import type { PronunciationReport } from './pronunciation.js';
 /**
  * Tipos del modo práctica libre (Daily Drop + Speaking/Listening/Reading/Writing).
  * Son independientes del currículo B1 versionado: aquí vive el contenido de práctica diaria.
@@ -38,6 +39,8 @@ export interface DailyItem {
   /** Aviso útil para hispanohablantes (falsos amigos, errores típicos). */
   watchOutEs?: string;
   quiz: DailyQuiz;
+  /** Nivel CEFR del término (los ítems sin nivel sirven para todos). */
+  level?: PracticeLevel;
 }
 
 export interface SpeakingTopic {
@@ -50,6 +53,8 @@ export interface SpeakingTopic {
   usefulPhrases: string[];
   targetWords: string[];
   suggestedSeconds: number;
+  /** Respuesta modelo (opcional) para comparar al final. */
+  modelAnswer?: string;
 }
 
 export interface ListeningSegment {
@@ -136,7 +141,7 @@ export interface CoachScores {
 }
 
 export interface CoachFeedback {
-  source: 'claude' | 'local';
+  source: 'claude' | 'gemini' | 'local';
   overallScore: number;
   cefrEstimate: PracticeLevel | 'A1' | 'C2';
   scores: CoachScores;
@@ -163,6 +168,8 @@ export interface SpeechAudioMetrics {
   recognitionConfidence: number | null;
   /** Volumen medio normalizado (0–1). */
   averageLevel: number;
+  /** Puntaje de pronunciación medido sobre el audio (Azure), si está disponible. Tiene prioridad sobre la confianza. */
+  assessedPronunciation?: number | null;
 }
 
 export interface CoachRequest {
@@ -173,4 +180,6 @@ export interface CoachRequest {
   targetWords: string[];
   minWords?: number;
   audio?: SpeechAudioMetrics;
+  /** Evaluación de pronunciación del audio (Azure), para que la corrección la tenga en cuenta. */
+  pronunciation?: PronunciationReport | null;
 }

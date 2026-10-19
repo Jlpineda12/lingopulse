@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
 import type { AudioStatus, ClientArenaTurnPayload } from '@lingopulse/shared';
 import { VoiceEnergyStreamVfx } from '../components/GameVfx';
 import { useAppState } from '../context/AppStateContext';

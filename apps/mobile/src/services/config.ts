@@ -16,11 +16,20 @@ export function getApiBaseUrl(): string {
       const { protocol, hostname } = window.location;
       return `${protocol === 'https:' ? 'https:' : 'http:'}//${hostname}:${API_PORT}`;
     }
-    return fromEnv ?? `http://localhost:${API_PORT}`;
+    return fromEnv || `http://localhost:${API_PORT}`;
   }
 
   const hostUri = Constants.expoConfig?.hostUri ?? '';
   const host = hostUri.split(':')[0];
   if (host && !host.includes('exp.direct')) return `http://${host}:${API_PORT}`;
-  return fromEnv ?? `http://localhost:${API_PORT}`;
+  return fromEnv || `http://localhost:${API_PORT}`;
+}
+
+/**
+ * Cabeceras para el backend. EXPO_PUBLIC_APP_KEY es la "clave de la app" que el servidor
+ * pide (APP_ACCESS_KEY) para que solo tu app use tus créditos de IA.
+ */
+export function apiHeaders(): Record<string, string> {
+  const key = process.env.EXPO_PUBLIC_APP_KEY;
+  return key ? { 'X-App-Key': key } : {};
 }

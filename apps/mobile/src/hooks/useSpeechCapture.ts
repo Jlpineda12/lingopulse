@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
-import type { SpeechAudioMetrics, SupportedLocale } from '@lingopulse/shared';
-import { transcribeRecording } from '../services/transcribe';
+import {
+  AudioModule,
+  AudioQuality,
+  createAudioPlayer,
+  IOSOutputFormat,
+  type AudioPlayer,
+  type AudioRecorder,
+  type RecordingOptions,
+} from 'expo-audio';
+import type { PronunciationReport, SpeechAudioMetrics, SupportedLocale } from '@lingopulse/shared';
+import { suspendSfx } from '../services/sfx';
+import { stopSpeaking } from '../services/speech';
+import { reviewRecording, transcribeRecording, type PronunciationReview } from '../services/transcribe';
 
 /**
  * Captura de voz para práctica, en web y en el teléfono:
@@ -12,7 +22,7 @@ import { transcribeRecording } from '../services/transcribe';
  *   - Transcripción en vivo con el reconocedor del navegador (Web Speech API).
  *   - Análisis acústico con Web Audio (RMS por fotograma).
  *  iOS/Android (Expo Go):
- *   - Grabación con expo-av y medición de volumen en vivo (metering en dB).
+ *   - Grabación con expo-audio y medición de volumen en vivo (metering en dB).
  *   - Transcripción al terminar enviando el audio al backend (Deepgram) si está
  *     configurado; si no, el usuario reescucha y escribe/corrige lo que dijo.
  *
@@ -23,12 +33,39 @@ export interface CaptureResult {
   transcript: string;
   audioUrl: string | null;
   metrics: SpeechAudioMetrics;
+  /** Evaluación de pronunciación del servidor (Azure o Gemini), si está activa. */
+  pronunciation: PronunciationReport | null;
+  /** No se detectó voz en la grabación. */
+  silent?: boolean;
+  /** Revisión con IA que llega después (~20 s) para afinar pronunciación y transcripción. */
+  review?: Promise<PronunciationReview | null> | null;
 }
 
 type CaptureState = 'idle' | 'recording' | 'processing';
 
 const PAUSE_MS = 700;
 const IS_WEB = Platform.OS === 'web';
+
+/**
+ * Grabación para voz: AAC mono a 22 kHz (~0,5 MB por minuto). El preset HIGH_QUALITY graba en estéreo
+ * a 44 kHz y en el iPhone llegaba sin comprimir (~10 MB/min): 2 minutos superaban el límite del servidor.
+ */
+const SPEECH_RECORDING: RecordingOptions = {
+  extension: '.m4a',
+  sampleRate: 22050,
+  numberOfChannels: 1,
+  bitRate: 64000,
+  isMeteringEnabled: true,
+  android: { outputFormat: 'mpeg4', audioEncoder: 'aac' },
+  ios: {
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.HIGH,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: { mimeType: 'audio/webm', bitsPerSecond: 64000 },
+};
 
 /** Detector simple de actividad de voz (umbral adaptativo al ruido de fondo). */
 class VoiceActivity {
@@ -121,7 +158,10 @@ export function getCaptureSupport() {
   };
 }
 
-export function useSpeechCapture(locale: SupportedLocale) {
+export function useSpeechCapture(locale: SupportedLocale, options: { referenceText?: string } = {}) {
+  // La frase de referencia puede cambiar entre grabaciones: se lee al detener.
+  const referenceRef = useRef(options.referenceText);
+  referenceRef.current = options.referenceText;
   const [state, setState] = useState<CaptureState>('idle');
   const [liveTranscript, setLiveTranscript] = useState('');
   const [level, setLevel] = useState(0);
@@ -144,7 +184,7 @@ export function useSpeechCapture(locale: SupportedLocale) {
     confidences: number[];
     interim: string;
     // nativo
-    nativeRec: Audio.Recording | null;
+    nativeRec: AudioRecorder | null;
   }>({
     vad: new VoiceActivity(),
     startedAt: 0,
@@ -181,7 +221,8 @@ export function useSpeechCapture(locale: SupportedLocale) {
   useEffect(
     () => () => {
       cleanupWeb();
-      r.current.nativeRec?.stopAndUnloadAsync().catch(() => undefined);
+      r.current.nativeRec?.stop().catch(() => undefined);
+      suspendSfx(false);
     },
     [cleanupWeb]
   );
@@ -191,27 +232,31 @@ export function useSpeechCapture(locale: SupportedLocale) {
   const startNative = async (): Promise<boolean> => {
     const c = r.current;
     try {
-      const perm = await Audio.requestPermissionsAsync();
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) {
         setError('Necesito permiso del micrófono. Actívalo en Ajustes > Expo Go > Micrófono.');
         return false;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(
-        { ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true } as Audio.RecordingOptions,
-        (status) => {
-          if (!status.isRecording || status.metering === undefined) return;
-          const db = status.metering;
-          const now = Date.now();
-          c.vad.push(Math.pow(10, db / 20), now);
-          setLevel(Math.max(0, Math.min(1, (db + 55) / 45)));
-          setElapsedMs(now - c.startedAt);
-        },
-        60
-      );
-      c.nativeRec = recording;
+      // Silencio total antes de abrir el micrófono: efectos y voz de la mascota pueden interrumpir la grabación en iOS.
+      suspendSfx(true);
+      stopSpeaking();
+      await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      const recorder = new AudioModule.AudioRecorder(SPEECH_RECORDING);
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      c.nativeRec = recorder;
+      // Medidor en vivo: dB → amplitud lineal (misma escala que el RMS de la web) para el VAD y la onda.
+      c.timer = setInterval(() => {
+        const db = recorder.getStatus().metering ?? -160;
+        const amp = Math.pow(10, Math.max(-160, Math.min(0, db)) / 20);
+        const now = Date.now();
+        c.vad.push(amp, now);
+        setLevel(Math.min(1, amp * 6));
+        setElapsedMs(now - c.startedAt);
+      }, 80);
       return true;
     } catch {
+      suspendSfx(false);
       setError('No pude iniciar la grabación. Cierra otras apps que usen el micrófono e inténtalo de nuevo.');
       return false;
     }
@@ -330,20 +375,31 @@ export function useSpeechCapture(locale: SupportedLocale) {
     const c = r.current;
     const endedAt = Date.now();
     let uri: string | null = null;
+    if (c.timer) clearInterval(c.timer);
+    c.timer = null;
     try {
-      await c.nativeRec?.stopAndUnloadAsync();
-      uri = c.nativeRec?.getURI() ?? null;
+      if (c.nativeRec) {
+        await c.nativeRec.stop();
+        uri = c.nativeRec.uri ?? null;
+      }
     } catch {
       uri = null;
     }
     c.nativeRec = null;
     // Devuelve el audio al altavoz para escuchar la grabación y la voz de la mascota.
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => undefined);
-    const server = uri ? await transcribeRecording(uri, locale) : null;
+    await AudioModule.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+    suspendSfx(false);
+    const server = uri ? await transcribeRecording(uri, locale, referenceRef.current) : null;
     return {
       transcript: server?.transcript ?? '',
       audioUrl: uri,
-      metrics: c.vad.metrics(c.startedAt, endedAt, server?.confidence ?? null),
+      metrics: {
+        ...c.vad.metrics(c.startedAt, endedAt, server?.confidence ?? null),
+        assessedPronunciation: server?.pronunciation?.pronScore ?? null,
+      },
+      pronunciation: server?.pronunciation ?? null,
+      silent: server?.silent ?? false,
+      review: uri && server?.reviewAvailable ? reviewRecording(uri, locale, referenceRef.current) : null,
     };
   };
 
@@ -365,24 +421,34 @@ export function useSpeechCapture(locale: SupportedLocale) {
         resolve();
       }
     });
-    const recorderDone = new Promise<string | null>((resolve) => {
+    const recorderDone = new Promise<Blob | null>((resolve) => {
       const rec = c.recorder;
       if (!rec || rec.state === 'inactive') return resolve(null);
       rec.onstop = () => {
         const blob = new Blob(c.chunks, { type: rec.mimeType || 'audio/webm' });
-        resolve(blob.size ? URL.createObjectURL(blob) : null);
+        resolve(blob.size ? blob : null);
       };
       rec.stop();
     });
-    const [, audioUrl] = await Promise.all([recognitionDone, recorderDone]);
+    const [, blob] = await Promise.all([recognitionDone, recorderDone]);
+    const audioUrl = blob ? URL.createObjectURL(blob) : null;
     if (c.interim.trim()) c.finals.push(c.interim.trim());
     const confidence = c.confidences.length
       ? c.confidences.reduce((a, b) => a + b, 0) / c.confidences.length
       : null;
-    const transcript = c.finals.join(' ').replace(/\s+/g, ' ').trim();
-    const metrics = c.vad.metrics(c.startedAt, endedAt, confidence);
+    const webTranscript = c.finals.join(' ').replace(/\s+/g, ' ').trim();
+    const vadMetrics = c.vad.metrics(c.startedAt, endedAt, confidence);
     cleanupWeb();
-    return { transcript, audioUrl, metrics };
+    // Si el backend tiene voz configurada, también evalúa la pronunciación de la grabación web.
+    const server = blob ? await transcribeRecording(blob, locale, referenceRef.current) : null;
+    return {
+      transcript: server?.transcript || webTranscript,
+      audioUrl,
+      metrics: { ...vadMetrics, assessedPronunciation: server?.pronunciation?.pronScore ?? null },
+      pronunciation: server?.pronunciation ?? null,
+      silent: !!server?.silent && !webTranscript,
+      review: blob && server?.reviewAvailable ? reviewRecording(blob, locale, referenceRef.current) : null,
+    };
   };
 
   const stop = useCallback(async (): Promise<CaptureResult> => {
@@ -401,8 +467,9 @@ export function useSpeechCapture(locale: SupportedLocale) {
     } catch {
       // ignore
     }
-    r.current.nativeRec?.stopAndUnloadAsync().catch(() => undefined);
+    r.current.nativeRec?.stop().catch(() => undefined);
     r.current.nativeRec = null;
+    suspendSfx(false);
     cleanupWeb();
     setLevel(0);
     setState('idle');
@@ -425,7 +492,7 @@ export function estimatedMetricsFromText(text: string): SpeechAudioMetrics {
   };
 }
 
-let currentSound: Audio.Sound | null = null;
+let currentPlayer: AudioPlayer | null = null;
 
 /** Reproduce una grabación (blob URL en web, archivo local en el teléfono). */
 export async function playAudioUrl(url: string) {
@@ -436,9 +503,10 @@ export async function playAudioUrl(url: string) {
     return;
   }
   try {
-    await currentSound?.unloadAsync();
-    const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
-    currentSound = sound;
+    currentPlayer?.release();
+    const player = createAudioPlayer({ uri: url }, { keepAudioSessionActive: true });
+    player.play();
+    currentPlayer = player;
   } catch {
     // ignore
   }

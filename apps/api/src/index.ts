@@ -13,6 +13,18 @@ import {
   isAiCoachEnabled,
 } from './services/aiCoach.js';
 import { isSpeechToTextEnabled, transcribeAudio } from './services/speechToText.js';
+import { analyzeLevels, hasUsableSpeech, toWav16k } from './services/audio.js';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { assessPronunciation, isAzureSpeechEnabled } from './services/azurePronunciation.js';
+import {
+  assessPronunciationWithGemini,
+  generateGeminiFeedback,
+  isGeminiCoachEnabled,
+  isGeminiEnabled,
+  transcribeWithGemini,
+} from './services/gemini.js';
 import {
   evaluateInputComprehension,
   evaluateWritingSubmission,
@@ -26,7 +38,7 @@ const PORT = Number(process.env.PORT ?? 4000);
 function setCorsHeaders(res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-App-Key');
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
@@ -42,6 +54,48 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   }
   const raw = Buffer.concat(chunks).toString('utf8');
   return (raw ? JSON.parse(raw) : {}) as T;
+}
+
+/** Proveedor de voz activo: Azure (transcribe + pronunciación) > Gemini (transcribe) > Deepgram. */
+function speechProvider(): 'azure' | 'gemini' | 'deepgram' | 'none' {
+  if (isAzureSpeechEnabled()) return 'azure';
+  if (isGeminiEnabled()) return 'gemini';
+  if (isSpeechToTextEnabled()) return 'deepgram';
+  return 'none';
+}
+
+function coachProvider(): 'gemini' | 'anthropic' | 'local' {
+  if (isGeminiCoachEnabled()) return 'gemini';
+  if (isAiCoachEnabled()) return 'anthropic';
+  return 'local';
+}
+
+/**
+ * Clave privada de la app (APP_ACCESS_KEY). Si está configurada, solo responden las peticiones
+ * que la traen en la cabecera X-App-Key, así nadie más gasta tus créditos de IA.
+ */
+function isAuthorized(req: IncomingMessage): boolean {
+  const expected = process.env.APP_ACCESS_KEY;
+  if (!expected) return true;
+  return req.headers['x-app-key'] === expected;
+}
+
+/**
+ * En desarrollo guarda la última grabación recibida (original + WAV) para poder diagnosticar
+ * problemas de micrófono. Desactívalo con SAVE_LAST_AUDIO=0; en producción no se guarda.
+ */
+async function saveLastAudio(original: Buffer, mimeType: string, wav: Buffer): Promise<string | null> {
+  if (process.env.NODE_ENV === 'production' || process.env.SAVE_LAST_AUDIO === '0') return null;
+  try {
+    const dir = join(tmpdir(), 'lingopulse-last-audio');
+    await mkdir(dir, { recursive: true });
+    const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : mimeType.split('/')[1]?.split(';')[0] ?? 'bin';
+    await writeFile(join(dir, `original.${ext}`), original);
+    await writeFile(join(dir, 'audio-16k.wav'), wav);
+    return dir;
+  } catch {
+    return null;
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -63,6 +117,11 @@ const server = createServer(async (req, res) => {
         version: '1.0.0',
         timestamp: new Date().toISOString(),
       });
+      return;
+    }
+
+    if (!isAuthorized(req)) {
+      sendJson(res, 401, { error: 'unauthorized' });
       return;
     }
 
@@ -161,37 +220,119 @@ const server = createServer(async (req, res) => {
 
     // 8a. Transcripción de audio grabado en el teléfono (Expo Go)
     if (req.method === 'GET' && url.pathname === '/api/speech/status') {
-      sendJson(res, 200, { sttEnabled: isSpeechToTextEnabled(), provider: isSpeechToTextEnabled() ? 'deepgram' : 'none' });
+      const provider = speechProvider();
+      sendJson(res, 200, {
+        sttEnabled: provider !== 'none',
+        provider,
+        pronunciation: provider === 'azure' ? 'precise' : provider === 'gemini' ? 'approximate' : 'none',
+      });
       return;
     }
     if (req.method === 'POST' && url.pathname === '/api/speech/transcribe') {
-      if (!isSpeechToTextEnabled()) {
+      const provider = speechProvider();
+      if (provider === 'none') {
         sendJson(res, 503, { error: 'stt_disabled' });
         return;
       }
-      const body = await readJsonBody<{ audioBase64?: string; mimeType?: string; language?: string }>(req);
+      const body = await readJsonBody<{ audioBase64?: string; mimeType?: string; language?: string; referenceText?: string }>(req);
       if (!body.audioBase64) {
         sendJson(res, 400, { error: 'audioBase64 is required' });
         return;
       }
       const audio = Buffer.from(body.audioBase64, 'base64');
-      if (audio.length > 15 * 1024 * 1024) {
-        sendJson(res, 413, { error: 'audio too large (max 15 MB)' });
+      if (audio.length > 40 * 1024 * 1024) {
+        sendJson(res, 413, { error: 'audio too large (max 40 MB)' });
+        return;
+      }
+      const mimeType = body.mimeType ?? 'audio/mp4';
+      const language = body.language ?? 'en-US';
+      const referenceText = String(body.referenceText ?? '').slice(0, 600);
+      try {
+        if (provider === 'deepgram') {
+          sendJson(res, 200, { ...(await transcribeAudio(audio, mimeType, language)), pronunciation: null, provider });
+          return;
+        }
+        const wav = await toWav16k(audio, mimeType);
+        const levels = analyzeLevels(wav);
+        const lastDir = await saveLastAudio(audio, mimeType, wav);
+        console.log(
+          `[LingoPulse API] audio ${levels.durationSec.toFixed(1)} s · pico ${levels.peakDb} dB · medio ${levels.rmsDb} dB · voz ${levels.voicedSec} s` +
+            (lastDir ? ` · guardado en ${lastDir}` : '')
+        );
+        if (!hasUsableSpeech(levels)) {
+          // Audio vacío o casi mudo: no se manda a la IA (inventaría un texto).
+          sendJson(res, 200, { transcript: '', confidence: null, durationSec: levels.durationSec, pronunciation: null, provider, silent: true, levels });
+          return;
+        }
+        if (provider === 'azure') {
+          const result = await assessPronunciation(wav, language, referenceText);
+          // Si Azure no entendió nada pero hay Gemini, al menos devolvemos la transcripción.
+          if (!result.transcript && isGeminiEnabled()) {
+            result.transcript = await transcribeWithGemini(wav).catch(() => '');
+          }
+          // Respuesta rápida (~2 s). Si hay Gemini, la app pide después /api/speech/review para afinar.
+          sendJson(res, 200, { ...result, provider, reviewAvailable: isGeminiEnabled() && !!result.pronunciation });
+          return;
+        }
+        // Solo Google: Gemini escucha y devuelve transcripción + pronunciación estimada (aproximada).
+        const result = await assessPronunciationWithGemini(wav, language, referenceText);
+        sendJson(res, 200, { ...result, confidence: null, durationSec: null, provider });
+      } catch (err) {
+        console.warn(`[LingoPulse API] speech (${provider}) failed: ${err instanceof Error ? err.message : err}`);
+        sendJson(res, 502, { error: 'stt_failed' });
+      }
+      return;
+    }
+
+    // 8b. Segunda pasada: Gemini escucha la misma grabación y detecta lo que la medición acústica
+    // no vio (sustituciones típicas como "tink" por "think") + transcripción literal con errores.
+    if (req.method === 'POST' && url.pathname === '/api/speech/review') {
+      if (!isGeminiEnabled()) {
+        sendJson(res, 503, { error: 'review_disabled' });
+        return;
+      }
+      const body = await readJsonBody<{
+        audioBase64?: string;
+        mimeType?: string;
+        language?: string;
+        referenceText?: string;
+        feedbackLanguage?: string;
+      }>(req);
+      if (!body.audioBase64) {
+        sendJson(res, 400, { error: 'audioBase64 is required' });
+        return;
+      }
+      const audio = Buffer.from(body.audioBase64, 'base64');
+      if (audio.length > 40 * 1024 * 1024) {
+        sendJson(res, 413, { error: 'audio too large (max 40 MB)' });
         return;
       }
       try {
-        const result = await transcribeAudio(audio, body.mimeType ?? 'audio/mp4', body.language ?? 'en');
+        const wav = await toWav16k(audio, body.mimeType ?? 'audio/mp4');
+        if (!hasUsableSpeech(analyzeLevels(wav))) {
+          sendJson(res, 200, { transcript: '', pronunciation: null, silent: true });
+          return;
+        }
+        const started = Date.now();
+        const result = await assessPronunciationWithGemini(
+          wav,
+          body.language ?? 'en-US',
+          String(body.referenceText ?? '').slice(0, 600),
+          body.feedbackLanguage === 'en' ? 'en' : 'es'
+        );
+        console.log(`[LingoPulse API] revisión Gemini en ${((Date.now() - started) / 1000).toFixed(1)} s`);
         sendJson(res, 200, result);
       } catch (err) {
-        console.warn(`[LingoPulse API] STT failed: ${err instanceof Error ? err.message : err}`);
-        sendJson(res, 502, { error: 'stt_failed' });
+        console.warn(`[LingoPulse API] review failed: ${err instanceof Error ? err.message : err}`);
+        sendJson(res, 502, { error: 'review_failed' });
       }
       return;
     }
 
     // 8. Práctica libre: estado del coach (para que la app muestre "IA activa" o "motor local")
     if (req.method === 'GET' && url.pathname === '/api/coach/status') {
-      sendJson(res, 200, { aiEnabled: isAiCoachEnabled(), provider: isAiCoachEnabled() ? 'anthropic' : 'local' });
+      const provider = coachProvider();
+      sendJson(res, 200, { aiEnabled: provider !== 'local', provider });
       return;
     }
 
@@ -214,7 +355,16 @@ const server = createServer(async (req, res) => {
         targetWords: Array.isArray(body.targetWords) ? body.targetWords.slice(0, 12).map(String) : [],
         minWords: body.minWords,
         audio: body.audio,
+        pronunciation: body.pronunciation ?? null,
       };
+      if (isGeminiCoachEnabled()) {
+        try {
+          sendJson(res, 200, await generateGeminiFeedback(request));
+          return;
+        } catch (err) {
+          console.warn(`[LingoPulse API] Gemini coach unavailable (${err instanceof Error ? err.message : err}); trying next`);
+        }
+      }
       if (isAiCoachEnabled()) {
         try {
           sendJson(res, 200, await generateAiFeedback(request));

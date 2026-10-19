@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
+import { AiThinking } from '../components/AiThinking';
 import { Ionicons } from '@expo/vector-icons';
 import {
   alignWords,
@@ -9,16 +11,19 @@ import {
   SPEAKING_TOPICS,
   type AlignmentResult,
   type CoachFeedback,
+  type PronunciationReport,
   type SpeakingTopic,
 } from '@lingopulse/shared';
 import { useAppState } from '../context/AppStateContext';
 import { useGame } from '../context/GameContext';
 import { AlignmentView, FeedbackView } from '../components/FeedbackView';
+import { PronunciationReportView } from '../components/PronunciationReportView';
 import { RecorderPanel, type RecorderOutput } from '../components/RecorderPanel';
 import { Reveal, ScoreRing } from '../components/motion';
 import { Badge, Button, Card, Chip, Eyebrow, ScreenHeader, ui, type IconName } from '../components/ui';
 import { playAudioUrl } from '../hooks/useSpeechCapture';
 import { getCoachFeedback } from '../services/coach';
+import { applyReview } from '../services/transcribe';
 import { speakEnglishPhrase } from '../services/speech';
 import { THEME, TYPE } from '../theme/colors';
 
@@ -53,6 +58,8 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
   const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
   const [loading, setLoading] = useState(false);
   const [recorderKey, setRecorderKey] = useState(0);
+  const [reviewing, setReviewing] = useState(false);
+  const attemptRef = useRef(0);
 
   const say = (t: string) => speakEnglishPhrase(t, locale);
   const fluency = useMemo(
@@ -61,6 +68,8 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
   );
 
   const reset = () => {
+    attemptRef.current += 1;
+    setReviewing(false);
     setRecording(null);
     setTranscript('');
     setFeedback(null);
@@ -88,6 +97,7 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
       minWords: Math.round(topic.suggestedSeconds * 1.2),
       // Solo hay métricas acústicas reales si se grabó con el micrófono.
       audio: recording.typed ? undefined : recording.metrics,
+      pronunciation: recording.typed ? null : recording.pronunciation,
     });
     setFeedback(fb);
     setLoading(false);
@@ -156,8 +166,28 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
               targetSeconds={topic.suggestedSeconds}
               hint={`Habla unos ${topic.suggestedSeconds} segundos`}
               onResult={(out) => {
+                const attempt = ++attemptRef.current;
                 setRecording(out);
                 setTranscript(out.transcript);
+                if (!out.review) return;
+                // La revisión de IA llega después: afina la pronunciación y trae la transcripción literal.
+                setReviewing(true);
+                out.review.then((review) => {
+                  if (attempt !== attemptRef.current) return;
+                  setReviewing(false);
+                  if (!review) return;
+                  setRecording((prev) => {
+                    if (!prev) return prev;
+                    const pronunciation = applyReview(prev.pronunciation, review);
+                    return {
+                      ...prev,
+                      pronunciation,
+                      metrics: { ...prev.metrics, assessedPronunciation: pronunciation?.pronScore ?? prev.metrics.assessedPronunciation },
+                    };
+                  });
+                  // Solo se reemplaza el texto si el usuario no lo editó mientras tanto.
+                  if (review.transcript) setTranscript((t) => (t === out.transcript ? review.transcript : t));
+                });
               }}
             />
           </Card>
@@ -202,6 +232,10 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
               </View>
             ) : null}
 
+            {recording.pronunciation ? (
+              <PronunciationReportView report={recording.pronunciation} locale={locale} reviewing={reviewing} />
+            ) : null}
+
             {!feedback ? (
               <View style={ui.row}>
                 <Button
@@ -214,7 +248,7 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
                 <Button label="Repetir" icon="refresh" variant="secondary" onPress={reset} disabled={loading} />
               </View>
             ) : null}
-            {loading ? <ActivityIndicator color={THEME.ink} /> : null}
+            {loading ? <AiThinking label="Analizando con IA" /> : null}
           </Card>
         </Reveal>
       )}
@@ -255,20 +289,31 @@ function Metric({ icon, label, value }: { icon: IconName; label: string; value: 
 
 function ReadAloudPractice() {
   const { locale } = useAppState();
-  const { todayKey, completeActivity } = useGame();
+  const { todayKey, completeActivity, progress } = useGame();
   const sentences = useMemo(() => {
-    const drop = getDailyDrop(todayKey);
+    const drop = getDailyDrop(todayKey, progress.level);
     return [...drop.items.map((i) => i.examples[0]!).filter(Boolean), ...LISTENING_TRACKS.flatMap((t) => t.dictation)];
-  }, [todayKey]);
+  }, [todayKey, progress.level]);
   const [idx, setIdx] = useState(0);
   const [result, setResult] = useState<AlignmentResult | null>(null);
+  const [pron, setPron] = useState<PronunciationReport | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const attemptRef = useRef(0);
   const [noTranscript, setNoTranscript] = useState(false);
   const [attempts, setAttempts] = useState<number[]>([]);
   const [rewarded, setRewarded] = useState(false);
   const sentence = sentences[idx % sentences.length]!;
 
   const onResult = (out: RecorderOutput) => {
-    if (!out.transcript) {
+    const attempt = ++attemptRef.current;
+    setPron(out.pronunciation);
+    setReviewing(!!out.review);
+    out.review?.then((review) => {
+      if (attempt !== attemptRef.current) return;
+      setReviewing(false);
+      setPron((prev) => applyReview(prev, review));
+    });
+    if (!out.transcript && !out.pronunciation) {
       setNoTranscript(true);
       setResult(null);
       return;
@@ -276,7 +321,8 @@ function ReadAloudPractice() {
     setNoTranscript(false);
     const r = alignWords(sentence, out.transcript);
     setResult(r);
-    const next = [...attempts, r.accuracy];
+    // Con Azure, el puntaje es la pronunciación real medida en el audio; si no, la coincidencia de palabras.
+    const next = [...attempts, out.pronunciation ? out.pronunciation.pronScore : r.accuracy];
     setAttempts(next);
     if (next.length >= 3 && !rewarded) {
       setRewarded(true);
@@ -311,11 +357,11 @@ function ReadAloudPractice() {
         </Card>
       </Reveal>
       <Card>
-        <RecorderPanel key={idx} locale={locale} hint="Lee la frase en voz alta" onResult={onResult} />
+        <RecorderPanel key={idx} locale={locale} hint="Lee la frase en voz alta" onResult={onResult} referenceText={sentence} />
         {noTranscript ? (
           <Text style={TYPE.footnote}>
-            Tu audio se grabó, pero no hay transcripción disponible en este dispositivo. Activa Deepgram en el backend o usa la
-            app en el navegador para puntuar la pronunciación.
+            Tu audio se grabó, pero el servidor de IA no está disponible. Revisa la conexión o la configuración del servidor
+            (ver README) para puntuar la pronunciación.
           </Text>
         ) : null}
       </Card>
@@ -323,7 +369,11 @@ function ReadAloudPractice() {
         <Reveal index={0}>
           <Card>
             <View style={ui.rowBetween}>
-              <ScoreRing score={result.accuracy} size={72} stroke={8} label="precisión" />
+              {pron ? (
+                <Text style={TYPE.headline}>Tu pronunciación</Text>
+              ) : (
+                <ScoreRing score={result.accuracy} size={72} stroke={8} label="precisión" />
+              )}
               <Button
                 label="Siguiente"
                 small
@@ -331,10 +381,13 @@ function ReadAloudPractice() {
                 onPress={() => {
                   setIdx((i) => i + 1);
                   setResult(null);
+                  setPron(null);
+                  setReviewing(false);
+                  attemptRef.current += 1;
                 }}
               />
             </View>
-            <AlignmentView result={result} />
+            {pron ? <PronunciationReportView report={pron} locale={locale} reviewing={reviewing} /> : <AlignmentView result={result} />}
             <Text style={TYPE.footnote}>
               Intentos: {attempts.map((a) => `${a}%`).join(' · ')}
               {attempts.length < 3 ? ` · ${3 - attempts.length} más para completar la actividad` : ' · actividad completada'}

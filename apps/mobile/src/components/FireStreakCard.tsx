@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 import {
   addDaysKey,

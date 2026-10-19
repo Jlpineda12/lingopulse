@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
-import { DAILY_ITEMS, ERROR_HUNT_ITEMS, localDateKey, type DailyItem } from '@lingopulse/shared';
+import { Animated, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
+import {
+  ERROR_HUNT_ITEMS,
+  getItemsForLevel,
+  localDateKey,
+  uiLanguageFor,
+  type DailyItem,
+  type PracticeLevel,
+  type UiLanguage,
+} from '@lingopulse/shared';
 import { currentEvent } from '../game/events';
 import { useAppState } from '../context/AppStateContext';
 import { useGame } from '../context/GameContext';
@@ -36,7 +45,13 @@ function shuffle<T>(arr: readonly T[]): T[] {
   return a;
 }
 
-const shortSpanish = (item: DailyItem) => item.spanish.split(/[,;(]/)[0]!.trim();
+/** Traducción corta al español; vacía si el ítem no la tiene. */
+const shortSpanish = (item: DailyItem) => (item.spanish ?? '').split(/[;(]/)[0]!.trim();
+/** Primera oración de la definición en inglés (para el modo inglés B1+). */
+const shortDefinition = (item: DailyItem) => {
+  const first = item.definitionEn.split(/(?<=[.;])\s/)[0]!.trim().replace(/;$/, '');
+  return first.length > 140 ? `${first.slice(0, 137).trim()}…` : first;
+};
 
 export function MinigameScreen({ initialGame }: { initialGame?: GameId }) {
   const { goBack, progress } = useGame();
@@ -89,7 +104,7 @@ interface Round {
   words?: string[];
 }
 
-function buildRounds(gameId: GameId): Round[] {
+function buildRounds(gameId: GameId, level: PracticeLevel, lang: UiLanguage): Round[] {
   if (gameId === 'error-hunt') {
     return shuffle(ERROR_HUNT_ITEMS)
       .slice(0, 6)
@@ -99,30 +114,60 @@ function buildRounds(gameId: GameId): Round[] {
         wrongIndex: it.wrongIndex,
         options: [],
         answer: it.correction,
-        explanation: it.explanationEs,
+        explanation: lang === 'en' ? it.explanationEn ?? it.explanationEs : it.explanationEs,
       }));
   }
   if (gameId === 'event-rush') {
     const words = currentEvent().event.words;
+    if (lang === 'en') {
+      // B1+: definición en inglés → elige la palabra.
+      return shuffle(words).map((w) => {
+        const others = shuffle(words.filter((o) => o.id !== w.id)).slice(0, 3).map((o) => o.term);
+        return { prompt: w.definitionEn, options: shuffle([w.term, ...others]), answer: w.term };
+      });
+    }
     return shuffle(words).map((w) => {
       const others = shuffle(words.filter((o) => o.id !== w.id)).slice(0, 3).map((o) => o.meaningEs);
       return { prompt: w.term, options: shuffle([w.meaningEs, ...others]), answer: w.meaningEs };
     });
   }
-  const pool = shuffle(DAILY_ITEMS);
+  // Solo palabras del nivel del alumno (y adyacentes).
+  const levelItems = getItemsForLevel(level);
+  const pool = shuffle(levelItems);
   if (gameId === 'word-rush') {
-    return pool.slice(0, 8).map((item) => {
-      const others = shuffle(DAILY_ITEMS.filter((d) => d.id !== item.id)).slice(0, 3).map(shortSpanish);
-      return { prompt: item.term, options: shuffle([shortSpanish(item), ...others]), answer: shortSpanish(item) };
+    if (lang === 'en') {
+      return pool.slice(0, 8).map((item) => {
+        const others = shuffle(levelItems.filter((d) => d.id !== item.id && d.term !== item.term))
+          .slice(0, 3)
+          .map((d) => d.term);
+        return { prompt: shortDefinition(item), options: shuffle([item.term, ...others]), answer: item.term };
+      });
+    }
+    // A1–A2: palabra → significado en español (solo ítems con traducción corta real).
+    const withGloss = pool.filter((d) => {
+      const g = shortSpanish(d);
+      return g.length > 0 && g.length <= 45;
+    });
+    return withGloss.slice(0, 8).map((item) => {
+      const answer = shortSpanish(item);
+      const others = shuffle(withGloss.filter((d) => d.id !== item.id && shortSpanish(d) !== answer))
+        .slice(0, 3)
+        .map(shortSpanish);
+      return { prompt: item.term, options: shuffle([answer, ...others]), answer };
     });
   }
   if (gameId === 'sharp-ear') {
     return pool.slice(0, 8).map((item) => {
-      const others = shuffle(DAILY_ITEMS.filter((d) => d.id !== item.id && d.category === item.category))
+      const others = shuffle(levelItems.filter((d) => d.id !== item.id && d.category === item.category && d.term !== item.term))
         .slice(0, 3)
         .map((d) => d.term);
-      while (others.length < 3) others.push(shuffle(DAILY_ITEMS)[0]!.term);
-      return { prompt: 'Escucha y elige', speak: item.term, options: shuffle([item.term, ...others]), answer: item.term };
+      while (others.length < 3) others.push(shuffle(levelItems.filter((d) => d.term !== item.term))[0]!.term);
+      return {
+        prompt: lang === 'en' ? 'Listen and choose' : 'Escucha y elige',
+        speak: item.term,
+        options: shuffle([item.term, ...others]),
+        answer: item.term,
+      };
     });
   }
   return pool
@@ -131,15 +176,21 @@ function buildRounds(gameId: GameId): Round[] {
     .slice(0, 5)
     .map((sentence) => {
       const words = sentence.replace(/[“”"]/g, '').split(/\s+/);
-      return { prompt: 'Ordena la frase', options: [], answer: words.join(' '), words: shuffle(words) };
+      return {
+        prompt: lang === 'en' ? 'Put the words in order' : 'Ordena la frase',
+        options: [],
+        answer: words.join(' '),
+        words: shuffle(words),
+      };
     });
 }
 
 function GamePlayer({ gameId, onExit }: { gameId: GameId; onExit: () => void }) {
-  const { finishMinigame, pet } = useGame();
+  const { finishMinigame, pet, progress } = useGame();
   const { locale } = useAppState();
   const meta = GAMES.find((g) => g.id === gameId) ?? EVENT_GAME;
-  const rounds = useMemo(() => buildRounds(gameId), [gameId]);
+  const lang = uiLanguageFor(progress.level);
+  const rounds = useMemo(() => buildRounds(gameId, progress.level, lang), [gameId, progress.level, lang]);
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [correct, setCorrect] = useState(0);
@@ -269,7 +320,9 @@ function GamePlayer({ gameId, onExit }: { gameId: GameId; onExit: () => void }) 
           )}
           <Text style={TYPE.footnote}>
             {gameId === 'word-rush' || gameId === 'event-rush'
-              ? '¿Qué significa?'
+              ? lang === 'en'
+                ? '¿Cuál es la palabra?'
+                : '¿Qué significa?'
               : gameId === 'sharp-ear'
                 ? '¿Qué escuchaste?'
                 : gameId === 'error-hunt'

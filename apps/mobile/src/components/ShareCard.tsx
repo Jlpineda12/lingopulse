@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';

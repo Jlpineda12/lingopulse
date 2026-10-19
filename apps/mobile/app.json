@@ -8,17 +8,41 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lingopulse.app",
+      "bundleIdentifier": "com.joses.lingopulse",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "LingoPulse necesita acceso al micrófono para tus sesiones de práctica hablada en Voice Arena."
-      }
+        "NSMicrophoneUsageDescription": "LingoPulse usa el micrófono para grabar tu voz y corregir tu pronunciación en inglés.",
+        "NSLocalNetworkUsageDescription": "LingoPulse se conecta al servidor de IA de tu Mac en la red Wi-Fi de casa para corregir tus respuestas.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "appleTeamId": "SN636Q8VGB"
     },
     "android": {
-      "package": "com.lingopulse.app",
-      "permissions": ["RECORD_AUDIO"]
+      "package": "com.joses.lingopulse",
+      "permissions": [
+        "RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#7FDBF8"
+      }
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "icon": "./assets/icon.png",
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "LingoPulse usa el micrófono para grabar tu voz y corregir tu pronunciación en inglés.",
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "./plugins/withoutPushEntitlement"
+    ]
   }
 }

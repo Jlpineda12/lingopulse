@@ -182,3 +182,218 @@ test('error hunt: the words around the marked one change in the correction', () 
     assert.ok(!item.correction.includes(window), item.sentence);
   }
 });
+
+import {
+  phonemeInfo,
+  pronunciationSummaryEn,
+  pronunciationTipsEs,
+  weakestPhoneme,
+  weakWords,
+  type PronunciationReport,
+} from './pronunciation.js';
+
+const SAMPLE_PRON: PronunciationReport = {
+  provider: 'azure',
+  scripted: true,
+  referenceText: 'I think it is very nice',
+  recognizedText: 'I tink it is bery',
+  pronScore: 66,
+  accuracy: 62,
+  fluency: 80,
+  completeness: 83,
+  prosody: 55,
+  words: [
+    { word: 'I', accuracy: 97, errorType: 'None', phonemes: [{ phoneme: 'ay', ipa: 'aɪ', accuracy: 97 }] },
+    {
+      word: 'think',
+      accuracy: 41,
+      errorType: 'Mispronunciation',
+      phonemes: [
+        { phoneme: 'th', ipa: 'θ', accuracy: 12 },
+        { phoneme: 'ih', ipa: 'ɪ', accuracy: 85 },
+      ],
+    },
+    { word: 'very', accuracy: 55, errorType: 'Mispronunciation', phonemes: [{ phoneme: 'v', ipa: 'v', accuracy: 20 }] },
+    { word: 'nice', accuracy: 0, errorType: 'Omission', phonemes: [] },
+  ],
+};
+
+test('phonemeInfo maps SAPI and IPA symbols to the same Spanish tip', () => {
+  const sapi = phonemeInfo('th');
+  const ipa = phonemeInfo('θ');
+  assert.equal(sapi.ipa, 'θ');
+  assert.ok(sapi.tipEs && sapi.tipEs.includes('lengua'));
+  assert.equal(ipa.tipEs, sapi.tipEs);
+  assert.equal(phonemeInfo('xx').tipEs, null);
+});
+
+test('weak words are ordered worst first and include omissions', () => {
+  const weak = weakWords(SAMPLE_PRON).map((w) => w.word);
+  // "very" tiene /v/ en 20: su puntaje efectivo (20) es peor que el de "think" (41).
+  assert.deepEqual(weak, ['nice', 'very', 'think']);
+  assert.equal(weakestPhoneme(SAMPLE_PRON.words[1]!)?.phoneme, 'th');
+});
+
+test('pronunciation tips explain the weakest sound in Spanish', () => {
+  const tips = pronunciationTipsEs(SAMPLE_PRON, 3);
+  assert.ok(tips.some((t) => t.includes('Te saltaste "nice"')));
+  assert.ok(tips.some((t) => t.includes('"think"') && t.includes('/θ/')));
+  assert.ok(tips.some((t) => t.includes('entonación')));
+  assert.ok(pronunciationSummaryEn(SAMPLE_PRON).includes('overall 66/100'));
+});
+
+test('assessed pronunciation overrides recognizer confidence in fluency analysis', () => {
+  const report = analyzeSpeechFluency('I think it is very nice and I like it a lot today', {
+    durationMs: 6000,
+    voicedMs: 5000,
+    pauseCount: 0,
+    longestPauseMs: 0,
+    recognitionConfidence: 0.95,
+    averageLevel: 0.4,
+    assessedPronunciation: 66,
+  });
+  assert.equal(report.pronunciationScore, 66);
+});
+
+test('Gemini estimates fall back to the AI tip when the sound has no Spanish tip', () => {
+  const report: PronunciationReport = {
+    ...SAMPLE_PRON,
+    provider: 'gemini',
+    approximate: true,
+    words: [{ word: 'world', accuracy: 50, errorType: 'Mispronunciation', phonemes: [], tipEs: 'Junta la "r" y la "l" sin vocal entre ellas.' }],
+  };
+  assert.ok(pronunciationTipsEs(report, 1)[0]!.includes('Junta la "r"'));
+  assert.ok(pronunciationSummaryEn(report).startsWith('Approximate AI estimate'));
+});
+
+import { effectiveWordAccuracy, mergePronunciation } from './pronunciation.js';
+
+// Datos reales: Azure con la lectura "I tink dis weader is bery nice" contra "I think this weather is very nice".
+const AZURE_REAL: PronunciationReport = {
+  provider: 'azure',
+  scripted: true,
+  referenceText: 'I think this weather is very nice',
+  recognizedText: 'I think this weather is very nice.',
+  pronScore: 90,
+  accuracy: 97,
+  fluency: 83,
+  completeness: 100,
+  prosody: 89,
+  words: [
+    { word: 'i', accuracy: 100, errorType: 'None', phonemes: [{ phoneme: 'ay', ipa: 'aɪ', accuracy: 100 }] },
+    { word: 'think', accuracy: 100, errorType: 'None', phonemes: [{ phoneme: 'th', ipa: 'θ', accuracy: 100 }, { phoneme: 'ih', ipa: 'ɪ', accuracy: 100 }] },
+    { word: 'this', accuracy: 100, errorType: 'None', phonemes: [{ phoneme: 'dh', ipa: 'ð', accuracy: 100 }] },
+    {
+      word: 'weather',
+      accuracy: 82,
+      errorType: 'None',
+      phonemes: [
+        { phoneme: 'w', ipa: 'w', accuracy: 40 },
+        { phoneme: 'eh', ipa: 'ɛ', accuracy: 19 },
+        { phoneme: 'dh', ipa: 'ð', accuracy: 0 },
+        { phoneme: 'ax', ipa: 'ə', accuracy: 34 },
+        { phoneme: 'r', ipa: 'ɹ', accuracy: 100 },
+      ],
+    },
+    { word: 'is', accuracy: 100, errorType: 'None', phonemes: [] },
+    { word: 'very', accuracy: 100, errorType: 'None', phonemes: [{ phoneme: 'v', ipa: 'v', accuracy: 100 }] },
+    { word: 'nice', accuracy: 100, errorType: 'None', phonemes: [] },
+  ],
+};
+
+const GEMINI_REVIEW: PronunciationReport = {
+  provider: 'gemini',
+  approximate: true,
+  scripted: true,
+  recognizedText: 'I tink dis weeder is berry nice',
+  pronScore: 64,
+  accuracy: 60,
+  fluency: 72,
+  completeness: 100,
+  prosody: 70,
+  words: [
+    { word: 'I', accuracy: 95, errorType: 'None', phonemes: [] },
+    { word: 'think', accuracy: 62, errorType: 'Mispronunciation', phonemes: [{ phoneme: 'θ', ipa: 'θ', accuracy: 62 }], tipEs: 'Lengua entre los dientes.' },
+    { word: 'this', accuracy: 60, errorType: 'Mispronunciation', phonemes: [{ phoneme: 'ð', ipa: 'ð', accuracy: 60 }] },
+    { word: 'weather', accuracy: 55, errorType: 'Mispronunciation', phonemes: [{ phoneme: 'ð', ipa: 'ð', accuracy: 55 }] },
+    { word: 'is', accuracy: 88, errorType: 'None', phonemes: [] },
+    { word: 'very', accuracy: 58, errorType: 'Mispronunciation', phonemes: [{ phoneme: 'v', ipa: 'v', accuracy: 58 }] },
+    { word: 'nice', accuracy: 92, errorType: 'None', phonemes: [] },
+  ],
+};
+
+test('a word with a failed key sound is not shown as good', () => {
+  assert.equal(effectiveWordAccuracy(AZURE_REAL.words[3]!), 39);
+  assert.ok(weakWords(AZURE_REAL).some((w) => w.word === 'weather'));
+});
+
+test('Gemini review adds the substitutions Azure missed and keeps Azure acoustics', () => {
+  const merged = mergePronunciation(AZURE_REAL, GEMINI_REVIEW);
+  assert.equal(merged.reviewedBy, 'gemini');
+  assert.equal(merged.fluency, 83);
+  assert.equal(merged.prosody, 89);
+  const byWord = Object.fromEntries(merged.words.map((w) => [w.word, w]));
+  assert.equal(byWord.think!.accuracy, 62);
+  assert.equal(byWord.think!.phonemes.find((p) => p.ipa === 'θ')!.accuracy, 62);
+  assert.equal(byWord.think!.tipEs, 'Lengua entre los dientes.');
+  assert.equal(byWord.very!.errorType, 'Mispronunciation');
+  assert.equal(byWord.nice!.accuracy, 100);
+  assert.ok(merged.pronScore < AZURE_REAL.pronScore);
+  assert.deepEqual(
+    weakWords(merged).map((w) => w.word).sort(),
+    ['think', 'this', 'very', 'weather']
+  );
+});
+
+test('a clean Gemini review does not lower a good Azure result', () => {
+  const clean: PronunciationReport = { ...GEMINI_REVIEW, words: GEMINI_REVIEW.words.map((w) => ({ ...w, accuracy: 98, errorType: 'None', phonemes: [] })) };
+  const goodAzure: PronunciationReport = { ...AZURE_REAL, pronScore: 96, accuracy: 100, words: AZURE_REAL.words.map((w) => ({ ...w, accuracy: 100, phonemes: [] })) };
+  const merged = mergePronunciation(goodAzure, clean);
+  assert.equal(merged.pronScore, 96);
+  assert.equal(weakWords(merged).length, 0);
+});
+
+import {
+  EXPERIENCE_DAILY_ITEMS,
+  EXPERIENCE_ERROR_HUNT_ITEMS,
+  EXPERIENCE_ISLAND_MAP,
+  EXPERIENCE_LISTENING_TRACKS,
+  EXPERIENCE_SPANGLISH_TRAPS,
+  EXPERIENCE_SPEAKING_TOPICS,
+  EXPERIENCE_WRITING_PROMPTS,
+} from './experience-bank.js';
+import { DAILY_ITEMS as ALL_DAILY, SPEAKING_TOPICS as ALL_SPEAKING } from './index.js';
+
+test('experience bank: every level has speaking, listening and writing content', () => {
+  for (const level of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const) {
+    assert.ok(EXPERIENCE_SPEAKING_TOPICS.some((t) => t.level === level), `speaking ${level}`);
+    assert.ok(EXPERIENCE_LISTENING_TRACKS.some((t) => t.level === level), `listening ${level}`);
+    assert.ok(EXPERIENCE_WRITING_PROMPTS.some((t) => t.level === level), `writing ${level}`);
+    assert.equal(EXPERIENCE_ISLAND_MAP[level].islands.length, 15, `island map ${level}`);
+  }
+  assert.ok(ALL_SPEAKING.some((t) => t.id.startsWith('exp-')), 'bank merged into SPEAKING_TOPICS');
+  assert.ok(ALL_DAILY.some((d) => d.id.startsWith('exp-')), 'bank merged into DAILY_ITEMS');
+});
+
+test('experience bank: answers point to real options', () => {
+  for (const t of EXPERIENCE_LISTENING_TRACKS) {
+    assert.ok(t.segments.length > 0, t.id);
+    for (const q of t.questions) assert.ok(q.answerIndex >= 0 && q.answerIndex < q.options.length, `${t.id}: ${q.question}`);
+  }
+  for (const d of EXPERIENCE_DAILY_ITEMS) assert.ok(d.quiz.options.includes(d.quiz.answer), d.id);
+  for (const trap of EXPERIENCE_SPANGLISH_TRAPS) {
+    assert.equal(trap.options[trap.answerIndex], trap.naturalReplacement, trap.id);
+    assert.notEqual(trap.trapWord, trap.naturalReplacement, trap.id);
+  }
+  for (const item of EXPERIENCE_ERROR_HUNT_ITEMS) assert.ok(item.wrongIndex < item.sentence.split(' ').length, item.sentence);
+  for (const w of EXPERIENCE_WRITING_PROMPTS) assert.ok(w.minWords >= 15 && w.checklist.length > 0, w.id);
+});
+
+import { getDailyDrop as dropFor } from './index.js';
+
+test('daily drop respects the learner level (no C1/C2 words for A1)', () => {
+  for (const day of ['2026-10-18', '2026-10-19', '2026-10-20', '2026-11-02']) {
+    const drop = dropFor(day, 'A1');
+    for (const item of drop.items) assert.ok(!item.level || ['A1', 'A2'].includes(item.level), `${item.term} (${item.level})`);
+  }
+});

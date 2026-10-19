@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text, useUiLanguage } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import type { AlignmentResult, CoachFeedback } from '@lingopulse/shared';
 import { THEME, TYPE } from '../theme/colors';
@@ -34,6 +35,7 @@ function SpeakLink({ onPress }: { onPress: () => void }) {
 
 export function FeedbackView({ feedback, onSpeak }: { feedback: CoachFeedback; onSpeak?: (text: string) => void }) {
   const [showAll, setShowAll] = useState(false);
+  const lang = useUiLanguage();
   const corrections = showAll ? feedback.corrections : feedback.corrections.slice(0, 5);
   let i = 0;
 
@@ -47,8 +49,8 @@ export function FeedbackView({ feedback, onSpeak }: { feedback: CoachFeedback; o
               <View style={ui.rowWrap}>
                 <Badge label={`Nivel ${feedback.cefrEstimate}`} color={THEME.gold} bg={THEME.goldLight} icon="ribbon" />
                 <Badge
-                  label={feedback.source === 'claude' ? 'Coach IA' : 'Motor local'}
-                  icon={feedback.source === 'claude' ? 'sparkles' : 'hardware-chip-outline'}
+                  label={feedback.source === 'gemini' ? 'IA Gemini' : feedback.source === 'claude' ? 'IA Claude' : 'Motor local'}
+                  icon={feedback.source === 'local' ? 'hardware-chip-outline' : 'sparkles'}
                 />
               </View>
               <Text style={TYPE.subhead}>{feedback.summaryEs}</Text>
@@ -88,7 +90,7 @@ export function FeedbackView({ feedback, onSpeak }: { feedback: CoachFeedback; o
                       <Text style={styles.right}>{c.corrected}</Text>
                     </Text>
                     <Text style={styles.explainEn}>{c.explanationEn}</Text>
-                    <Text style={styles.explainEs}>{c.explanationEs}</Text>
+                    {lang === 'es' ? <Text style={styles.explainEs}>{c.explanationEs}</Text> : null}
                   </View>
                 </Reveal>
               );

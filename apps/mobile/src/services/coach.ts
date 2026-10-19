@@ -4,7 +4,7 @@ import {
   type CoachRequest,
 } from '@lingopulse/shared';
 
-import { getApiBaseUrl } from './config';
+import { apiHeaders, getApiBaseUrl } from './config';
 
 export type CoachEngine = 'claude' | 'local';
 
@@ -14,7 +14,7 @@ async function fetchJson<T>(path: string, init: RequestInit, timeoutMs: number):
   try {
     const res = await fetch(`${getApiBaseUrl()}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json', ...apiHeaders(), ...(init.headers ?? {}) },
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

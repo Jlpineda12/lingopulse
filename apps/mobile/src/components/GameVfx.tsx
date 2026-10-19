@@ -1,13 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, Easing, Modal, Platform, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, {
   Circle,

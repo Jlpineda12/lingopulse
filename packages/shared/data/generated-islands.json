@@ -1,0 +1,1158 @@
+{
+  "generatedWith": "gemini-flash-latest",
+  "note": "Contenido generado con IA para revisión. Cambia \"approved\" a true en las islas que apruebes.",
+  "islands": [
+    {
+      "level": "A1",
+      "island_id": "A1-ISL-01",
+      "title": "Arrival & Border Control",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "A1-ISL-01",
+        "title": "Arrival & Border Control",
+        "topic_context": "Interacciones básicas en el control de pasaportes y aduanas al llegar a un país extranjero: declarar el propósito de la visita, la duración de la estadía y mostrar documentos.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "A1-I01-SPK-01",
+              "goal": "Explicar el motivo del viaje y la duración de la visita en el control migratorio.",
+              "instructions": "Estás frente al oficial de migración en el aeropuerto. Preséntate cordialmente, indica que viajas por vacaciones y que te quedarás por diez días.",
+              "target_phrases": [
+                "I am here on vacation.",
+                "I am staying for...",
+                "Here is my passport."
+              ],
+              "model_response": "Good afternoon. Here is my passport. I am here on vacation and I am staying for ten days."
+            },
+            {
+              "id": "A1-I01-SPK-02",
+              "goal": "Indicar dónde te vas a hospedar y mostrar la confirmación.",
+              "instructions": "El oficial te pregunta por tu alojamiento. Responde que te quedarás en un hotel en el centro de la ciudad y muestra tu confirmación impresa.",
+              "target_phrases": [
+                "I am staying at...",
+                "In the city center.",
+                "Here is my reservation."
+              ],
+              "model_response": "I am staying at a hotel in the city center. Here is my reservation."
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "A1-I01-LIS-01",
+          "audio_script": "Officer: Good afternoon. May I see your passport?\nTraveler: Good afternoon. Yes, here you go.\nOfficer: What is the purpose of your visit?\nTraveler: I am here on vacation with my family.\nOfficer: How long are you staying in the country?\nTraveler: We are staying for ten days.\nOfficer: Great. Welcome and enjoy your trip!",
+          "comprehension_questions": [
+            {
+              "question": "¿Cuál es el propósito del viaje del pasajero?",
+              "options": [
+                "A) Viaje de negocios",
+                "B) Vacaciones con su familia",
+                "C) Estudios universitarios"
+              ],
+              "correct_answer": "B) Vacaciones con su familia",
+              "explanation": "El viajero responde con claridad a la pregunta del oficial: 'I am here on vacation with my family'."
+            },
+            {
+              "question": "¿Por cuánto tiempo se quedará el viajero en el país?",
+              "options": [
+                "A) Diez días",
+                "B) Dos semanas",
+                "C) Tres meses"
+              ],
+              "correct_answer": "A) Diez días",
+              "explanation": "El viajero especifica la duración de su estancia diciendo: 'We are staying for ten days'."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "A1-I01-WRT-01",
+          "task_type": "Mensaje de texto / Notificación de llegada",
+          "instructions": "Escribe un mensaje corto (20-35 palabras) a un amigo o familiar para avisarle que ya pasaste el control de migración y vas a buscar tus maletas.",
+          "scaffolding_structures": [
+            "I just passed border control.",
+            "I am waiting for my luggage now.",
+            "See you outside very soon!"
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "A1-I01-SPA-01",
+            "incorrect_sentence": "I arrived to the airport on time.",
+            "spanish_interference": "En español decimos 'llegar a', pero en inglés no se usa la preposición 'to' con el verbo 'arrive'. Para aeropuertos o estaciones específicas, la preposición correcta es 'at'.",
+            "native_correction": "I arrived at the airport on time."
+          },
+          {
+            "error_id": "A1-I01-SPA-02",
+            "incorrect_sentence": "I will stay in an hotel.",
+            "spanish_interference": "En español la letra 'h' es muda, lo que lleva al error de usar 'an'. En inglés la palabra 'hotel' empieza con un sonido consonántico aspirado (/h/), por lo que requiere el artículo 'a'.",
+            "native_correction": "I will stay in a hotel."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Fill out",
+            "type": "Phrasal Verb",
+            "ipa": "/fɪl aʊt/",
+            "explanation": "Completar o rellenar un formulario con información escrita requerida por las autoridades.",
+            "how_to_use": "Verbo separable. Puedes colocar el sustantivo en medio o al final: 'fill out the form' o 'fill the form out'.",
+            "example_1": "You must fill out this card before border control.",
+            "example_2": "Please fill out the form with a black pen."
+          },
+          {
+            "term": "Red-eye",
+            "type": "Slang / Colloquial",
+            "ipa": "/ˈrɛd.aɪ/",
+            "explanation": "Vuelo comercial que viaja durante la noche y aterriza a primera hora de la mañana.",
+            "how_to_use": "Se utiliza coloquialmente como sustantivo o como modificador antes de la palabra 'flight'.",
+            "example_1": "I am very tired after my red-eye from Chicago.",
+            "example_2": "We booked a cheap red-eye to arrive early."
+          },
+          {
+            "term": "Declare",
+            "type": "Verb",
+            "ipa": "/dɪˈklɛr/",
+            "explanation": "Informar oficialmente a las autoridades de aduana sobre bienes, dinero o alimentos que ingresas al país.",
+            "how_to_use": "Verbo regular. Va acompañado directamente por el objeto o artículo que se somete a revisión.",
+            "example_1": "Do you have any food to declare at customs?",
+            "example_2": "I declare two bottles of wine on this form."
+          },
+          {
+            "term": "Valid",
+            "type": "Adjective",
+            "ipa": "/ˈvæl.ɪd/",
+            "explanation": "Vigente y legalmente aceptado; que no está caducado o vencido.",
+            "how_to_use": "Se coloca antes del sustantivo que califica o después del verbo 'to be'.",
+            "example_1": "You need a valid passport to enter the country.",
+            "example_2": "My tourist visa is valid for three months."
+          },
+          {
+            "term": "Smooth sailing",
+            "type": "Idiom",
+            "ipa": "/smuːð ˈseɪ.lɪŋ/",
+            "explanation": "Un proceso sencillo, continuo y sin ningún obstáculo o complicación inesperada.",
+            "how_to_use": "Se emplea habitualmente después del verbo 'to be' para resumir una experiencia sin problemas.",
+            "example_1": "Immigration was smooth sailing today.",
+            "example_2": "Our trip through the airport was smooth sailing."
+          },
+          {
+            "term": "Luggage",
+            "type": "Useful Vocabulary",
+            "ipa": "/ˈlʌɡ.ɪdʒ/",
+            "explanation": "Equipaje; el conjunto de valijas, maletas y bultos de un viajero.",
+            "how_to_use": "Sustantivo incontable en inglés. Nunca agregues una 's' final ni uses el artículo 'a' directamente con esta palabra.",
+            "example_1": "I need to collect my luggage at carousel four.",
+            "example_2": "The officer inspected my luggage at customs."
+          }
+        ]
+      }
+    },
+    {
+      "level": "A1",
+      "island_id": "A1-ISL-03",
+      "title": "Roommates & Living Spaces",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "A1-ISL-03",
+        "title": "Roommates & Living Spaces",
+        "topic_context": "Convivencia básica en un departamento compartido: acordar tareas del hogar, describir habitaciones y establecer reglas sencillas.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "A1-I03-SPK-01",
+              "goal": "Preguntar sobre el turno de limpieza en el departamento.",
+              "instructions": "Habla con tu nuevo compañero de cuarto sobre las tareas de la casa. Pregúntale a quién le toca lavar los platos hoy.",
+              "target_phrases": [
+                "Whose turn is it?",
+                "I can wash...",
+                "Do you want to...?"
+              ],
+              "model_response": "Hi! Whose turn is it to wash the dishes today? I can do it if you want."
+            },
+            {
+              "id": "A1-I03-SPK-02",
+              "goal": "Pedir permiso de manera cortés para usar un electrodoméstico.",
+              "instructions": "Quieres usar la lavadora de ropa este fin de semana. Pregúntale a tu compañero si está libre el espacio.",
+              "target_phrases": [
+                "Can I use...?",
+                "Are you using...",
+                "No problem."
+              ],
+              "model_response": "Excuse me, can I use the washing machine now? Or are you using it?"
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "A1-I03-LIS-01",
+          "audio_script": "Leo: Hey Mia, do you have a minute?\nMia: Yes, what is up?\nLeo: Can we clean the kitchen together tonight?\nMia: I am busy tonight, but I can do it tomorrow morning.\nLeo: Okay, that works. I will take out the trash now.\nMia: Thanks, Leo! I can buy dish soap tomorrow too.",
+          "comprehension_questions": [
+            {
+              "question": "¿Cuándo puede limpiar la cocina Mia?",
+              "options": [
+                "A) Esta noche",
+                "B) Mañana por la mañana",
+                "C) El fin de semana"
+              ],
+              "correct_answer": "B) Mañana por la mañana",
+              "explanation": "Mia responde: 'I am busy tonight, but I can do it tomorrow morning'."
+            },
+            {
+              "question": "¿Qué tarea del hogar hará Leo de inmediato?",
+              "options": [
+                "A) Sacar la basura",
+                "B) Comprar jabón para platos",
+                "C) Lavar la ropa"
+              ],
+              "correct_answer": "A) Sacar la basura",
+              "explanation": "Leo dice: 'I will take out the trash now'."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "A1-I03-WRT-01",
+          "task_type": "Nota breve para un compañero de cuarto",
+          "instructions": "Escribe una nota corta (20-35 palabras) para tu compañero de cuarto avisándole que compraste leche y pidiéndole que saque la basura.",
+          "scaffolding_structures": [
+            "Hi! I bought some...",
+            "Could you please take out...",
+            "See you later!"
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "A1-I03-SPA-01",
+            "incorrect_sentence": "Please close the light when you leave the room.",
+            "spanish_interference": "En español decimos comúnmente 'cerrar la luz'. En inglés, las luces y aparatos eléctricos no se cierran, sino que se apagan con el phrasal verb 'turn off'.",
+            "native_correction": "Please turn off the light when you leave the room."
+          },
+          {
+            "error_id": "A1-I03-SPA-02",
+            "incorrect_sentence": "We need to clean the kitchen in the weekend.",
+            "spanish_interference": "Por influencia del español 'en el fin de semana', se suele usar erróneamente la preposición 'in'. En inglés estadounidense se utiliza la preposición 'on'.",
+            "native_correction": "We need to clean the kitchen on the weekend."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Clean up",
+            "type": "Phrasal Verb",
+            "ipa": "/kliːn ʌp/",
+            "explanation": "Limpiar u ordenar a fondo un espacio que está sucio o desordenado.",
+            "how_to_use": "Verbo separable. Puedes decir 'clean up the kitchen' o 'clean the kitchen up'.",
+            "example_1": "We need to clean up the living room before the guests arrive.",
+            "example_2": "Please clean up your mess after cooking dinner."
+          },
+          {
+            "term": "Crash",
+            "type": "Slang / Colloquial",
+            "ipa": "/kræʃ/",
+            "explanation": "Dormir o quedarse a pasar la noche en casa de alguien de forma improvisada o informal.",
+            "how_to_use": "Se usa de manera coloquial e intransitiva cuando alguien duerme en tu sofá o habitación de invitados.",
+            "example_1": "My friend will crash on our sofa tonight.",
+            "example_2": "You can crash here if it is too late to go home."
+          },
+          {
+            "term": "Share",
+            "type": "Verb",
+            "ipa": "/ʃer/",
+            "explanation": "Compartir un espacio, habitación o gastos con otra persona.",
+            "how_to_use": "Verbo regular. Va seguido directamente de la cosa o espacio compartido ('share an apartment', 'share the rent').",
+            "example_1": "I share a two-bedroom apartment with my best friend.",
+            "example_2": "We share the groceries equally every month."
+          },
+          {
+            "term": "Cozy",
+            "type": "Adjective",
+            "ipa": "/ˈkoʊ.zi/",
+            "explanation": "Acogedor, cálido y cómodo; describe un espacio pequeño pero agradable.",
+            "how_to_use": "Se coloca antes del sustantivo que califica o después del verbo 'to be'.",
+            "example_1": "Our small apartment is very cozy in the winter.",
+            "example_2": "She decorated her room to make it look cozy."
+          },
+          {
+            "term": "Make yourself at home",
+            "type": "Idiom",
+            "ipa": "/meɪk jərˈsɛlf æt hoʊm/",
+            "explanation": "Siéntete como en tu casa; expresión de bienvenida y hospitalidad.",
+            "how_to_use": "Se dice como una invitación amable a un visitante para que se relaje y se ponga cómodo.",
+            "example_1": "Come in and make yourself at home while I make tea.",
+            "example_2": "Please sit down and make yourself at home."
+          },
+          {
+            "term": "Roommate",
+            "type": "Useful Vocabulary",
+            "ipa": "/ˈruːm.meɪt/",
+            "explanation": "Compañero de cuarto o de departamento con quien compartes vivienda.",
+            "how_to_use": "Sustantivo contable muy utilizado en inglés norteamericano para referirse a la persona con quien vives.",
+            "example_1": "My new roommate is very quiet and friendly.",
+            "example_2": "I have to talk with my roommate about the bills."
+          }
+        ]
+      }
+    },
+    {
+      "level": "A1",
+      "island_id": "A1-ISL-04",
+      "title": "Daily Rhythms & Commute",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "A1-ISL-04",
+        "title": "Daily Rhythms & Commute",
+        "topic_context": "Rutinas diarias y traslados matutinos: horarios cotidianos, tomar el transporte público, comprar pasajes y llegar a tiempo al trabajo o la escuela.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "A1-I04-SPK-01",
+              "goal": "Preguntar sobre la ruta y el horario de un autobús.",
+              "instructions": "Estás en una parada de autobús. Pregúntale a otra persona si ese autobús va al centro de la ciudad y a qué hora llega.",
+              "target_phrases": [
+                "Excuse me",
+                "Does this bus go to...?",
+                "What time does it arrive?"
+              ],
+              "model_response": "Excuse me, does this bus go to downtown? What time does it arrive?"
+            },
+            {
+              "id": "A1-I04-SPK-02",
+              "goal": "Comprar un boleto de metro para el día.",
+              "instructions": "Estás en la taquilla del metro. Pide un pase de un día y pregunta si puedes pagar en efectivo.",
+              "target_phrases": [
+                "Can I have a...?",
+                "One-day pass",
+                "Can I pay with cash?"
+              ],
+              "model_response": "Hello! Can I have a one-day pass, please? Can I pay with cash?"
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "A1-I04-LIS-01",
+          "audio_script": "Mark: Good morning, Sara! Are you ready for work?\nSara: Good morning, Mark! Yes, but the train is late today.\nMark: Oh no. What time does your train usually leave?\nSara: It leaves at eight fifteen, but now it is eight twenty-five.\nMark: Do not worry. The next train arrives in three minutes.\nSara: That is great. I can still arrive on time!",
+          "comprehension_questions": [
+            {
+              "question": "¿A qué hora sale normalmente el tren de Sara?",
+              "options": [
+                "A) A las 8:15",
+                "B) A las 8:25",
+                "C) A las 8:30"
+              ],
+              "correct_answer": "A) A las 8:15",
+              "explanation": "Sara menciona claramente que su tren sale normalmente a las 8:15 ('It leaves at eight fifteen')."
+            },
+            {
+              "question": "¿En cuántos minutos llega el siguiente tren?",
+              "options": [
+                "A) En diez minutos",
+                "B) En tres minutos",
+                "C) En quince minutos"
+              ],
+              "correct_answer": "B) En tres minutos",
+              "explanation": "Mark le dice a Sara: 'The next train arrives in three minutes'."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "A1-I04-WRT-01",
+          "task_type": "Mensaje corto sobre tu traslado diario",
+          "instructions": "Escribe un mensaje corto (20-35 palabras) a un amigo contándole cómo vas al trabajo hoy y a qué hora llegas.",
+          "scaffolding_structures": [
+            "I take the bus at...",
+            "The commute is...",
+            "I arrive at work at..."
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "A1-I04-SPA-01",
+            "incorrect_sentence": "I wake up late and lose the bus.",
+            "spanish_interference": "En español decimos 'perder el autobús'. En inglés no se usa el verbo 'lose' para transporte público no alcanzado; se utiliza estrictamente el verbo 'miss'.",
+            "native_correction": "I wake up late and miss the bus."
+          },
+          {
+            "error_id": "A1-I04-SPA-02",
+            "incorrect_sentence": "I read a book in the bus every morning.",
+            "spanish_interference": "En español usamos 'en' para cualquier vehículo. En inglés, para medios de transporte colectivos grandes donde puedes caminar o pararte (bus, tren, metro), se usa la preposición 'on'.",
+            "native_correction": "I read a book on the bus every morning."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Get off",
+            "type": "Phrasal Verb",
+            "ipa": "/ɡɛt ɔːf/",
+            "explanation": "Bajarse o descender de un transporte público como un autobús, tren o tranvía.",
+            "how_to_use": "Se combina comúnmente con 'at' para señalar la parada o estación de destino.",
+            "example_1": "I get off the bus near my office.",
+            "example_2": "You need to get off at the next stop."
+          },
+          {
+            "term": "Packed",
+            "type": "Slang / Colloquial",
+            "ipa": "/pækt/",
+            "explanation": "Expresión coloquial para indicar que un vagón, autobús o lugar está completamente lleno de personas.",
+            "how_to_use": "Funciona después del verbo 'to be' para describir la congestión de un lugar o vehículo.",
+            "example_1": "The morning train is always packed.",
+            "example_2": "The bus is packed, so I will walk."
+          },
+          {
+            "term": "Commute",
+            "type": "Verb",
+            "ipa": "/kəˈmjuːt/",
+            "explanation": "Viajar regularmente entre el hogar y el lugar de trabajo o escuela.",
+            "how_to_use": "Verbo regular. Puede usarse con preposiciones de transporte como 'by bus' o 'by train'.",
+            "example_1": "I commute by subway every weekday.",
+            "example_2": "Many people commute to the city for work."
+          },
+          {
+            "term": "Crowded",
+            "type": "Adjective",
+            "ipa": "/ˈkraʊ.dɪd/",
+            "explanation": "Lleno de gente; abarrotado de pasajeros o personas.",
+            "how_to_use": "Se coloca antes de un sustantivo o después del verbo 'to be' para describir espacios concurridos.",
+            "example_1": "The platform is crowded at eight in the morning.",
+            "example_2": "I do not like crowded buses."
+          },
+          {
+            "term": "In a rush",
+            "type": "Idiom",
+            "ipa": "/ɪn ə rʌʃ/",
+            "explanation": "Estar apurado o tener prisa por llegar o terminar algo.",
+            "how_to_use": "Se utiliza habitualmente con el verbo 'to be' para señalar que alguien tiene poco tiempo.",
+            "example_1": "She is in a rush because her alarm did not ring.",
+            "example_2": "I am in a rush to catch the morning train."
+          },
+          {
+            "term": "Fare",
+            "type": "Useful Vocabulary",
+            "ipa": "/fɛr/",
+            "explanation": "La tarifa o el precio del boleto para usar un medio de transporte.",
+            "how_to_use": "Sustantivo incontable o contable según el contexto; a menudo se usa como 'bus fare' o 'train fare'.",
+            "example_1": "The bus fare is two dollars.",
+            "example_2": "You can pay the fare with a transit card."
+          }
+        ]
+      }
+    },
+    {
+      "level": "A2",
+      "island_id": "A2-ISL-01",
+      "title": "Baggage Claim & Hotels",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "A2-ISL-01",
+        "title": "Baggage Claim & Hotels",
+        "topic_context": "Procedimientos en el aeropuerto y el hotel: cómo reportar equipaje extraviado en la zona de reclamo, registrarse en recepción y resolver dudas sobre servicios.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "A2-I01-SPK-01",
+              "goal": "Reportar una maleta extraviada en el reclamo de equipaje.",
+              "instructions": "Tu vuelo aterrizó, pero tu maleta no apareció en la cinta transportadora. Acércate al mostrador de reclamo de equipaje, describe tu maleta y entrega tu comprobante.",
+              "target_phrases": [
+                "My luggage did not arrive",
+                "It is a black suitcase",
+                "Here is my claim ticket"
+              ],
+              "model_response": "Excuse me, my luggage did not arrive on the carousel. It is a large black suitcase with wheels. Here is my claim ticket."
+            },
+            {
+              "id": "A2-I01-SPK-02",
+              "goal": "Registrarse en el hotel y solicitar una habitación silenciosa.",
+              "instructions": "Llegas a la recepción de tu hotel para hacer el check-in. Da tu nombre, entrega tu documento de identidad y pide con amabilidad una habitación alejada del ruido de la calle.",
+              "target_phrases": [
+                "I have a reservation under",
+                "Here is my passport",
+                "Could I have a quiet room?"
+              ],
+              "model_response": "Good afternoon. I have a reservation under the name Maria Silva. Here is my passport. Could I have a quiet room, please?"
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "A2-I01-LIS-01",
+          "audio_script": "Receptionist: Good evening! Welcome to the Central Hotel. How can I help you?\nGuest: Hi, good evening. I have a reservation under the name Carlos Gomez.\nReceptionist: Thank you, Mr. Gomez. May I see your passport and a credit card, please?\nGuest: Sure, here they are. Also, what time is breakfast served in the morning?\nReceptionist: Breakfast is served from 7:00 to 10:00 a.m. in the main dining hall.\nGuest: Wonderful. Is there free Wi-Fi in the bedroom?\nReceptionist: Yes, the Wi-Fi code is on your keycard holder. Here is room 402!",
+          "comprehension_questions": [
+            {
+              "question": "¿En qué horario se sirve el desayuno en el hotel?",
+              "options": [
+                "A) De 6:00 a 9:00 a.m.",
+                "B) De 7:00 a 10:00 a.m.",
+                "C) De 8:00 a 11:00 a.m."
+              ],
+              "correct_answer": "B) De 7:00 a 10:00 a.m.",
+              "explanation": "El recepcionista indica claramente: 'Breakfast is served from 7:00 to 10:00 a.m. in the main dining hall'."
+            },
+            {
+              "question": "¿Dónde puede consultar el huésped la clave de la red Wi-Fi?",
+              "options": [
+                "A) En el sobre de su tarjeta llave",
+                "B) En la pared del comedor principal",
+                "C) En un mensaje de texto en su teléfono"
+              ],
+              "correct_answer": "A) En el sobre de su tarjeta llave",
+              "explanation": "El recepcionista explica que la clave se encuentra en el portatarjetas: 'the Wi-Fi code is on your keycard holder'."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "A2-I01-WRT-01",
+          "task_type": "Mensaje breve de confirmación a un hotel",
+          "instructions": "Escribe un mensaje breve al hotel antes de tu viaje (50-70 palabras) confirmando tu hora de llegada, consultando por el servicio de transporte al aeropuerto y preguntando si el desayuno está incluido.",
+          "scaffolding_structures": [
+            "Dear Hotel Reservations,",
+            "I am writing to confirm my arrival on...",
+            "Could you please let me know if..."
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "A2-I01-SPA-01",
+            "incorrect_sentence": "We arrived to the hotel after midnight.",
+            "spanish_interference": "Traducción literal de 'llegar a'. En inglés, el verbo 'arrive' nunca se combina con la preposición 'to'. Se utiliza 'arrive at' para edificios, lugares específicos o eventos, y 'arrive in' para ciudades o países.",
+            "native_correction": "We arrived at the hotel after midnight."
+          },
+          {
+            "error_id": "A2-I01-SPA-02",
+            "incorrect_sentence": "We stayed during two days at the hotel.",
+            "spanish_interference": "Uso erróneo de 'during' para indicar la extensión temporal de una acción. En inglés, para indicar cuánto tiempo duró una estancia o actividad se emplea la preposición 'for', reservando 'during' solo para señalar el momento en que ocurre algo ('during the night').",
+            "native_correction": "We stayed for two days at the hotel."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Check in",
+            "type": "Phrasal Verb",
+            "ipa": "/ˈtʃek ɪn/",
+            "explanation": "Registrarse formalmente a la llegada en un hotel o en el mostrador de una aerolínea.",
+            "how_to_use": "Se utiliza como verbo compuesto intransitivo o seguido de 'at': 'check in at the desk'. Cuando funciona como sustantivo o adjetivo, se escribe junto ('check-in desk').",
+            "example_1": "We need to check in at the front desk before four o'clock.",
+            "example_2": "You can check in online twenty-four hours before the flight."
+          },
+          {
+            "term": "Red-eye",
+            "type": "Slang / Colloquial",
+            "ipa": "/ˈred.aɪ/",
+            "explanation": "Vuelo comercial nocturno que sale muy tarde y aterriza temprano a la mañana siguiente, dejando a los pasajeros fatigados.",
+            "how_to_use": "Sustantivo informal contable. Generalmente va precedido de 'the' o 'a': 'take the red-eye'.",
+            "example_1": "I felt exhausted after taking a red-eye from Los Angeles.",
+            "example_2": "The red-eye was cheaper, but we did not sleep at all."
+          },
+          {
+            "term": "Claim",
+            "type": "Verb",
+            "ipa": "/kleɪm/",
+            "explanation": "Reclamar o recoger algo que te pertenece formalmente, como el equipaje facturado tras un vuelo.",
+            "how_to_use": "Verbo transitivo. En aeropuertos aparece frecuentemente en el compuesto 'baggage claim'.",
+            "example_1": "Passengers must claim their luggage on the ground floor.",
+            "example_2": "Did you claim your suitcase at the airport counter?"
+          },
+          {
+            "term": "Missing",
+            "type": "Adjective",
+            "ipa": "/ˈmɪs.ɪŋ/",
+            "explanation": "Extraviado o no encontrado en el lugar donde debería estar.",
+            "how_to_use": "Funciona después del verbo to be ('my bag is missing') o directamente antes del sustantivo ('missing items').",
+            "example_1": "One of my heavy suitcases is missing from the carousel.",
+            "example_2": "The hotel staff helped me look for my missing bag."
+          },
+          {
+            "term": "Travel light",
+            "type": "Idiom",
+            "ipa": "/ˈtræv.əl laɪt/",
+            "explanation": "Viajar con muy poco equipaje o solamente con lo estrictamente indispensable.",
+            "how_to_use": "Se emplea habitualmente como infinitivo o en presente simple para describir un hábito de viaje.",
+            "example_1": "I always prefer to travel light when I go on weekend trips.",
+            "example_2": "It is much easier to move around when you travel light."
+          },
+          {
+            "term": "Luggage tag",
+            "type": "Useful Vocabulary",
+            "ipa": "/ˈlʌɡ.ɪdʒ tæɡ/",
+            "explanation": "Etiqueta identificatoria plástica o de papel que se adhiere a una maleta con el nombre y datos de contacto del pasajero.",
+            "how_to_use": "Sustantivo contable común. Se suele combinar con verbos como 'attach', 'fill out' o 'check'.",
+            "example_1": "Please write your phone number clearly on the luggage tag.",
+            "example_2": "The airline agent attached a yellow luggage tag to my suitcase."
+          }
+        ]
+      }
+    },
+    {
+      "level": "A2",
+      "island_id": "A2-ISL-02",
+      "title": "Workplace Collaboration",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "A2-ISL-02",
+        "title": "Workplace Collaboration",
+        "topic_context": "Colaboración en el trabajo: coordinar reuniones diarias, dividir tareas con compañeros de equipo, solicitar ayuda y comunicar avances de proyectos.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "A2-I02-SPK-01",
+              "goal": "Pedir ayuda a un compañero para revisar una presentación compartida.",
+              "instructions": "Estás trabajando en una presentación importante y necesitas apoyo con los gráficos. Pídele unos minutos a tu compañero antes de la reunión de la tarde.",
+              "target_phrases": [
+                "Do you have a few minutes?",
+                "Could you help me with...?",
+                "I need to finish this by..."
+              ],
+              "model_response": "Hi Carlos, do you have a few minutes? Could you help me with this presentation? I need to finish this by three o'clock."
+            },
+            {
+              "id": "A2-I02-SPK-02",
+              "goal": "Proponer un horario para coordinar una reunión de equipo.",
+              "instructions": "Necesitas acordar una hora con tu colega para revisar los avances del proyecto semanal. Pregúntale si está disponible mañana en la mañana.",
+              "target_phrases": [
+                "Are you free on...?",
+                "Let's discuss the project",
+                "How about meeting at...?"
+              ],
+              "model_response": "Hello Sarah. Let's discuss the project tomorrow. Are you free on Tuesday morning? How about meeting at ten?"
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "A2-I02-LIS-01",
+          "audio_script": "Mark: Hi Elena, do you have the sales report for our team meeting?\nElena: Yes, Mark. I finished the summary this morning, but I still need the final numbers from accounting.\nMark: No problem. I can email David in accounting right now to ask for them.\nElena: Thanks! That helps a lot. Can we practice our presentation at two o'clock?\nMark: I have another call at two. How about two thirty in conference room B?\nElena: Two thirty is perfect. I will bring the printed copies.\nMark: Great, see you there!",
+          "comprehension_questions": [
+            {
+              "question": "¿Qué información le falta a Elena para completar el informe?",
+              "options": [
+                "A) El resumen del proyecto",
+                "B) Los números finales de contabilidad",
+                "C) Las copias impresas"
+              ],
+              "correct_answer": "B) Los números finales de contabilidad",
+              "explanation": "Elena menciona textualmente: 'I still need the final numbers from accounting'."
+            },
+            {
+              "question": "¿A qué hora acuerdan reunirse Mark y Elena para practicar la presentación?",
+              "options": [
+                "A) A las dos en punto",
+                "B) A las dos y media",
+                "C) A las tres en punto"
+              ],
+              "correct_answer": "B) A las dos y media",
+              "explanation": "Mark propone 'two thirty' porque tiene otra llamada a las dos, y Elena acepta diciendo que esa hora es perfecta."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "A2-I02-WRT-01",
+          "task_type": "Mensaje breve de actualización laboral",
+          "instructions": "Escribe un correo electrónico breve (50-70 palabras) a tu equipo de trabajo compartiendo el estado de una tarea asignada y proponiendo una videollamada corta para resolver dudas.",
+          "scaffolding_structures": [
+            "I am writing to give you an update on...",
+            "I already finished the first draft, but...",
+            "Can we have a short meeting tomorrow to...?"
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "A2-I02-SPA-01",
+            "incorrect_sentence": "I cannot assist the team meeting tomorrow morning.",
+            "spanish_interference": "Falso amigo común: en español se dice 'asistir a una reunión', pero en inglés 'assist' significa ayudar. Para indicar asistencia presencial se debe usar 'attend'.",
+            "native_correction": "I cannot attend the team meeting tomorrow morning."
+          },
+          {
+            "error_id": "A2-I02-SPA-02",
+            "incorrect_sentence": "I am agree with your idea for the new schedule.",
+            "spanish_interference": "Traducción literal de 'estoy de acuerdo'. En inglés, 'agree' es un verbo y no un adjetivo, por lo que no se combina con el verbo auxiliar 'to be'.",
+            "native_correction": "I agree with your idea for the new schedule."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Catch up",
+            "type": "Phrasal Verb",
+            "ipa": "/ˈkætʃ ʌp/",
+            "explanation": "Ponerse al día con un compañero respecto a novedades del trabajo o tareas pendientes.",
+            "how_to_use": "Suele usarse con la preposición 'with' para mencionar a la persona: 'catch up with someone'.",
+            "example_1": "Let's catch up after lunch to discuss the plan.",
+            "example_2": "I need to catch up with my team before the presentation."
+          },
+          {
+            "term": "No-brainer",
+            "type": "Slang / Colloquial",
+            "ipa": "/ˈnoʊˌbreɪ.nər/",
+            "explanation": "Una decisión o elección obvia que no requiere pensarlo mucho.",
+            "how_to_use": "Se emplea como sustantivo singular precedido por el artículo 'a'.",
+            "example_1": "Accepting this project is a no-brainer because it helps our career.",
+            "example_2": "Working together on this report is a complete no-brainer."
+          },
+          {
+            "term": "Assign",
+            "type": "Verb",
+            "ipa": "/əˈsaɪn/",
+            "explanation": "Asignar o delegar una tarea o responsabilidad a una persona.",
+            "how_to_use": "Sigue el patrón 'assign something to someone' o 'assign someone a task'.",
+            "example_1": "The manager will assign the new tasks tomorrow morning.",
+            "example_2": "Can you assign someone to help with the slides?"
+          },
+          {
+            "term": "Overwhelmed",
+            "type": "Adjective",
+            "ipa": "/ˌoʊ.vərˈwelmd/",
+            "explanation": "Sentirse sobrecargado o agobiado por el exceso de trabajo o responsabilidades.",
+            "how_to_use": "Se usa habitualmente con verbos de estado como 'feel' o 'be'.",
+            "example_1": "Maria feels overwhelmed with all the emails this week.",
+            "example_2": "If you are overwhelmed, ask your coworkers for help."
+          },
+          {
+            "term": "On the same page",
+            "type": "Idiom",
+            "ipa": "/ɑːn ðə seɪm peɪdʒ/",
+            "explanation": "Estar en sintonía o tener el mismo entendimiento sobre una meta o proyecto.",
+            "how_to_use": "Se combina casi siempre con el verbo 'to be': 'be on the same page'.",
+            "example_1": "We need a short call to make sure we are on the same page.",
+            "example_2": "The team met early so everyone was on the same page."
+          },
+          {
+            "term": "Deadline",
+            "type": "Useful Vocabulary",
+            "ipa": "/ˈded.laɪn/",
+            "explanation": "Fecha o plazo límite establecido para entregar una tarea o finalizar un proyecto.",
+            "how_to_use": "Colocaciones frecuentes: 'meet a deadline' (cumplir el plazo) o 'tight deadline' (plazo ajustado).",
+            "example_1": "We have a tight deadline for the marketing presentation.",
+            "example_2": "Can you finish your part before the deadline tomorrow?"
+          }
+        ]
+      }
+    },
+    {
+      "level": "B1",
+      "island_id": "B1-ISL-01",
+      "title": "Personality Types & Friendships",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "B1-ISL-01",
+        "title": "Personality Types & Friendships",
+        "topic_context": "Exploring introversion versus extroversion, navigating interpersonal boundaries, dealing with social friction, and maintaining long-lasting adult friendships.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "B1-I01-SPK-01",
+              "goal": "Describe your best friend's personality and explain how your characters complement each other.",
+              "instructions": "Talk about a close friend. Describe their main personality traits, whether they are an introvert or an extrovert, and how your differing or similar personalities help your friendship work smoothly.",
+              "target_phrases": [
+                "We get along well because...",
+                "In contrast to me, they tend to...",
+                "Whenever we have a disagreement..."
+              ],
+              "model_response": "My best friend Camila is extremely outgoing, whereas I am quite reserved. We get along well because our differences create a natural balance in our daily lives. In contrast to me, they tend to strike up conversations with strangers easily, which pushes me out of my comfort zone. Whenever we have a disagreement, we talk openly and resolve our issues quickly."
+            },
+            {
+              "id": "B1-I01-SPK-02",
+              "goal": "Give advice on resolving a personality clash between two close friends.",
+              "instructions": "Imagine two of your friends have stopped talking because one feels neglected by the other's introverted habits. Explain how you would mediate the situation and encourage them to understand each other.",
+              "target_phrases": [
+                "It is crucial to consider...",
+                "From my perspective...",
+                "A sensible compromise would be..."
+              ],
+              "model_response": "From my perspective, both friends simply have different social boundaries that need to be respected. It is crucial to consider that introverted people need alone time to recharge, which is never a personal rejection. A sensible compromise would be planning shorter, one-on-one activities rather than loud weekend parties so both people feel comfortable."
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "B1-I01-LIS-01",
+          "audio_script": "Leo: Hey Maya, have you noticed that Daniel has been avoiding our group lately?\nMaya: Yes, actually. He mentioned last week that big social gatherings make him feel exhausted, not energized.\nLeo: Really? I always assumed he was just acting distant or uninterested in hanging out with us.\nMaya: Not at all. He is quite introverted, so spending hours in crowded places quickly drains his battery.\nLeo: That makes sense. I am an extrovert, so I usually recharge by being around lots of people.\nMaya: Exactly! We should invite him to do something quieter instead, like cooking dinner at your apartment.\nLeo: That is a wonderful suggestion. I will send him a text message right now to plan a relaxed evening.",
+          "comprehension_questions": [
+            {
+              "question": "Why has Daniel been avoiding large social gatherings recently?",
+              "options": [
+                "A) He feels tired and drained around big groups of people.",
+                "B) He had an argument with Leo about their weekend plans.",
+                "C) He prefers to travel abroad alone rather than stay home."
+              ],
+              "correct_answer": "A) He feels tired and drained around big groups of people.",
+              "explanation": "Maya explains that Daniel is introverted and that crowded social gatherings leave him feeling exhausted and drain his battery."
+            },
+            {
+              "question": "What alternative activity does Maya suggest to accommodate Daniel?",
+              "options": [
+                "A) Attending an outdoor music festival together",
+                "B) Having a quiet dinner at Leo's apartment",
+                "C) Going to a busy downtown restaurant after work"
+              ],
+              "correct_answer": "B) Having a quiet dinner at Leo's apartment",
+              "explanation": "Maya suggests inviting Daniel to do something quieter, specifically proposing that they cook dinner at Leo's apartment."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "B1-I01-WRT-01",
+          "task_type": "Reflective Essay",
+          "instructions": "Write an essay (120-160 words) for a community blog about what makes adult friendships survive over time. Discuss how differing personality styles can coexist and suggest two habits that keep long-term friendships healthy.",
+          "scaffolding_structures": [
+            "In my experience, a true friend is someone who...",
+            "While introverts and extroverts perceive socializing differently, they can...",
+            "Whenever personal misunderstandings arise, a good habit is to..."
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "B1-I01-SPA-01",
+            "incorrect_sentence": "Close friendships usually depend of mutual trust and regular communication.",
+            "spanish_interference": "Spanish speakers often say 'depend of' because the Spanish equivalent is 'depender de'. In English, the verb 'depend' always collocates with the preposition 'on'.",
+            "native_correction": "Close friendships usually depend on mutual trust and regular communication."
+          },
+          {
+            "error_id": "B1-I01-SPA-02",
+            "incorrect_sentence": "I enjoy talking to Sarah because she is a very comprehensive person.",
+            "spanish_interference": "In Spanish, 'comprensivo/a' describes someone who is understanding and supportive. In English, 'comprehensive' is a false friend meaning thorough or complete. Use 'understanding' instead.",
+            "native_correction": "I enjoy talking to Sarah because she is a very understanding person."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Drift apart",
+            "type": "Phrasal Verb",
+            "ipa": "/drɪft əˈpɑːrt/",
+            "explanation": "To gradually become less close or friendly with someone over a period of time, often due to changing life circumstances.",
+            "how_to_use": "Intransitive verb phrase. Usually takes plural subjects like 'we', 'they', or 'friends'.",
+            "example_1": "Over time, high school classmates often drift apart when they attend different universities.",
+            "example_2": "We used to be best friends, but we started to drift apart after I moved across the country."
+          },
+          {
+            "term": "Flaky",
+            "type": "Slang / Colloquial",
+            "ipa": "/ˈfleɪ.ki/",
+            "explanation": "Informal term describing an unreliable person who frequently cancels plans or fails to do what they promised.",
+            "how_to_use": "Predicate or attributive adjective. Commonly used in casual conversations to describe friends or acquaintances.",
+            "example_1": "Jack is completely flaky, so do not count on him to show up on time.",
+            "example_2": "I stopped making weekend plans with her because she is too flaky."
+          },
+          {
+            "term": "Confide",
+            "type": "Verb",
+            "ipa": "/kənˈfaɪd/",
+            "explanation": "To share personal secrets or private thoughts with someone whom you trust completely.",
+            "how_to_use": "Typically intransitive followed by the preposition 'in' plus the person: 'confide in someone'.",
+            "example_1": "She decided to confide in her closest friend about her personal struggles.",
+            "example_2": "It helps to have a trusted colleague you can confide in when work becomes stressful."
+          },
+          {
+            "term": "Introverted",
+            "type": "Adjective",
+            "ipa": "/ˈɪn.trə.vɜːr.t̬ɪd/",
+            "explanation": "Tending to be quiet, reserved, and more interested in one's own thoughts than in spending time with large groups.",
+            "how_to_use": "Can precede a noun ('an introverted student') or follow linking verbs like 'be' or 'seem'.",
+            "example_1": "As an introverted person, David recharges his energy by reading alone in the evening.",
+            "example_2": "She felt drained after the party because she is naturally introverted."
+          },
+          {
+            "term": "See eye to eye",
+            "type": "Idiom",
+            "ipa": "/siː aɪ tuː aɪ/",
+            "explanation": "To agree fully with someone on a topic or to share the same viewpoint.",
+            "how_to_use": "Often used in the negative ('don't see eye to eye') followed by the preposition 'on' or 'about'.",
+            "example_1": "Although they are brothers, they rarely see eye to eye on politics.",
+            "example_2": "My roommate and I see eye to eye about keeping the kitchen clean."
+          },
+          {
+            "term": "Mutual friend",
+            "type": "Useful Vocabulary",
+            "ipa": "/ˈmjuː.tʃu.əl frend/",
+            "explanation": "A person who is a friend of two individuals who may or may not know each other well.",
+            "how_to_use": "Countable noun phrase, very common in social and conversational introductions.",
+            "example_1": "I met my current business partner through a mutual friend at a casual dinner.",
+            "example_2": "Neither of us knew the host, but we both knew a mutual friend who invited us."
+          }
+        ]
+      }
+    },
+    {
+      "level": "B1",
+      "island_id": "B1-ISL-02",
+      "title": "Urban Legends & Unexplained Mysteries",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "B1-ISL-02",
+        "title": "Urban Legends & Unexplained Mysteries",
+        "topic_context": "Examining widespread urban legends, modern myths, folkloric storytelling, and the psychological appeal of unexplained phenomena.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "B1-I02-SPK-01",
+              "goal": "Recount a mysterious event or local legend and evaluate its credibility.",
+              "instructions": "Tell a partner about an urban legend or ghost story from your hometown or country. Explain what supposedly happens, who usually shares the story, and whether you believe it could be true.",
+              "target_phrases": [
+                "According to local legend...",
+                "Supposedly, there is...",
+                "To be completely honest, I doubt..."
+              ],
+              "model_response": "According to local legend, an old mansion on the outskirts of my town is haunted by a former doctor. Supposedly, there is a strange light flickering in the attic every November. To be completely honest, I doubt it is supernatural, but it definitely keeps curious teenagers away at night."
+            },
+            {
+              "id": "B1-I02-SPK-02",
+              "goal": "Discuss why people are fascinated by unexplained phenomena and conspiracy theories.",
+              "instructions": "Share your perspective on why mysterious stories and urban legends spread so quickly on social media. What emotional needs do these tales satisfy for people?",
+              "target_phrases": [
+                "In my opinion, people are drawn to...",
+                "It spreads quickly because...",
+                "From a psychological perspective..."
+              ],
+              "model_response": "In my opinion, people are drawn to unexplained mysteries because they add excitement to routine lives. A story spreads quickly because shocking details trigger curiosity and emotional reactions. From a psychological perspective, humans just love sharing narratives that challenge everyday logic."
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "B1-I02-LIS-01",
+          "audio_script": "Leo: Have you ever heard about the vanishing hitchhiker near the old highway bridge?\nMaya: Yes, of course! My uncle actually claimed he saw her twenty years ago while driving home from work.\nLeo: Seriously? Do you think there is any truth to it, or is it just a classic neighborhood tale?\nMaya: Well, I think people love mysteries because they explain strange feelings or dangerous roads, but I don't believe in real phantoms.\nLeo: That makes sense. The local police even investigated the area once because so many drivers reported seeing a figure in white.\nMaya: Exactly, and they found out that the curve has terrible lighting and thick fog, which creates optical illusions at night.\nLeo: So it turns out the legend was just born from bad road safety and an active imagination!\nMaya: Definitely, though I still get nervous whenever I have to drive across that bridge in the dark.",
+          "comprehension_questions": [
+            {
+              "question": "Why did Maya's uncle mention the vanishing hitchhiker legend?",
+              "options": [
+                "A) He read about it in a local newspaper investigation",
+                "B) He claimed he saw her twenty years ago while driving home from work",
+                "C) He warned drivers about bad road lighting near the bridge"
+              ],
+              "correct_answer": "B) He claimed he saw her twenty years ago while driving home from work",
+              "explanation": "Maya states that her uncle claimed he saw the mysterious figure twenty years ago while driving home from work."
+            },
+            {
+              "question": "According to the dialogue, what actually caused drivers to see a figure on the road?",
+              "options": [
+                "A) Terrible lighting and thick fog, which creates optical illusions at night",
+                "B) A local prankster dressed in white standing near the dangerous curve",
+                "C) Reflective safety signs installed by the local highway department"
+              ],
+              "correct_answer": "A) Terrible lighting and thick fog, which creates optical illusions at night",
+              "explanation": "Maya explains that the police discovered the curve suffered from poor lighting and thick fog, leading to visual illusions."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "B1-I02-WRT-01",
+          "task_type": "Forum Contribution",
+          "instructions": "Write a post (120-160 words) for an online discussion forum titled: 'Do You Believe in the Supernatural?'. Describe a famous unexplained mystery or legend, explain whether you think it is real or fabricated, and give reasons for your point of view.",
+          "scaffolding_structures": [
+            "One of the most famous legends is...",
+            "While some people claim that...",
+            "Taking all the evidence into account, I believe..."
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "B1-I02-SPA-01",
+            "incorrect_sentence": "He told me a terrifying history about a haunted hotel in the mountains.",
+            "spanish_interference": "Spanish speakers frequently confuse 'history' and 'story' because both translate as 'historia'. 'History' refers to real academic or documented past events, whereas a fictional, folkloric, or personal narrative is a 'story'.",
+            "native_correction": "He told me a terrifying story about a haunted hotel in the mountains."
+          },
+          {
+            "error_id": "B1-I02-SPA-02",
+            "incorrect_sentence": "Whether you believe this myth depends of your personal beliefs.",
+            "spanish_interference": "Spanish uses the preposition 'de' following the verb 'depender' ('depende de'). In English, the verb 'depend' requires the preposition 'on'.",
+            "native_correction": "Whether you believe this myth depends on your personal beliefs."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Crop up",
+            "type": "Phrasal Verb",
+            "ipa": "/krɑːp ʌp/",
+            "explanation": "To appear, occur, or be mentioned suddenly and unexpectedly.",
+            "how_to_use": "Intransitive phrasal verb. Often used with subjects like 'questions', 'rumors', 'stories', or 'problems'.",
+            "example_1": "Strange rumors always crop up whenever an old house is abandoned.",
+            "example_2": "Similar ghost stories crop up in almost every culture around the world."
+          },
+          {
+            "term": "Creepy",
+            "type": "Slang / Colloquial",
+            "ipa": "/ˈkriː.pi/",
+            "explanation": "Causing an unpleasant feeling of fear, unease, or nervousness.",
+            "how_to_use": "Informal adjective used before nouns or after linking verbs like 'feel', 'look', or 'sound'.",
+            "example_1": "We heard a creepy noise coming from the basement late at night.",
+            "example_2": "The abandoned hospital had a very creepy atmosphere after sunset."
+          },
+          {
+            "term": "Debunk",
+            "type": "Verb",
+            "ipa": "/dɪˈbʌŋk/",
+            "explanation": "To show that an idea, belief, or myth is false or exaggerated by providing real evidence.",
+            "how_to_use": "Transitive verb followed directly by the noun phrase representing the myth or false claim.",
+            "example_1": "Scientists worked hard to debunk the myth about the monster in the lake.",
+            "example_2": "A local journalist managed to debunk the claims made by the viral video."
+          },
+          {
+            "term": "Eerie",
+            "type": "Adjective",
+            "ipa": "/ˈɪr.i/",
+            "explanation": "Strange and frightening in a mysterious, supernatural, or unsettling way.",
+            "how_to_use": "Adjective commonly modifying nouns like 'silence', 'glow', 'sound', or 'coincidence'.",
+            "example_1": "There was an eerie silence in the forest before the storm hit.",
+            "example_2": "An eerie glow appeared in the window of the empty cabin."
+          },
+          {
+            "term": "Take with a grain of salt",
+            "type": "Idiom",
+            "ipa": "/teɪk wɪð ə ɡreɪn əv sɔːlt/",
+            "explanation": "To view or accept a statement or story with skepticism, recognizing that it may not be entirely accurate.",
+            "how_to_use": "Idiomatic phrase. Can be used transitively where the information or story is placed either after 'take' or after 'salt'.",
+            "example_1": "You should take with a grain of salt any story you read on social media without proof.",
+            "example_2": "My grandmother told us to take with a grain of salt all the spooky rumors in our village."
+          },
+          {
+            "term": "Folklore",
+            "type": "Useful Vocabulary",
+            "ipa": "/ˈfoʊk.lɔːr/",
+            "explanation": "The traditional beliefs, customs, stories, and legends of a community passed down by word of mouth.",
+            "how_to_use": "Uncountable noun. Frequently modified by adjectives such as 'local', 'traditional', or 'regional'.",
+            "example_1": "Local folklore claims that a phantom carriage travels along the riverbank at midnight.",
+            "example_2": "Many modern horror movies are inspired by traditional Mexican folklore."
+          }
+        ]
+      }
+    },
+    {
+      "level": "B2",
+      "island_id": "B2-ISL-01",
+      "title": "The Psychology of Ambition",
+      "approved": false,
+      "warnings": [],
+      "island": {
+        "island_id": "B2-ISL-01",
+        "title": "The Psychology of Ambition",
+        "topic_context": "The internal drivers of high achievement, toxic productivity culture, the pursuit of status, and the psychological toll of relentless career striving.",
+        "speaking_module": {
+          "prompts": [
+            {
+              "id": "B2-I01-SPK-01",
+              "goal": "Critically analyze the distinction between healthy intrinsic aspiration and pathological overachievement.",
+              "instructions": "Discuss whether modern corporate culture elevates ambition to an unhealthy obsession. Contrast the pursuit of personal mastery with the perpetual anxiety of status competition. Adopt a balanced analytical stance.",
+              "target_phrases": [
+                "While drive is frequently celebrated as a virtue...",
+                "The tipping point occurs when...",
+                "Striking a sustainable equilibrium demands..."
+              ],
+              "model_response": "While drive is frequently celebrated as a virtue in contemporary professional environments, it can easily devolve into chronic distress. The tipping point occurs when self-worth becomes entirely contingent upon external accolades and social prestige. Striking a sustainable equilibrium demands cultivating intrinsic goals that nurture genuine fulfillment rather than merely chasing competitive status."
+            },
+            {
+              "id": "B2-I01-SPK-02",
+              "goal": "Deliver an argument on whether hustle culture exploits individual ambition at the expense of well-being.",
+              "instructions": "Imagine speaking at a workplace wellness forum. Address management on why glorifying non-stop work harms productivity in the long run and propose an alternative framework for sustained motivation.",
+              "target_phrases": [
+                "We must dismantle the assumption that...",
+                "Unchecked ambition invariably yields...",
+                "A far more resilient model involves..."
+              ],
+              "model_response": "We must dismantle the assumption that ceaseless overwork equates to dedication. Unchecked ambition invariably yields cognitive fatigue and acute burnout, which ultimately undermines organizational performance. A far more resilient model involves prioritizing restorative downtime, measuring genuine impact rather than superficial hours logged at a desk."
+            }
+          ]
+        },
+        "listening_module": {
+          "id": "B2-I01-LIS-01",
+          "audio_script": "Dr. Vance: Welcome, everyone. Today we are examining the darker dimensions of career drive. Historically, ambition was cataloged as a moral vice, yet late-capitalist society rebrands it as the ultimate personal virtue.\nElena: But isn't intrinsic motivation fundamentally distinct from what you call careerism, Dr. Vance? If someone is striving to solve an epidemiological puzzle, their drive is intellectually generative, not predatory.\nDr. Vance: Absolutely, Elena. Psychologists differentiate between mastery goals and performance goals. When individuals chase mastery, setbacks are processed as informative feedback. Conversely, status-driven strivers perceive any plateau as an existential failure.\nElena: And that distinction explains why high achievers often suffer from acute imposter feelings. They measure self-worth strictly against an ever-escalating standard of external validation.\nDr. Vance: Exactly. The hedonic treadmill ensures that every milestone—whether a tenure-track chair or a partnership—provides only ephemeral satisfaction before the baseline of anxiety resets.\nElena: So the corporate apparatus capitalizes on that neurosis, incentivizing self-exploitation under the noble guise of 'passion' and 'grit.'\nDr. Vance: Precisely. Until organizations decouple productivity metrics from sacrificial labor, we will witness record attrition rates among our most promising talent.",
+          "comprehension_questions": [
+            {
+              "question": "According to Dr. Vance, what characterizes high achievers who pursue mastery goals?",
+              "options": [
+                "A) They derive self-worth entirely from public recognition and promotions.",
+                "B) They interpret professional setbacks as informative feedback.",
+                "C) They maintain lower baseline anxiety on the hedonic treadmill."
+              ],
+              "correct_answer": "B) They interpret professional setbacks as informative feedback.",
+              "explanation": "Dr. Vance explicitly explains that when individuals pursue mastery goals, professional setbacks are perceived as informative feedback rather than existential failures."
+            },
+            {
+              "question": "What is identified by both speakers as the consequence of relying on external validation for ambition?",
+              "options": [
+                "A) Diminished cognitive ability during high-stress corporate negotiations.",
+                "B) Temporary satisfaction followed by a rapid return to baseline anxiety.",
+                "C) Rapid disengagement from intellectual curiosity and team collaboration."
+              ],
+              "correct_answer": "B) Temporary satisfaction followed by a rapid return to baseline anxiety.",
+              "explanation": "Dr. Vance points out that the hedonic treadmill ensures each professional milestone yields only fleeting satisfaction before anxiety resets to its original baseline."
+            }
+          ]
+        },
+        "writing_module": {
+          "id": "B2-I01-WRT-01",
+          "task_type": "Evaluative Essay",
+          "instructions": "Write an evaluative essay (200-240 words) addressing the following statement: 'Modern society places excessive value on career ambition, creating a crisis of mental well-being.' Synthesize opposing viewpoints and present your reasoned conclusion.",
+          "scaffolding_structures": [
+            "Advocates of relentless ambition maintain that competitive drive fosters...",
+            "Nevertheless, sociological studies increasingly demonstrate that the psychological toll manifests in...",
+            "A nuanced appraisal suggests that ambition remains beneficial only when disentangled from..."
+          ]
+        },
+        "spanglish_error_lab": [
+          {
+            "error_id": "B2-I01-SPA-01",
+            "incorrect_sentence": "Many professionals pretend to reach the executive suite without assessing the personal sacrifices involved.",
+            "spanish_interference": "False friend confusion. In Spanish, 'pretender' means to intend, aspire, or aim to do something. In English, 'pretend' means to feign, make believe, or simulate something untruthful. The correct verb for aspiring to an objective is 'intend' or 'aspire'.",
+            "native_correction": "Many professionals intend to reach the executive suite without assessing the personal sacrifices involved."
+          },
+          {
+            "error_id": "B2-I01-SPA-02",
+            "incorrect_sentence": "Relentless corporate pressure can make ambitious workers to lose perspective on their physical health.",
+            "spanish_interference": "Syntactic transfer error. In Spanish, the causative construction 'hacer que alguien haga algo' or 'hacer a alguien hacer algo' often leads speakers to use the infinitive with 'to' after the causative verb 'make'. In English, 'make' takes a bare infinitive without 'to'.",
+            "native_correction": "Relentless corporate pressure can make ambitious workers lose perspective on their physical health."
+          }
+        ],
+        "lexical_toolbox": [
+          {
+            "term": "Burn out",
+            "type": "Phrasal Verb",
+            "ipa": "/bɜːrn aʊt/",
+            "explanation": "To become utterly exhausted physically, mentally, or emotionally as a consequence of sustained overwork or unresolved chronic stress.",
+            "how_to_use": "Intransitive or reflexive. Often used in passive constructions: 'be burned out'.",
+            "example_1": "If you continue pulling seventy-hour workweeks, you will inevitably burn out before the end of the fiscal year.",
+            "example_2": "Ambitious corporate associates frequently burn out when they neglect sleep and restorative recreation."
+          },
+          {
+            "term": "Climber",
+            "type": "Slang / Colloquial",
+            "ipa": "/ˈklaɪ.mɚ/",
+            "explanation": "An informal, mildly pejorative label for an excessively ambitious individual obsessively focused on ascending the professional hierarchy or social ladder.",
+            "how_to_use": "Countable noun, often preceded by adjectives like 'social' or 'corporate'.",
+            "example_1": "Colleagues grew wary of the ambitious climber who routinely took credit for collaborative research projects.",
+            "example_2": "He dismissed accusations that he was a ruthless climber, insisting he merely possessed exceptional work ethic."
+          },
+          {
+            "term": "Overextend",
+            "type": "Verb",
+            "ipa": "/ˌoʊ.vɚ.ɪkˈstend/",
+            "explanation": "To commit oneself to more tasks, obligations, or financial liabilities than one can realistically manage or sustain.",
+            "how_to_use": "Transitive, frequently reflexive ('overextend oneself').",
+            "example_1": "Young entrepreneurs routinely overextend themselves by launching multiple speculative ventures simultaneously.",
+            "example_2": "Do not overextend your research team by committing to unrealistic publication deadlines."
+          },
+          {
+            "term": "Tenacious",
+            "type": "Adjective",
+            "ipa": "/təˈneɪ.ʃəs/",
+            "explanation": "Tending to keep a firm hold of something; characterized by persistent determination, grit, and refusal to surrender despite obstacles.",
+            "how_to_use": "Formal. Modifies individuals, efforts, defense, memory, or pursuit.",
+            "example_1": "Her tenacious pursuit of the scholarship convinced the selection committee of her academic promise.",
+            "example_2": "Even in the face of repeated commercial failures, the founder remained remarkably tenacious."
+          },
+          {
+            "term": "Rat race",
+            "type": "Idiom",
+            "ipa": "/ˈræt ˌreɪs/",
+            "explanation": "An unending, self-defeating, or fiercely competitive lifestyle or career path wherein participants struggle relentlessly for wealth or status.",
+            "how_to_use": "Noun phrase, typically used with the definite article: 'the rat race'. Common with verbs like 'escape', 'join', or 'leave'.",
+            "example_1": "After two decades in investment banking, she abandoned the rat race to cultivate an organic vineyard.",
+            "example_2": "Many young professionals find that participating in the rat race yields severe anxiety rather than genuine happiness."
+          },
+          {
+            "term": "Imposter syndrome",
+            "type": "Useful Vocabulary",
+            "ipa": "/ɪmˈpɑː.stɚ ˌsɪn.droʊm/",
+            "explanation": "The persistent psychological pattern in which high-achieving individuals doubt their accomplishments and harbor an internalized fear of being exposed as a fraud.",
+            "how_to_use": "Uncountable compound noun. Collocates with 'suffer from', 'battle', or 'experience'.",
+            "example_1": "Despite publishing groundbreaking research, the junior professor struggled with paralyzing imposter syndrome.",
+            "example_2": "Workplace mentors can play a pivotal role in helping new hires overcome persistent imposter syndrome."
+          }
+        ]
+      }
+    }
+  ]
+}

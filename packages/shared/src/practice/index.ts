@@ -5,3 +5,6 @@ export * from './text-coach.js';
 export * from './placement-test.js';
 export * from './streak.js';
 export * from './error-hunt.js';
+export * from './pronunciation.js';
+export * from './experience-bank.js';
+export * from './language.js';

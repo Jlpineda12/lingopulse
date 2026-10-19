@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
+import { AiThinking } from '../components/AiThinking';
 import {
   countWords,
   findTargetWordsUsed,
@@ -117,7 +119,7 @@ export function WritingScreen({
           onPress={submit}
           disabled={loading || words < 5}
         />
-        {loading ? <ActivityIndicator color={COLORS.accentBlue} /> : null}
+        {loading ? <AiThinking /> : null}
         {words > 0 && words < 5 ? <Muted>Escribe al menos 5 palabras para recibir correcciones.</Muted> : null}
       </Card>
 

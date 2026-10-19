@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   CEFR_LEVEL_META,
@@ -10,7 +11,6 @@ import {
 } from '@lingopulse/shared';
 import { useAppState } from '../context/AppStateContext';
 import { useGame, type ActivityKind } from '../context/GameContext';
-import { MiniFireStreakBadge } from '../components/FireStreakCard';
 import {
   FloatingIslandQuestNode,
   IslandSkyBackdrop,
@@ -29,16 +29,7 @@ import {
 import type { TopicIllustrationKind } from '../components/CustomTopicIcons';
 import { OptionButton } from '../components/MultipleChoice';
 import { PressableScale, Reveal } from '../components/motion';
-import {
-  Badge,
-  Button,
-  Card,
-  Eyebrow,
-  LargeTitle,
-  SectionHeader,
-  ui,
-  type IconName,
-} from '../components/ui';
+import { Badge, Button, Card, Eyebrow, LargeTitle, SectionHeader, ui, type IconName } from '../components/ui';
 import { levelProgress, MOOD_META, moodMessage } from '../game/pet';
 import { speakEnglishPhrase } from '../services/speech';
 import { petTint, SHADOW, THEME, TYPE, type GradientKey } from '../theme/colors';
@@ -46,10 +37,7 @@ import { Glyph } from '../components/Glyph';
 import { eventMissions } from '../game/events';
 import { LEAGUE_TIERS } from '../game/league';
 
-export const KIND_META: Record<
-  ActivityKind,
-  { icon: IconName; label: string; gradient: GradientKey }
-> = {
+export const KIND_META: Record<ActivityKind, { icon: IconName; label: string; gradient: GradientKey }> = {
   speaking: { icon: 'mic', label: 'Speaking', gradient: 'speaking' },
   listening: { icon: 'headset', label: 'Listening', gradient: 'listening' },
   reading: { icon: 'reader', label: 'Reading', gradient: 'reading' },
@@ -84,27 +72,20 @@ export function HomeScreen() {
   const [trapIdx, setTrapIdx] = useState(0);
   const [trapPicked, setTrapPicked] = useState<number | null>(null);
   const [dreamModalVisible, setDreamModalVisible] = useState(false);
-  const [weatherMode, setWeatherMode] = useState<IslandAtmosphereMode>(
-    detectDefaultAtmosphere
-  );
+  const [trapOpen, setTrapOpen] = useState(false);
+  const [weatherMode, setWeatherMode] = useState<IslandAtmosphereMode>(detectDefaultAtmosphere);
 
   const hour = new Date().getHours();
-  const drop = useMemo(() => getDailyDrop(todayKey), [todayKey]);
-  const practice = useMemo(
-    () => getDailyPractice(todayKey, progress.level),
-    [todayKey, progress.level]
-  );
+  const drop = useMemo(() => getDailyDrop(todayKey, progress.level), [todayKey, progress.level]);
+  const practice = useMemo(() => getDailyPractice(todayKey, progress.level), [todayKey, progress.level]);
   const lvl = levelProgress(progress.xp);
   const levelInfo = CEFR_LEVEL_META[progress.level];
   const featuredMeta = DAILY_CATEGORY_META[drop.featured.category];
   const greeting = moodMessage(pet.name, mood, pet.catchphrase);
   const moodInfo = MOOD_META[mood] ?? MOOD_META.happy;
 
-  const baseHello =
-    hour < 12 ? 'Good morning' : hour < 19 ? 'Good afternoon' : 'Good evening';
-  const hello = currentAccount
-    ? `${baseHello}, ${currentAccount.playerName}`
-    : baseHello;
+  const baseHello = hour < 12 ? 'Good morning' : hour < 19 ? 'Good afternoon' : 'Good evening';
+  const hello = currentAccount ? `${baseHello}, ${currentAccount.playerName}` : baseHello;
 
   const levelTraps = useMemo(() => {
     const matching = SPANGLISH_TRAPS.filter((t) => t.level === progress.level);
@@ -137,8 +118,7 @@ export function HomeScreen() {
       badge: `ISLA 2 · SPEAKING`,
       title: practice.speaking.title,
       done: todayActivities.some((a) => a.kind === 'speaking'),
-      onPress: () =>
-        openScreen({ name: 'speaking', topicId: practice.speaking.id }),
+      onPress: () => openScreen({ name: 'speaking', topicId: practice.speaking.id }),
     },
     {
       step: 3,
@@ -147,19 +127,15 @@ export function HomeScreen() {
       title: practice.listening.title,
       illustrationKind: 'audio_wave',
       done: todayActivities.some((a) => a.kind === 'listening'),
-      onPress: () =>
-        openScreen({ name: 'listening', trackId: practice.listening.id }),
+      onPress: () => openScreen({ name: 'listening', trackId: practice.listening.id }),
     },
     {
       step: 4,
       biomeKey: 'reading',
       badge: `ISLA 4 · READING`,
       title: practice.reading.title,
-      done:
-        todayActivities.some((a) => a.kind === 'reading') ||
-        todayActivities.some((a) => a.kind === 'writing'),
-      onPress: () =>
-        openScreen({ name: 'reading', passageId: practice.reading.id }),
+      done: todayActivities.some((a) => a.kind === 'reading') || todayActivities.some((a) => a.kind === 'writing'),
+      onPress: () => openScreen({ name: 'reading', passageId: practice.reading.id }),
     },
     {
       step: 5,
@@ -172,8 +148,7 @@ export function HomeScreen() {
     },
   ];
 
-  const activeStepNumber =
-    pathIslands.find((n) => !n.done)?.step ?? pathIslands.length;
+  const activeStepNumber = pathIslands.find((n) => !n.done)?.step ?? pathIslands.length;
 
   const canvasAmbientBg = ATMOSPHERE_META[weatherMode].skyBottom;
 
@@ -183,15 +158,8 @@ export function HomeScreen() {
       <Reveal index={0}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <LargeTitle
-              subtitle={`${levelInfo.titleEs} · ${LEVEL_DIFFICULTY_ES[progress.level]}`}
-            >
-              {hello}
-            </LargeTitle>
+            <LargeTitle subtitle={`${levelInfo.titleEs} · ${LEVEL_DIFFICULTY_ES[progress.level]}`}>{hello}</LargeTitle>
           </View>
-
-          {/* Racha lateral intuitiva con mini animación de fuego (días + encendida/apagada) */}
-          <MiniFireStreakBadge onPress={() => setTab('practice')} />
         </View>
       </Reveal>
 
@@ -222,11 +190,7 @@ export function HomeScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <PressableScale
-                onPress={() => setTab('pet')}
-                hapticKind="select"
-                style={styles.customizeBtn}
-              >
+              <PressableScale onPress={() => setTab('pet')} hapticKind="select" style={styles.customizeBtn}>
                 <Ionicons name="paw" size={13} color={THEME.blue} />
                 <Text style={styles.customizeBtnText}>Ver a {pet.name}</Text>
               </PressableScale>
@@ -234,11 +198,7 @@ export function HomeScreen() {
           </View>
 
           <View style={styles.companionBannerBottom}>
-            <PressableScale
-              onPress={() => speakWithPip(greeting.en)}
-              hapticKind="light"
-              style={styles.speechPill}
-            >
+            <PressableScale onPress={() => speakWithPip(greeting.en)} hapticKind="light" style={styles.speechPill}>
               <Ionicons name="volume-high" size={14} color={THEME.blue} />
               <Text style={styles.speechPillText} numberOfLines={1}>
                 “{greeting.en}”
@@ -246,21 +206,9 @@ export function HomeScreen() {
             </PressableScale>
 
             <View style={styles.miniNeedsRow}>
-              <MiniNeed
-                icon="nutrition"
-                value={stats.fullness}
-                color={NEED_RINGS.fullness[1]}
-              />
-              <MiniNeed
-                icon="flash"
-                value={stats.energy}
-                color={NEED_RINGS.energy[1]}
-              />
-              <MiniNeed
-                icon="heart"
-                value={stats.happiness}
-                color={NEED_RINGS.happiness[1]}
-              />
+              <MiniNeed icon="nutrition" value={stats.fullness} color={NEED_RINGS.fullness[1]} />
+              <MiniNeed icon="flash" value={stats.energy} color={NEED_RINGS.energy[1]} />
+              <MiniNeed icon="heart" value={stats.happiness} color={NEED_RINGS.happiness[1]} />
             </View>
           </View>
         </View>
@@ -269,20 +217,30 @@ export function HomeScreen() {
       {/* Evento semanal y liga */}
       <Reveal index={2}>
         <View style={styles.liveRow}>
-          <PressableScale onPress={() => openScreen({ name: 'event' })} style={[styles.liveCard, { backgroundColor: eventState.event.soft }]}>
+          <PressableScale
+            onPress={() => openScreen({ name: 'event' })}
+            style={[styles.liveCard, { backgroundColor: eventState.event.soft }]}
+          >
             <Glyph name={eventState.event.glyph} size={40} />
             <Text style={styles.liveTag}>EVENTO</Text>
-            <Text style={styles.liveTitle} numberOfLines={1}>{eventState.event.titleEs}</Text>
+            <Text style={styles.liveTitle} numberOfLines={1}>
+              {eventState.event.titleEs}
+            </Text>
             <View style={styles.liveDots}>
               {eventMissions(eventState.event, eventState.progress).map((m) => (
                 <View key={m.id} style={[styles.liveDot, m.done && { backgroundColor: THEME.green }]} />
               ))}
             </View>
           </PressableScale>
-          <PressableScale onPress={() => openScreen({ name: 'league' })} style={[styles.liveCard, { backgroundColor: (LEAGUE_TIERS[league.tier] ?? LEAGUE_TIERS[0]!).soft }]}>
+          <PressableScale
+            onPress={() => openScreen({ name: 'league' })}
+            style={[styles.liveCard, { backgroundColor: (LEAGUE_TIERS[league.tier] ?? LEAGUE_TIERS[0]!).soft }]}
+          >
             <Glyph name={(LEAGUE_TIERS[league.tier] ?? LEAGUE_TIERS[0]!).glyph} size={40} />
             <Text style={styles.liveTag}>LIGA SEMANAL</Text>
-            <Text style={styles.liveTitle} numberOfLines={1}>#{league.myRank} · {(LEAGUE_TIERS[league.tier] ?? LEAGUE_TIERS[0]!).nameEs.replace('Liga ', '')}</Text>
+            <Text style={styles.liveTitle} numberOfLines={1}>
+              #{league.myRank} · {(LEAGUE_TIERS[league.tier] ?? LEAGUE_TIERS[0]!).nameEs.replace('Liga ', '')}
+            </Text>
             <Text style={styles.liveSub}>{league.weekXp} XP esta semana</Text>
           </PressableScale>
         </View>
@@ -297,10 +255,7 @@ export function HomeScreen() {
         />
       </Reveal>
 
-      <IslandSkyBackdrop
-        topColor={ATMOSPHERE_META[weatherMode].skyTop}
-        bottomColor={canvasAmbientBg}
-      >
+      <IslandSkyBackdrop topColor={ATMOSPHERE_META[weatherMode].skyTop} bottomColor={canvasAmbientBg}>
         {pathIslands.map((island, idx) => {
           const isCurrent = island.step === activeStepNumber;
           const isLast = idx === pathIslands.length - 1;
@@ -318,12 +273,7 @@ export function HomeScreen() {
                 illustrationKind={island.illustrationKind}
                 onPress={island.onPress}
               />
-              {!isLast ? (
-                <SkyBridgeConnector
-                  fromLeft={idx % 2 === 0}
-                  lit={island.done}
-                />
-              ) : null}
+              {!isLast ? <SkyBridgeConnector fromLeft={idx % 2 === 0} lit={island.done} /> : null}
             </Reveal>
           );
         })}
@@ -332,124 +282,120 @@ export function HomeScreen() {
       </IslandSkyBackdrop>
 
       <Reveal index={7}>
-        <DynamicIslandAtmosphereBanner
-          mode={weatherMode}
-          onChangeMode={setWeatherMode}
-        />
+        <DynamicIslandAtmosphereBanner mode={weatherMode} onChangeMode={setWeatherMode} />
       </Reveal>
 
-      {/* Mini-Juego: Cazador de Spanglish (con sonidos de aprobación/error y sin auto-lectura forzada) */}
+      {/* Extras: minijuegos y mini-reto, cerrados hasta que el usuario los abra */}
       <Reveal index={8}>
-        <Card style={styles.trapCard}>
-          <View style={[ui.rowBetween, { flexWrap: 'wrap', gap: 6 }]}>
-            <Eyebrow icon="flash" color={THEME.orange}>
-              Mini-Juego · Cazador de Spanglish
-            </Eyebrow>
-            <Badge
-              label={`Nivel ${currentTrap.level} · ${LEVEL_DIFFICULTY_ES[currentTrap.level]}`}
-              bg="#FFF3E0"
-              color="#D95B00"
-              icon="flame"
-            />
-          </View>
-          <Text style={TYPE.headline}>
-            Encuentra cómo lo diría un hablante nativo:
-          </Text>
-          <View style={styles.trapWrongBox}>
-            <Ionicons name="close-circle" size={18} color={THEME.red} />
-            <Text style={styles.trapWrongText}>
-              “{currentTrap.spanglishSentence}”
-            </Text>
-          </View>
+        <View style={styles.liveRow}>
+          <PressableScale
+            onPress={() => openScreen({ name: 'minigame' })}
+            style={[styles.liveCard, { backgroundColor: '#EEF0FF' }]}
+          >
+            <Glyph name="arcade" size={40} />
+            <Text style={styles.liveTag}>EXTRA</Text>
+            <Text style={styles.liveTitle}>Minijuegos</Text>
+            <Text style={styles.liveSub}>Gana estrellas para tu casa</Text>
+          </PressableScale>
+          <PressableScale
+            onPress={() => setTrapOpen((v) => !v)}
+            style={[styles.liveCard, { backgroundColor: '#FFF3E0' }, trapOpen && { borderColor: THEME.orange }]}
+          >
+            <Glyph name="bolt" size={40} />
+            <Text style={styles.liveTag}>MINI-RETO</Text>
+            <Text style={styles.liveTitle}>Spanglish</Text>
+            <Text style={styles.liveSub}>{trapOpen ? 'Toca para cerrar' : 'Caza el error en 10 s'}</Text>
+          </PressableScale>
+        </View>
+      </Reveal>
 
-          <View style={{ gap: 8 }}>
-            {currentTrap.options.map((opt, idx) => {
-              const isAnswer = idx === currentTrap.answerIndex;
-              const state =
-                trapPicked === null
-                  ? 'idle'
-                  : trapPicked === idx
-                    ? isAnswer
-                      ? 'right'
-                      : 'wrong'
-                    : isAnswer
-                      ? 'reveal'
-                      : 'idle';
-              return (
-                <OptionButton
-                  key={opt}
-                  label={opt}
-                  state={state}
-                  disabled={trapPicked !== null}
-                  onPress={() => {
-                    setTrapPicked(idx);
-                  }}
-                />
-              );
-            })}
-          </View>
-
-          {trapPicked !== null && (
-            <View style={styles.trapExplainBox}>
-              <View style={ui.rowBetween}>
-                <Text style={styles.trapNaturalText}>
-                  ✓ {currentTrap.naturalSentence}
-                </Text>
-                <PressableScale
-                  onPress={() =>
-                    speakEnglishPhrase(currentTrap.naturalSentence, locale)
-                  }
-                  hapticKind="light"
-                  style={styles.listenMiniBtn}
-                >
-                  <Ionicons name="volume-high" size={15} color="#176B3A" />
-                  <Text style={styles.listenMiniText}>Escuchar</Text>
-                </PressableScale>
-              </View>
-              <Text style={TYPE.footnote}>{currentTrap.whyEs}</Text>
-              <Button
-                label="Siguiente reto de Spanglish"
-                icon="arrow-forward"
-                small
-                variant="secondary"
-                onPress={() => {
-                  setTrapPicked(null);
-                  setTrapIdx((i) => i + 1);
-                }}
+      {trapOpen ? (
+        <Reveal index={0}>
+          <Card style={styles.trapCard}>
+            <View style={[ui.rowBetween, { flexWrap: 'wrap', gap: 6 }]}>
+              <Eyebrow icon="flash" color={THEME.orange}>
+                Mini-Juego · Cazador de Spanglish
+              </Eyebrow>
+              <Badge
+                label={`Nivel ${currentTrap.level} · ${LEVEL_DIFFICULTY_ES[currentTrap.level]}`}
+                bg="#FFF3E0"
+                color="#D95B00"
+                icon="flame"
               />
             </View>
-          )}
-        </Card>
-      </Reveal>
+            <Text style={TYPE.headline}>Encuentra cómo lo diría un hablante nativo:</Text>
+            <View style={styles.trapWrongBox}>
+              <Ionicons name="close-circle" size={18} color={THEME.red} />
+              <Text style={styles.trapWrongText}>“{currentTrap.spanglishSentence}”</Text>
+            </View>
 
-      <TomodachiDreamModal
-        visible={dreamModalVisible}
-        onClose={() => setDreamModalVisible(false)}
-      />
+            <View style={{ gap: 8 }}>
+              {currentTrap.options.map((opt, idx) => {
+                const isAnswer = idx === currentTrap.answerIndex;
+                const state =
+                  trapPicked === null
+                    ? 'idle'
+                    : trapPicked === idx
+                      ? isAnswer
+                        ? 'right'
+                        : 'wrong'
+                      : isAnswer
+                        ? 'reveal'
+                        : 'idle';
+                return (
+                  <OptionButton
+                    key={opt}
+                    label={opt}
+                    state={state}
+                    disabled={trapPicked !== null}
+                    onPress={() => {
+                      setTrapPicked(idx);
+                    }}
+                  />
+                );
+              })}
+            </View>
+
+            {trapPicked !== null && (
+              <View style={styles.trapExplainBox}>
+                <View style={ui.rowBetween}>
+                  <Text style={styles.trapNaturalText}>✓ {currentTrap.naturalSentence}</Text>
+                  <PressableScale
+                    onPress={() => speakEnglishPhrase(currentTrap.naturalSentence, locale)}
+                    hapticKind="light"
+                    style={styles.listenMiniBtn}
+                  >
+                    <Ionicons name="volume-high" size={15} color="#176B3A" />
+                    <Text style={styles.listenMiniText}>Escuchar</Text>
+                  </PressableScale>
+                </View>
+                <Text style={TYPE.footnote}>{currentTrap.whyEs}</Text>
+                <Button
+                  label="Siguiente reto de Spanglish"
+                  icon="arrow-forward"
+                  small
+                  variant="secondary"
+                  onPress={() => {
+                    setTrapPicked(null);
+                    setTrapIdx((i) => i + 1);
+                  }}
+                />
+              </View>
+            )}
+          </Card>
+        </Reveal>
+      ) : null}
+
+      <TomodachiDreamModal visible={dreamModalVisible} onClose={() => setDreamModalVisible(false)} />
     </View>
   );
 }
 
-function MiniNeed({
-  icon,
-  value,
-  color,
-}: {
-  icon: IconName;
-  value: number;
-  color: string;
-}) {
+function MiniNeed({ icon, value, color }: { icon: IconName; value: number; color: string }) {
   return (
     <View style={styles.miniNeedPill}>
       <Ionicons name={icon} size={12} color={color} />
-      <Text
-        style={[
-          styles.miniNeedText,
-          value < 25 && { color: THEME.red },
-        ]}
-      >
-        {Math.round(value)}%
-      </Text>
+      <Text style={[styles.miniNeedText, value < 25 && { color: THEME.red }]}>{Math.round(value)}%</Text>
     </View>
   );
 }

@@ -1,12 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, {
   Circle,

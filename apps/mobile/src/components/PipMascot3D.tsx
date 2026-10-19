@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppState } from '../context/AppStateContext';
 import { useGame } from '../context/GameContext';

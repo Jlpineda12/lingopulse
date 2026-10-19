@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { displayPetName, type PetMood } from '../game/pet';
+import { tr } from '../i18n';
 
 /**
  * Recordatorios locales escritos por la mascota (en inglés fácil + español).
@@ -44,7 +45,13 @@ export async function scheduleReminders(params: {
   try {
     if (!handlerSet) {
       Notifications.setNotificationHandler({
-        handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: false, shouldSetBadge: false }),
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
       });
       handlerSet = true;
     }
@@ -63,7 +70,7 @@ export async function scheduleReminders(params: {
       if (d === 0 && params.practicedToday) continue;
       const msg = msgs[(at.getDate() + d) % msgs.length]!;
       await Notifications.scheduleNotificationAsync({
-        content: { title: msg.title, body: msg.body },
+        content: { title: msg.title, body: tr(msg.body) },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
       });
     }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -15,6 +15,7 @@ import { CompanionTraveler, RewardToast, TabBar, TopBar } from './src/components
 import { SplashScreen } from './src/components/SplashScreen';
 import { StreakCelebration } from './src/components/FireStreakCard';
 import { scheduleReminders } from './src/services/reminders';
+import { preloadSfx } from './src/services/sfx';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DailyScreen } from './src/screens/DailyScreen';
@@ -29,6 +30,8 @@ import { MinigameScreen } from './src/screens/MinigameScreen';
 import { EventScreen } from './src/screens/EventScreen';
 import { LeagueScreen } from './src/screens/LeagueScreen';
 import { THEME } from './src/theme/colors';
+import { setUiLanguage } from './src/i18n';
+import { uiLanguageFor } from '@lingopulse/shared';
 
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
   const style = document.createElement('style');
@@ -113,6 +116,18 @@ function Shell() {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [transitionKey]);
 
+  // A1–A2: la app explica en español. B1 en adelante: toda la app en inglés.
+  // El registro y el test de ubicación van en español (aún no se conoce el nivel real).
+  const uiLang = progress.onboarded ? uiLanguageFor(progress.level) : 'es';
+  useLayoutEffect(() => {
+    setUiLanguage(uiLang);
+  }, [uiLang]);
+
+  // Audio nativo: suena aunque el iPhone esté en silencio y deja listos los efectos.
+  useEffect(() => {
+    preloadSfx();
+  }, []);
+
   // Reprograma los recordatorios de la mascota cuando cambia la racha o el día practicado.
   const reminders = progress.reminders;
   useEffect(() => {
@@ -124,14 +139,14 @@ function Shell() {
       streak: streakView.streak,
       practicedToday: streakView.activeToday,
     });
-  }, [reminders?.enabled, reminders?.hour, pet.name, streakView.streak, streakView.activeToday]);
+  }, [reminders?.enabled, reminders?.hour, pet.name, streakView.streak, streakView.activeToday, uiLang]);
 
   // Pantalla de carga profesional animada al abrir la aplicación
   if (!ready || !splashDone) {
     return (
       <>
-        <StatusBar barStyle="dark-content" backgroundColor="#E6F2FF" />
-        <SplashScreen onFinish={() => setSplashDone(true)} />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFD9A8" />
+        <SplashScreen ready={ready} petSpecies={pet.species} onFinish={() => setSplashDone(true)} />
       </>
     );
   }

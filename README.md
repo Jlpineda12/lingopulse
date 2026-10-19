@@ -84,6 +84,39 @@ apps/mobile/src/components/Pet3D.tsx       Mascota 3D personalizable
 apps/mobile/src/screens/         Inicio, Daily, Practicar, Speaking, Listening, Reading, Writing, Mascota, Lección
 ```
 
+## Banco de Aprendizaje Experiencial (contenido A1–C2)
+
+`BancodeVocabulario.txt` (raíz del proyecto) es la fuente del banco de islas temáticas. Hoy trae una isla
+completa por nivel y el mapa de 90 islas (15 por nivel). Se integra solo en la app:
+
+| Del banco | Aparece en |
+|---|---|
+| Speaking (2 por isla, con frases objetivo y respuesta modelo) | Islas → Isla Voz, según tu nivel |
+| Listening (diálogo + preguntas) | Islas → Isla Oído, con dictado |
+| Writing (tarea + estructuras sugeridas) | Islas → Isla Pluma |
+| Laboratorio de Spanglish | Mini-reto Spanglish (Ruta) y minijuego Encuentra el Error |
+| Caja de léxico (con IPA, uso y ejemplos) | Cofre Diario (rotación diaria y Mi vocabulario) |
+
+**Para actualizarlo o agregar islas:** reemplaza `BancodeVocabulario.txt` (mismo formato) y ejecuta:
+
+```bash
+node packages/shared/scripts/import-experience-bank.mjs
+```
+
+El script regenera `packages/shared/src/practice/experience-bank.data.ts`; la conversión está en
+`experience-bank.ts` y los tests (`npm test`) validan que respuestas, quizzes y errores sean coherentes.
+
+## IA: corrección (Gemini) y pronunciación (Azure)
+
+La app funciona sin IA (corrector local con ~50 reglas). Con el servidor configurado:
+
+- **Gemini** corrige Writing y Speaking (`LLM_PROVIDER=gemini`, barato y con nivel gratuito). Claude sigue disponible con `LLM_PROVIDER=anthropic`.
+- **Pronunciación con solo Google:** Gemini escucha la grabación y estima palabra por palabra y sonido por sonido (marcado como *aproximado*), con consejos en español.
+- **Azure AI Speech** (opcional, plan Free F0) da la medición acústica precisa; si está configurado, tiene prioridad.
+- El servidor convierte el audio con **ffmpeg** y solo responde a tu app gracias a `APP_ACCESS_KEY`.
+
+Guía completa, desde las claves hasta instalar la app en tu celular y el de tu hermano (servidor en Google Cloud Run, APK de Android, iPhone): [`docs/05_ia_y_celulares.md`](./docs/05_ia_y_celulares.md).
+
 ## Novedades: racha, eventos, liga, islas "Grand Line" y orden
 
 - **Racha mejorada:** escudos de racha (1 gratis por semana, máx. 2) que protegen días perdidos, hitos con monedas (3, 7, 14, 30, 60, 100, 365 días), llama que cambia de color por nivel (brasa → hoguera → infierno → azul → cósmica), celebración animada al encenderla y tarjeta para compartir. Lógica en `packages/shared/src/practice/streak.ts` (con tests).

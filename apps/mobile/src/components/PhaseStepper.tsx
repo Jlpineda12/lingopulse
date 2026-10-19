@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import type { LessonPhase } from '@lingopulse/shared';
 import { useAppState, type ActiveStep } from '../context/AppStateContext';
 import { COLORS } from '../theme/colors';

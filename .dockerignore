@@ -1,0 +1,16 @@
+# Solo el backend entra a la imagen (ver Dockerfile).
+**/node_modules
+**/._*
+**/.DS_Store
+.git
+.claude
+.expo
+**/.env
+**/.env.*
+!.env.example
+docs
+supabase
+*.html
+apps/mobile/*
+!apps/mobile/package.json
+**/*.test.ts

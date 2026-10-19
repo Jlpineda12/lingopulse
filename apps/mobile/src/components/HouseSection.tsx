@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { useGame } from '../context/GameContext';
 import {
   COLLECTIONS,

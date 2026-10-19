@@ -18,7 +18,7 @@ import {
   type WritingEvaluationResult,
 } from '@lingopulse/shared';
 
-import { getApiBaseUrl } from './config';
+import { apiHeaders, getApiBaseUrl } from './config';
 
 /**
  * Fallback local en memoria por si el usuario abre la app móvil sin haber iniciado `npm run dev:api`.
@@ -66,6 +66,7 @@ async function fetchWithFallback<T>(
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...apiHeaders(),
         ...(options.headers ?? {}),
       },
       signal: controller.signal,

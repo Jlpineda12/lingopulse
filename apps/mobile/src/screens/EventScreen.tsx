@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppState } from '../context/AppStateContext';
 import { useGame } from '../context/GameContext';

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import type { MultipleChoiceQuestion } from '@lingopulse/shared';
 import { useOptionalGame } from '../context/GameContext';

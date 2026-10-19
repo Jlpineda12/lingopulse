@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { useAppState } from '../context/AppStateContext';
 import { COLORS } from '../theme/colors';
 
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dimensionBox: {
-    flex: 1,
+    flexGrow: 1,
     minWidth: 100,
     backgroundColor: COLORS.accentSoftBg,
     borderRadius: 14,

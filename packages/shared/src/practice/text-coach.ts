@@ -1,3 +1,4 @@
+import { pronunciationTipsEs } from './pronunciation.js';
 import type {
   CoachCorrection,
   CoachFeedback,
@@ -979,7 +980,9 @@ export function analyzeSpeechFluency(
   fluency = Math.round(clamp(fluency, 10, 100));
 
   const pronunciationScore =
-    audio.recognitionConfidence !== null
+    typeof audio.assessedPronunciation === 'number'
+      ? Math.round(clamp(audio.assessedPronunciation, 0, 100))
+      : audio.recognitionConfidence !== null
       ? Math.round(clamp(audio.recognitionConfidence * 100 + 5, 0, 100))
       : null;
 
@@ -1154,6 +1157,7 @@ export function buildLocalFeedback(req: CoachRequest): CoachFeedback {
   if (missingTargets.length && req.targetWords.length)
     improvements.push(`Intenta usar: ${missingTargets.slice(0, 3).join(', ')}.`);
   improvements.push(...fluencyNotes.filter((n) => !n.startsWith('Ritmo natural')));
+  if (spoken && req.pronunciation) improvements.push(...pronunciationTipsEs(req.pronunciation, 3));
   if (fluencyNotes.some((n) => n.startsWith('Ritmo natural')))
     strengths.push(fluencyNotes.find((n) => n.startsWith('Ritmo natural'))!);
 

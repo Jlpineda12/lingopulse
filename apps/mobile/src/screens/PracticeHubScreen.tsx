@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -21,15 +22,11 @@ import { useGame, type ActivityKind, type Screen } from '../context/GameContext'
 import {
   BIOME_PALETTES,
   FloatingIslandQuestNode,
+  IslandSkyBackdrop,
   SkyBridgeConnector,
   WorldBiomeHeader,
   type IslandBiomeKey,
 } from '../components/GameIslands';
-import {
-  detectDefaultAtmosphere,
-  DynamicIslandAtmosphereBanner,
-  type IslandAtmosphereMode,
-} from '../components/GameVfx';
 import { OptionButton } from '../components/MultipleChoice';
 import { PressableScale, Reveal } from '../components/motion';
 import {
@@ -84,9 +81,7 @@ export function PracticeHubScreen() {
   const { locale } = useAppState();
   const { progress, setLevel, openScreen, completeActivity } = useGame();
   const [activeTab, setActiveTab] = useState<HubCategory>('speaking');
-  const [weatherMode, setWeatherMode] = useState<IslandAtmosphereMode>(
-    detectDefaultAtmosphere
-  );
+  const [levelPickerOpen, setLevelPickerOpen] = useState(false);
 
   // Estado para Misiones de Roleplay Rápidas
   const [selectedMission, setSelectedMission] = useState<QuickRoleplayMission | null>(null);
@@ -177,7 +172,7 @@ export function PracticeHubScreen() {
           />
         </Reveal>
 
-        <View style={styles.islandsMapContainer}>
+        <IslandSkyBackdrop>
           {filteredIslands.map((item, idx) => {
             const isCurrent = idx === 0;
             const isLast = idx === filteredIslands.length - 1;
@@ -200,7 +195,7 @@ export function PracticeHubScreen() {
               </Reveal>
             );
           })}
-        </View>
+        </IslandSkyBackdrop>
       </View>
     );
   };
@@ -373,7 +368,7 @@ export function PracticeHubScreen() {
           </PressableScale>
         </Reveal>
 
-        <View style={styles.islandsMapContainer}>
+        <IslandSkyBackdrop>
           {missions.map((m, idx) => {
             const firstUserIdx = missions.findIndex(
               (item) => item.level === progress.level
@@ -403,7 +398,7 @@ export function PracticeHubScreen() {
               </Reveal>
             );
           })}
-        </View>
+        </IslandSkyBackdrop>
       </View>
     );
   };
@@ -556,40 +551,49 @@ export function PracticeHubScreen() {
 
   return (
     <View style={ui.screen}>
-      {/* Cabecera de Mundos e Islas */}
+      {/* Cabecera: título + nivel (un solo botón para cambiarlo) */}
       <Reveal index={0}>
         <View style={ui.rowBetween}>
-          <LargeTitle subtitle={`Mostrando solo las islas de tu nivel (${progress.level})`}>
-            Mundos e Islas
-          </LargeTitle>
-          <PressableScale
-            onPress={() => setActiveTab('placement')}
-            hapticKind="select"
-          >
-            <View
-              style={[
-                styles.rankPill,
-                { borderColor: levelMeta.color },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="crown"
-                size={15}
-                color={levelMeta.color}
-              />
-              <Text style={styles.rankPillText}>{levelMeta.titleEs}</Text>
+          <View style={{ flex: 1 }}>
+            <LargeTitle subtitle="Elige un mundo">Islas</LargeTitle>
+          </View>
+          <PressableScale onPress={() => setLevelPickerOpen((v) => !v)} hapticKind="select">
+            <View style={[styles.rankPill, { borderColor: levelMeta.color }]}>
+              <MaterialCommunityIcons name="crown" size={15} color={levelMeta.color} />
+              <Text style={styles.rankPillText}>Nivel {progress.level}</Text>
+              <Ionicons name={levelPickerOpen ? 'chevron-up' : 'chevron-down'} size={14} color={THEME.ink2} />
             </View>
           </PressableScale>
         </View>
       </Reveal>
 
-      {/* Selector de Archipiélago / Mundo con colores vivos (Cero negro) */}
+      {levelPickerOpen ? (
+        <Reveal index={0}>
+          <Card style={{ gap: 10 }}>
+            <Text style={TYPE.footnote}>
+              Las islas se adaptan a tu nivel. ¿No sabes cuál es? Haz la prueba del Templo Nivel.
+            </Text>
+            <View style={styles.levelGrid}>
+              {LEVEL_FILTERS.map((l) => (
+                <Chip
+                  key={l}
+                  label={`${l} · ${CEFR_LEVEL_META[l].titleEs}`}
+                  active={progress.level === l}
+                  color={CEFR_LEVEL_META[l].color}
+                  onPress={() => {
+                    setLevel(l);
+                    setLevelPickerOpen(false);
+                  }}
+                />
+              ))}
+            </View>
+          </Card>
+        </Reveal>
+      ) : null}
+
+      {/* Mundos: cuadrícula 3×2, todos visibles */}
       <Reveal index={1}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingVertical: 3 }}
-        >
+        <View style={styles.worldGrid}>
           {HUB_WORLDS.map((w) => {
             const active = activeTab === w.id;
             const palette = BIOME_PALETTES[w.biome];
@@ -599,69 +603,22 @@ export function PracticeHubScreen() {
                 hapticKind="select"
                 onPress={() => setActiveTab(w.id)}
                 style={[
-                  styles.worldTab,
-                  active && {
-                    backgroundColor: palette.accent,
-                    borderColor: palette.accent,
-                    borderBottomColor: palette.cliffMid,
-                  },
-                  SHADOW.card,
+                  styles.worldTile,
+                  { backgroundColor: active ? palette.accent : '#FFFFFF' },
+                  active && { borderColor: palette.accent, borderBottomColor: palette.cliffShadow },
                 ]}
               >
-                <MaterialCommunityIcons
-                  name={w.mcIcon}
-                  size={17}
-                  color={active ? '#FFFFFF' : palette.accent}
-                />
-                <Text
-                  style={[
-                    styles.worldTabText,
-                    active && { color: '#FFFFFF' },
-                  ]}
-                >
+                <View style={[styles.worldTileIcon, { backgroundColor: active ? 'rgba(255,255,255,0.22)' : `${palette.accent}1A` }]}>
+                  <MaterialCommunityIcons name={w.mcIcon} size={20} color={active ? '#FFFFFF' : palette.accent} />
+                </View>
+                <Text style={[styles.worldTileText, active && { color: '#FFFFFF' }]} numberOfLines={1}>
                   {w.label}
                 </Text>
               </PressableScale>
             );
           })}
-        </ScrollView>
+        </View>
       </Reveal>
-
-      {/* Selector de Nivel Activo (Muestra solo las islas del nivel elegido) */}
-      {activeTab !== 'placement' && (
-        <Reveal index={1}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
-          >
-            {LEVEL_FILTERS.map((l) => (
-              <Chip
-                key={l}
-                label={
-                  l === progress.level
-                    ? `Islas ${l} (Tu nivel)`
-                    : `Nivel ${l}`
-                }
-                active={progress.level === l}
-                color={CEFR_LEVEL_META[l].color}
-                onPress={() => {
-                  setLevel(l);
-                }}
-              />
-            ))}
-          </ScrollView>
-        </Reveal>
-      )}
-
-      {activeTab !== 'placement' && (
-        <Reveal index={1}>
-          <DynamicIslandAtmosphereBanner
-            mode={weatherMode}
-            onChangeMode={setWeatherMode}
-          />
-        </Reveal>
-      )}
 
       {/* Mapa de Islas Flotantes del Mundo Activo */}
       {(activeTab === 'speaking' ||
@@ -694,27 +651,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: THEME.ink,
   },
-  worldTab: {
-    flexDirection: 'row',
+  worldGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  worldTile: {
+    width: '31.6%',
+    flexGrow: 1,
     alignItems: 'center',
-    gap: 7,
-    paddingHorizontal: 15,
+    gap: 5,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+    borderRadius: 18,
+    borderWidth: 2,
     borderColor: '#E2E9F5',
-    borderBottomWidth: 3.5,
+    borderBottomWidth: 4,
     borderBottomColor: '#CBD6EC',
   },
-  worldTabText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: THEME.ink,
-  },
-  islandsMapContainer: {
-    gap: 0,
-  },
+  worldTileIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  worldTileText: { fontSize: 12, fontWeight: '800', color: THEME.ink },
+  levelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   arenaHero: {
     borderRadius: 26,
     padding: 20,

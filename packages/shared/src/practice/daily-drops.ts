@@ -1,4 +1,6 @@
-import type { DailyCategory, DailyItem } from './types.js';
+import type { DailyCategory, DailyItem, PracticeLevel } from './types.js';
+import { EXPERIENCE_DAILY_ITEMS } from './experience-bank.js';
+import { uiLanguageFor } from './language.js';
 
 export const DAILY_CATEGORY_META: Record<
   DailyCategory,
@@ -1635,10 +1637,32 @@ export interface DailyDrop {
  * Selección determinista por fecha local: un elemento por categoría y una
  * categoría destacada que rota cada día. Mismo día ⇒ misma selección.
  */
-export function getDailyDrop(dateKey: string = localDateKey()): DailyDrop {
+const CEFR_ORDER: PracticeLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+/** Ítems útiles para un nivel: los generales + los de ese nivel y los adyacentes (±1). */
+function poolForLevel(category: DailyCategory, level?: PracticeLevel): DailyItem[] {
+  const all = getItemsByCategory(category);
+  if (!level) return all.filter((item) => !item.level);
+  const i = CEFR_ORDER.indexOf(level);
+  const near = new Set(CEFR_ORDER.slice(Math.max(0, i - 1), i + 2));
+  // B1+: la app va en inglés, así que no se mezclan ítems A1–A2 (traen explicaciones en español).
+  if (uiLanguageFor(level) === 'en') {
+    near.delete('A1');
+    near.delete('A2');
+  }
+  const pool = all.filter((item) => !item.level || near.has(item.level));
+  return pool.length ? pool : all;
+}
+
+/** Todos los ítems útiles para un nivel (todas las categorías), para minijuegos y repasos. */
+export function getItemsForLevel(level?: PracticeLevel): DailyItem[] {
+  return DAILY_CATEGORIES.flatMap((category) => poolForLevel(category, level));
+}
+
+export function getDailyDrop(dateKey: string = localDateKey(), level?: PracticeLevel): DailyDrop {
   const day = dayNumberFromKey(dateKey);
   const items = DAILY_CATEGORIES.map((category, idx) => {
-    const pool = getItemsByCategory(category);
+    const pool = poolForLevel(category, level);
     const offset = hashString(category) % pool.length;
     return pool[(day + offset + idx) % pool.length]!;
   });
@@ -1649,3 +1673,6 @@ export function getDailyDrop(dateKey: string = localDateKey()): DailyDrop {
 export function findDailyItem(id: string): DailyItem | undefined {
   return DAILY_ITEMS.find((item) => item.id === id);
 }
+
+// Contenido del Banco de Aprendizaje Experiencial (BancodeVocabulario.txt), ver experience-bank.ts.
+DAILY_ITEMS.push(...EXPERIENCE_DAILY_ITEMS.filter((item) => !DAILY_ITEMS.some((d) => d.term.toLowerCase() === item.term.toLowerCase())));

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppState } from '../context/AppStateContext';
@@ -1225,8 +1226,9 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   creatorTabPill: {
-    flex: 1,
-    minWidth: 72,
+    // 3 por fila; con flexWrap no usar flex: 1 (en RN 0.86 estira los botones en alto).
+    flexGrow: 1,
+    width: '30%',
     alignItems: 'center',
     paddingVertical: 9,
     paddingHorizontal: 6,

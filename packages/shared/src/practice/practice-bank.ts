@@ -6,6 +6,7 @@ import type {
   WritingPrompt,
 } from './types.js';
 import { dayNumberFromKey, localDateKey } from './daily-drops.js';
+import { EXPERIENCE_LISTENING_TRACKS, EXPERIENCE_SPEAKING_TOPICS, EXPERIENCE_WRITING_PROMPTS } from './experience-bank.js';
 
 /* ------------------------------------------------------------------ */
 /* SPEAKING                                                            */
@@ -1302,3 +1303,7 @@ export function getDailyPractice(dateKey: string = localDateKey(), level?: Pract
   };
 }
 
+// Contenido del Banco de Aprendizaje Experiencial (BancodeVocabulario.txt), ver experience-bank.ts.
+SPEAKING_TOPICS.push(...EXPERIENCE_SPEAKING_TOPICS);
+LISTENING_TRACKS.push(...EXPERIENCE_LISTENING_TRACKS);
+WRITING_PROMPTS.push(...EXPERIENCE_WRITING_PROMPTS);

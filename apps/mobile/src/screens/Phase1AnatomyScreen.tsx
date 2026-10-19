@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { useAppState } from '../context/AppStateContext';
 import { COLORS } from '../theme/colors';
 
@@ -302,7 +303,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   reviewPill: {
-    flex: 1,
+    flexGrow: 1,
     minWidth: 140,
     backgroundColor: COLORS.purpleSoftBg,
     borderRadius: 12,

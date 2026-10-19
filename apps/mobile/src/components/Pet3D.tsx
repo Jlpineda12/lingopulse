@@ -7,6 +7,19 @@ import { createPetScene, type PetSceneHandle } from '../pet3d/petScene';
 import type { HouseSceneOptions } from '../pet3d/petHouse';
 import { haptic } from './motion';
 
+// En React Native / expo-gl con Three.js r163+, Three.js rechaza contextos que sean instanceof WebGLRenderingContext.
+// Este bypass permite que Three.js use el contexto acelerado de expo-gl como WebGL 2 sin lanzar error.
+if (typeof WebGLRenderingContext !== 'undefined') {
+  try {
+    Object.defineProperty(WebGLRenderingContext, Symbol.hasInstance, {
+      value: () => false,
+      configurable: true,
+    });
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Mascota 3D en web (canvas WebGL) y en iOS/Android (expo-gl, funciona en Expo Go).
  * Arrastra para girarla 360°, tócala para que salte de alegría.
@@ -211,6 +224,29 @@ export function Pet3D({
     nativeCleanup.current?.();
     const w = gl.drawingBufferWidth;
     const hgt = gl.drawingBufferHeight;
+
+    if (typeof WebGLRenderingContext !== 'undefined') {
+      try {
+        Object.defineProperty(WebGLRenderingContext, Symbol.hasInstance, {
+          value: () => false,
+          configurable: true,
+        });
+      } catch {
+        // ignore
+      }
+    }
+    if (typeof (global as any).WebGL2RenderingContext === 'undefined') {
+      (global as any).WebGL2RenderingContext = (gl as any).constructor;
+    }
+    if (!(gl as any).getContextAttributes) {
+      (gl as any).getContextAttributes = () => ({
+        alpha: true,
+        antialias: true,
+        depth: true,
+        stencil: true,
+      });
+    }
+
     const fakeCanvas = {
       width: w,
       height: hgt,
@@ -225,10 +261,13 @@ export function Pet3D({
       canvas: fakeCanvas as unknown as HTMLCanvasElement,
       context: gl as unknown as WebGLRenderingContext,
       antialias: true,
+      alpha: true,
     });
     renderer.setPixelRatio(1);
     renderer.setSize(w, hgt, false);
-    renderer.setClearColor(new THREE.Color(backgroundColor), 1);
+    // 'transparent' no es un color de THREE: en ese caso se limpia con alfa 0 para ver el fondo de la pantalla.
+    if (isTransparent(backgroundColor)) renderer.setClearColor(0x000000, 0);
+    else renderer.setClearColor(new THREE.Color(backgroundColor), 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
 
@@ -267,10 +306,14 @@ export function Pet3D({
     <View style={{ width: size, height }} {...pan.panHandlers}>
       <GLView
         key={`${configKey}-${backgroundColor}`}
-        style={{ width: size, height }}
+        style={{ width: size, height, backgroundColor: 'transparent' }}
         onContextCreate={onContextCreate}
         msaaSamples={4}
       />
     </View>
   );
+}
+
+function isTransparent(color: string | undefined): boolean {
+  return !color || color === 'transparent' || /^rgba\(.*,\s*0\s*\)$/.test(color);
 }

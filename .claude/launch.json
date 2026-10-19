@@ -6,9 +6,9 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "cd ~/Projects/EnglishApp/apps/mobile && BROWSER=none EXPO_NO_TELEMETRY=1 npx expo start --web --port 8090"
+        "cd ~/Projects/EnglishApp/apps/mobile && BROWSER=none EXPO_NO_TELEMETRY=1 CI=0 npx expo start --web --port 8092"
       ],
-      "port": 8090
+      "port": 8092
     }
   ]
 }

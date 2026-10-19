@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { File, Paths } from 'expo-file-system';
 
 export type SfxKind =
   | 'tap'
@@ -10,6 +11,14 @@ export type SfxKind =
   | 'pet';
 
 let sfxMuted = false;
+// Mientras el micrófono graba no suena nada: en iPhone un sonido puede cortar la grabación.
+let sfxSuspended = false;
+
+export function suspendSfx(suspended: boolean) {
+  // Ojo: NO pausar reproductores aquí. En expo-audio (iOS) pausar o terminar un sonido desactiva
+  // la sesión de audio 100 ms después aunque el micrófono esté grabando, y corta la grabación.
+  sfxSuspended = suspended;
+}
 
 export function isSfxMuted(): boolean {
   return sfxMuted;
@@ -106,29 +115,11 @@ function playWebSfx(notes: ToneNote[]) {
   }
 }
 
-// Generador de WAV PCM en memoria (base64) para iOS / Android en Expo Go
-const BASE64_CHARS =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+// Generador de WAV PCM para iOS / Android.
+// iOS no reproduce URLs "data:audio/...", así que cada sonido se escribe una vez
+// como archivo .wav en la caché del teléfono y se reutiliza un reproductor por sonido.
 
-function encodeBase64(bytes: Uint8Array): string {
-  let result = '';
-  const len = bytes.length;
-  for (let i = 0; i < len; i += 3) {
-    const b0 = bytes[i]!;
-    const b1 = i + 1 < len ? bytes[i + 1]! : 0;
-    const b2 = i + 2 < len ? bytes[i + 2]! : 0;
-    result += BASE64_CHARS[b0 >> 2];
-    result += BASE64_CHARS[((b0 & 3) << 4) | (b1 >> 4)];
-    result += i + 1 < len ? BASE64_CHARS[((b1 & 15) << 2) | (b2 >> 6)] : '=';
-    result += i + 2 < len ? BASE64_CHARS[b2 & 63] : '=';
-  }
-  return result;
-}
-
-const nativeWavCache: Partial<Record<SfxKind, string>> = {};
-
-function buildWavDataUri(kind: SfxKind): string {
-  if (nativeWavCache[kind]) return nativeWavCache[kind]!;
+function buildWavBytes(kind: SfxKind): Uint8Array {
   const notes = SFX_RECIPES[kind];
   const sampleRate = 22050;
   const totalMs = Math.max(...notes.map((n) => n.delayMs + n.durationMs)) + 30;
@@ -177,31 +168,71 @@ function buildWavDataUri(kind: SfxKind): string {
     const clamped = Math.max(-1, Math.min(1, sample));
     view.setInt16(44 + i * 2, Math.round(clamped * 32767), true);
   }
+  return new Uint8Array(buffer);
+}
 
-  const uri = `data:audio/wav;base64,${encodeBase64(new Uint8Array(buffer))}`;
-  nativeWavCache[kind] = uri;
-  return uri;
+const nativePlayers: Partial<Record<SfxKind, AudioPlayer>> = {};
+let audioModeReady: Promise<void> | null = null;
+
+/**
+ * Configura la sesión de audio una sola vez: suena aunque el iPhone esté en modo
+ * silencio y se mezcla con la música de otras apps. Llamarla al arrancar la app.
+ */
+export function initAppAudio(): Promise<void> {
+  if (Platform.OS === 'web') return Promise.resolve();
+  if (!audioModeReady) {
+    audioModeReady = setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+      allowsRecording: false,
+    }).catch(() => undefined);
+  }
+  return audioModeReady;
+}
+
+function nativePlayer(kind: SfxKind): AudioPlayer {
+  const existing = nativePlayers[kind];
+  if (existing) return existing;
+  const file = new File(Paths.cache, `lingopulse-sfx-v2-${kind}.wav`);
+  if (!file.exists) {
+    file.create({ overwrite: true });
+    file.write(buildWavBytes(kind));
+  }
+  // keepAudioSessionActive: al terminar el efecto, expo-audio no apaga la sesión de audio
+  // (si la apagara, cortaría una grabación en curso en iPhone).
+  const player = createAudioPlayer({ uri: file.uri }, { keepAudioSessionActive: true });
+  player.volume = 0.85;
+  nativePlayers[kind] = player;
+  return player;
 }
 
 async function playNativeSfx(kind: SfxKind) {
   try {
-    const uri = buildWavDataUri(kind);
-    const { sound } = await Audio.Sound.createAsync(
-      { uri },
-      { shouldPlay: true, volume: 0.85 }
-    );
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync().catch(() => {});
-      }
-    });
+    await initAppAudio();
+    const player = nativePlayer(kind);
+    await player.seekTo(0);
+    player.play();
   } catch {
     // Silencioso si el audio nativo está ocupado
   }
 }
 
+/** Prepara los archivos de sonido en segundo plano para que el primer toque no tarde. */
+export function preloadSfx() {
+  if (Platform.OS === 'web') return;
+  void initAppAudio().then(() => {
+    (Object.keys(SFX_RECIPES) as SfxKind[]).forEach((k) => {
+      try {
+        nativePlayer(k);
+      } catch {
+        // ignorar
+      }
+    });
+  });
+}
+
 export function playSfx(kind: SfxKind) {
-  if (sfxMuted) return;
+  if (sfxMuted || sfxSuspended) return;
   if (Platform.OS === 'web') {
     playWebSfx(SFX_RECIPES[kind]);
   } else {

@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { READING_PASSAGES, type ReadingPassage } from '@lingopulse/shared';
 import { useAppState } from '../context/AppStateContext';

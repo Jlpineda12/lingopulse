@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '../i18n';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';

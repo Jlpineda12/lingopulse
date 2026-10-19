@@ -1,4 +1,5 @@
 import type { PracticeLevel } from './types.js';
+import { EXPERIENCE_SPANGLISH_TRAPS } from './experience-bank.js';
 
 export interface CefrLevelInfo {
   id: PracticeLevel;
@@ -615,3 +616,6 @@ export const QUICK_ROLEPLAY_MISSIONS: QuickRoleplayMission[] = [
     targetPhrases: ['accountability', 'root-cause analysis', 'safeguards', 'unequivocally'],
   },
 ];
+
+// Contenido del Banco de Aprendizaje Experiencial (BancodeVocabulario.txt), ver experience-bank.ts.
+SPANGLISH_TRAPS.push(...EXPERIENCE_SPANGLISH_TRAPS);

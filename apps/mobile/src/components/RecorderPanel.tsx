@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
@@ -33,18 +34,22 @@ export function RecorderPanel({
   onResult,
   hint = 'Toca el micrófono y habla en inglés',
   onRecordingChange,
+  referenceText,
 }: {
   locale: SupportedLocale;
   targetSeconds?: number;
   onResult: (out: RecorderOutput) => void;
   hint?: string;
   onRecordingChange?: (recording: boolean) => void;
+  /** Frase que se debe leer: activa la evaluación de pronunciación contra ella. */
+  referenceText?: string;
 }) {
-  const capture = useSpeechCapture(locale);
+  const capture = useSpeechCapture(locale, { referenceText });
   const game = useOptionalGame();
   const [bars, setBars] = useState<number[]>(() => new Array(32).fill(0.05));
   const [typed, setTyped] = useState('');
   const [typing, setTyping] = useState(false);
+  const [silentNotice, setSilentNotice] = useState(false);
 
   useEffect(() => {
     if (capture.state !== 'recording') return;
@@ -64,8 +69,16 @@ export function RecorderPanel({
       haptic('medium');
       const res = await capture.stop();
       setBars(new Array(32).fill(0.05));
+      if (res.silent) {
+        // Sin voz: no se pasa un resultado vacío (o inventado); se pide repetir.
+        haptic('error');
+        setSilentNotice(true);
+        return;
+      }
+      setSilentNotice(false);
       onResult({ ...res, typed: false });
     } else {
+      setSilentNotice(false);
       const ok = await capture.start();
       if (ok) haptic('success');
     }
@@ -97,6 +110,8 @@ export function RecorderPanel({
                 transcript: typed.trim(),
                 audioUrl: null,
                 metrics: estimatedMetricsFromText(typed),
+                pronunciation: null,
+                review: null,
                 typed: true,
               })
             }
@@ -180,7 +195,7 @@ export function RecorderPanel({
         {processing
           ? Platform.OS === 'web'
             ? 'Analizando tu audio…'
-            : 'Analizando y transcribiendo tu audio…'
+            : 'La IA está escuchando tu audio (puede tardar unos 20 s)…'
           : recording
             ? 'Te escucho… toca para terminar'
             : hint}
@@ -196,6 +211,16 @@ export function RecorderPanel({
         <View style={styles.live}>
           <Text style={TYPE.caption}>Transcripción en vivo</Text>
           <Text style={styles.liveText}>{capture.liveTranscript || '…'}</Text>
+        </View>
+      ) : null}
+
+      {silentNotice && !recording ? (
+        <View style={styles.errorBox}>
+          <Ionicons name="mic-off" size={18} color={THEME.red} />
+          <Text style={styles.error}>
+            No se escuchó tu voz. Revisa que el micrófono no esté tapado, acerca el teléfono y vuelve a intentarlo.
+            En Ajustes › Expo Go confirma que el micrófono esté permitido.
+          </Text>
         </View>
       ) : null}
 
