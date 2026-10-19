@@ -175,7 +175,8 @@ export function unitQuestionBank(unit: Unit): UnitQuestion[] {
   });
 
   unit.grammar.practice.forEach((g, i) => {
-    bank.push(mc(spanish ? `Gramática · Completa: ${g.q}` : `Grammar · Complete: ${g.q}`, g.a, g.opts, `${unit.id}-gr-${i}`, g.why));
+    const lead = g.q.includes('___') ? (spanish ? 'Completa: ' : 'Complete: ') : '';
+    bank.push(mc(`${spanish ? 'Gramática' : 'Grammar'} · ${lead}${g.q}`, g.a, g.opts, `${unit.id}-gr-${i}`, g.why));
   });
 
   bank.push(...(unit.extraQuiz ?? []));

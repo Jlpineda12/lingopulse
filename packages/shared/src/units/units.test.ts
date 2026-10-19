@@ -38,7 +38,7 @@ describe('Islas por tema: contenido', () => {
       }
       assert.ok(u.grammar.practice.length >= 8, 'mínimo 8 ejercicios de gramática');
       for (const g of u.grammar.practice) {
-        assert.ok(g.q.includes('___'), `gramática sin hueco: ${g.q}`);
+        assert.ok(g.q.includes('___') || /[?:]\s*$/.test(g.q), `gramática sin hueco ni pregunta: ${g.q}`);
         assert.ok(g.opts.includes(g.a), `la respuesta "${g.a}" no está en las opciones de "${g.q}"`);
         assert.equal(new Set(g.opts).size, g.opts.length, `opciones repetidas en "${g.q}"`);
       }
