@@ -45,6 +45,12 @@ type CaptureState = 'idle' | 'recording' | 'processing';
 
 const PAUSE_MS = 700;
 const IS_WEB = Platform.OS === 'web';
+/**
+ * Se sigue grabando un instante después de tocar "detener": la gente suele tocar el botón
+ * mientras termina la última palabra y esa sílaba se perdía.
+ */
+const TAIL_MS = 450;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Grabación para voz: AAC mono a 22 kHz (~0,5 MB por minuto). El preset HIGH_QUALITY graba en estéreo
@@ -375,6 +381,7 @@ export function useSpeechCapture(locale: SupportedLocale, options: { referenceTe
     const c = r.current;
     const endedAt = Date.now();
     let uri: string | null = null;
+    await wait(TAIL_MS);
     if (c.timer) clearInterval(c.timer);
     c.timer = null;
     try {
@@ -399,13 +406,15 @@ export function useSpeechCapture(locale: SupportedLocale, options: { referenceTe
       },
       pronunciation: server?.pronunciation ?? null,
       silent: server?.silent ?? false,
-      review: uri && server?.reviewAvailable ? reviewRecording(uri, locale, referenceRef.current) : null,
+      review: uri && server?.reviewAvailable ? reviewRecording(uri, locale, referenceRef.current, server.audioId) : null,
     };
   };
 
   const stopWeb = async (): Promise<CaptureResult> => {
     const c = r.current;
     const endedAt = Date.now();
+    await wait(TAIL_MS);
+    c.active = false;
     const recognition = c.recognition;
     const recognitionDone = new Promise<void>((resolve) => {
       if (!recognition) return resolve();
@@ -447,13 +456,13 @@ export function useSpeechCapture(locale: SupportedLocale, options: { referenceTe
       metrics: { ...vadMetrics, assessedPronunciation: server?.pronunciation?.pronScore ?? null },
       pronunciation: server?.pronunciation ?? null,
       silent: !!server?.silent && !webTranscript,
-      review: blob && server?.reviewAvailable ? reviewRecording(blob, locale, referenceRef.current) : null,
+      review: blob && server?.reviewAvailable ? reviewRecording(blob, locale, referenceRef.current, server.audioId) : null,
     };
   };
 
   const stop = useCallback(async (): Promise<CaptureResult> => {
     setState('processing');
-    r.current.active = false;
+    if (!IS_WEB) r.current.active = false;
     const result = IS_WEB ? await stopWeb() : await stopNative();
     setLevel(0);
     setState('idle');

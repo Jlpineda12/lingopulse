@@ -65,8 +65,8 @@ interface GeminiResponse {
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 interface GenerateOptions {
-  /** 'low' = pensar poco: respuestas más rápidas (transcripción y pronunciación). */
-  thinking?: 'low';
+  /** 'minimal'/'low' = pensar poco: respuestas más rápidas (transcripción y pronunciación). */
+  thinking?: 'minimal' | 'low';
   timeoutMs: number;
   /** Modelo para esta tarea (si no, GEMINI_MODEL o Flash). */
   model?: string;
@@ -105,7 +105,9 @@ async function generateJson(system: string, parts: Part[], schema: object | null
           const body = await res.text();
           lastError = new Error(`Gemini ${model} HTTP ${res.status}: ${body.slice(0, 300)}`);
           if (res.status === 400 && thinking && /think/i.test(body)) {
-            thinking = undefined; // el modelo no acepta ese nivel de razonamiento: se reintenta sin él
+            // El modelo no acepta ese nivel de razonamiento: se baja un escalón (minimal → low → por defecto).
+            thinking = thinking === 'minimal' ? 'low' : undefined;
+            attempt--;
             continue;
           }
           if (res.status === 429 && markIfDailyQuota(model, body)) break; // siguiente modelo, sin esperar
@@ -182,12 +184,27 @@ Only write words you actually hear in THIS recording. Never guess, complete or i
 
 const TranscriptSchema = z.object({ transcript: z.string() });
 
-export async function transcribeWithGemini(wav: Buffer): Promise<string> {
+/**
+ * Modelo para la transcripción rápida. Flash-Lite transcribe bien, tarda ~2-4 s y en el nivel
+ * gratuito tiene su propio cupo, así no gasta el de Flash (que se usa para la pronunciación).
+ */
+function fastTranscriptModel(): string {
+  return process.env.GEMINI_STT_MODEL || 'gemini-flash-lite-latest';
+}
+
+/** ¿Se transcribe aparte (rápido) mientras la pronunciación se calcula en paralelo? GEMINI_FAST_TRANSCRIPT=0 lo apaga. */
+export function isGeminiFastTranscriptEnabled(): boolean {
+  return isGeminiEnabled() && process.env.GEMINI_FAST_TRANSCRIPT !== '0';
+}
+
+export async function transcribeWithGemini(wav: Buffer, opts: { fast?: boolean } = {}): Promise<string> {
   const raw = await generateJson(
     TRANSCRIBE_PROMPT,
     [{ inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } }, { text: 'Transcribe this recording.' }],
     z.toJSONSchema(TranscriptSchema),
-    { thinking: 'low', timeoutMs: 100_000 }
+    opts.fast
+      ? { thinking: 'minimal', timeoutMs: 30_000, model: fastTranscriptModel() }
+      : { thinking: 'low', timeoutMs: 100_000 }
   );
   return TranscriptSchema.parse(raw).transcript.trim();
 }

@@ -32,6 +32,11 @@ const EXTENSIONS: Record<string, string> = {
   'audio/mpeg': 'mp3',
 };
 
+/** Una conversión normal tarda < 1 s; si ffmpeg se cuelga con un archivo raro, se corta. */
+function ffmpegTimeoutMs(): number {
+  return Number(process.env.FFMPEG_TIMEOUT_MS) || 30_000;
+}
+
 export async function toWav16k(audio: Buffer, mimeType: string): Promise<Buffer> {
   const dir = await mkdtemp(join(tmpdir(), 'lingopulse-audio-'));
   const input = join(dir, `in.${EXTENSIONS[mimeType.split(';')[0]!.trim()] ?? 'bin'}`);
@@ -41,11 +46,16 @@ export async function toWav16k(audio: Buffer, mimeType: string): Promise<Buffer>
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(ffmpegPath(), [
         '-hide_banner',
+        '-nostdin',
         '-loglevel',
         'error',
         '-y',
+        // Solo archivos locales: un audio manipulado (p. ej. una lista HLS) no puede pedir URLs ni otros archivos.
+        '-protocol_whitelist',
+        'file',
         '-i',
         input,
+        '-vn',
         '-ac',
         '1',
         '-ar',
@@ -59,9 +69,22 @@ export async function toWav16k(audio: Buffer, mimeType: string): Promise<Buffer>
         output,
       ]);
       let stderr = '';
-      proc.stderr.on('data', (d) => (stderr += String(d)));
-      proc.on('error', (err) => reject(new Error(`ffmpeg no disponible: ${err.message}`)));
-      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(0, 300)}`))));
+      const killer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error(`ffmpeg: tiempo de espera agotado (${ffmpegTimeoutMs()} ms)`));
+      }, ffmpegTimeoutMs());
+      proc.stderr.on('data', (d) => {
+        if (stderr.length < 4000) stderr += String(d);
+      });
+      proc.on('error', (err) => {
+        clearTimeout(killer);
+        reject(new Error(`ffmpeg no disponible: ${err.message}`));
+      });
+      proc.on('close', (code) => {
+        clearTimeout(killer);
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg ${code}: ${stderr.slice(0, 300)}`));
+      });
     });
     return await readFile(output);
   } finally {
@@ -180,6 +203,32 @@ export function analyzeLevels(wav: Buffer): AudioLevels {
     rmsDb: Math.round(toDb(Math.sqrt(sumSq / Math.max(1, samples))) * 10) / 10,
     voicedSec: Math.round(voicedBlocks * 0.05 * 10) / 10,
   };
+}
+
+/**
+ * Sube el volumen de grabaciones bajas (micrófono lejos o teléfono en la mesa) para que Azure y
+ * Gemini entiendan todas las palabras, sobre todo las finales que se dicen más bajito.
+ * Lleva el pico a -3 dBFS con una ganancia máxima de +18 dB; no toca audio ya fuerte.
+ */
+export function normalizeGain(wav: Buffer, targetPeakDb = -3, maxGainDb = 18): Buffer {
+  const pcm = pcmOf(wav);
+  const samples = Math.floor(pcm.length / 2);
+  let peak = 0;
+  for (let i = 0; i < samples; i++) {
+    const a = Math.abs(pcm.readInt16LE(i * 2));
+    if (a > peak) peak = a;
+  }
+  if (!peak) return wav;
+  const peakDb = toDb(peak / 32768);
+  const gainDb = Math.min(maxGainDb, targetPeakDb - peakDb);
+  if (gainDb < 1) return wav;
+  const gain = Math.pow(10, gainDb / 20);
+  const out = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i++) {
+    const v = Math.round(pcm.readInt16LE(i * 2) * gain);
+    out.writeInt16LE(Math.max(-32768, Math.min(32767, v)), i * 2);
+  }
+  return Buffer.concat([wavHeader(out.length), out]);
 }
 
 /** ¿La grabación tiene voz suficiente para analizarla? (evita que la IA invente texto con audio vacío) */

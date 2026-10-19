@@ -49,9 +49,48 @@ interface ActiveArenaSession {
   turns: StoredTurn[];
   observedTargetStatus: 'server_verified' | 'provisional' | 'absent';
   closed: boolean;
+  lastActivityAt: number;
 }
 
+/** Error de sesión que el servidor traduce a 404 (no existe o caducó) o 409 (ya cerrada). */
+export class ArenaSessionError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'not_found' | 'closed'
+  ) {
+    super(message);
+  }
+}
+
+/** Las sesiones viven en memoria: caducan tras 2 h sin actividad y nunca hay más de 2000. */
+export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+export const MAX_SESSIONS = 2000;
 const sessions = new Map<string, ActiveArenaSession>();
+
+/** Borra las sesiones caducadas y, si aún sobran, las más antiguas (el Map conserva el orden de creación). */
+export function pruneArenaSessions(now = Date.now()): void {
+  for (const [id, s] of sessions) {
+    if (now - s.lastActivityAt > SESSION_TTL_MS) sessions.delete(id);
+  }
+  for (const id of sessions.keys()) {
+    if (sessions.size < MAX_SESSIONS) break;
+    sessions.delete(id);
+  }
+}
+
+export function arenaSessionCount(): number {
+  return sessions.size;
+}
+
+function getSession(sessionId: string): ActiveArenaSession {
+  const session = typeof sessionId === 'string' ? sessions.get(sessionId) : undefined;
+  if (!session || Date.now() - session.lastActivityAt > SESSION_TTL_MS) {
+    if (session) sessions.delete(sessionId);
+    throw new ArenaSessionError(`Voice Arena session ${sessionId} not found`, 'not_found');
+  }
+  session.lastActivityAt = Date.now();
+  return session;
+}
 
 /**
  * Fase 2: Evalúa comprensión de Reading & Listening (inferir intención o consecuencia).
@@ -183,8 +222,10 @@ export function startVoiceArenaSession(params: {
     ],
     observedTargetStatus: 'absent',
     closed: false,
+    lastActivityAt: Date.now(),
   };
 
+  pruneArenaSessions();
   sessions.set(sessionId, session);
 
   return {
@@ -389,12 +430,9 @@ export function processLearnerVoiceTurn(params: {
   responseWindowMs?: number;
   voicedMs?: number;
 }): ClientArenaTurnPayload {
-  const session = sessions.get(params.sessionId);
-  if (!session) {
-    throw new Error(`Voice Arena session ${params.sessionId} not found`);
-  }
+  const session = getSession(params.sessionId);
   if (session.closed) {
-    throw new Error(`Voice Arena session ${params.sessionId} is already closed`);
+    throw new ArenaSessionError(`Voice Arena session ${params.sessionId} is already closed`, 'closed');
   }
 
   const audioStatus: AudioStatus = params.audioStatus ?? 'usable';
@@ -567,10 +605,7 @@ export function processLearnerVoiceTurn(params: {
  * combustible de mascota, racha (>=30s de voz válida) y programación FSRS.
  */
 export function generateVoiceScorecard(sessionId: string): VoiceScorecardDTO {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    throw new Error(`Voice Arena session ${sessionId} not found`);
-  }
+  const session = getSession(sessionId);
   session.closed = true;
 
   const usableLearnerTurns = session.turns.filter(

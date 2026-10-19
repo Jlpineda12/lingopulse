@@ -13,6 +13,8 @@ export interface ServerTranscript {
   silent?: boolean;
   /** Hay una segunda pasada con IA disponible (ver reviewRecording). */
   reviewAvailable?: boolean;
+  /** Id de la grabación en el servidor: la revisión ya empezó allí y se recoge sin reenviar el audio. */
+  audioId?: string | null;
 }
 
 /** Resultado de la revisión de Gemini: transcripción literal + pronunciación estimada. */
@@ -76,7 +78,13 @@ export async function transcribeRecording(
       const res = await fetch(`${getApiBaseUrl()}/api/speech/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...apiHeaders() },
-        body: JSON.stringify({ audioBase64, mimeType, language: locale, referenceText: referenceText ?? '' }),
+        body: JSON.stringify({
+          audioBase64,
+          mimeType,
+          language: locale,
+          referenceText: referenceText ?? '',
+          feedbackLanguage: getUiLanguage(),
+        }),
         signal: controller.signal,
       });
       if (!res.ok) return null;
@@ -88,6 +96,7 @@ export async function transcribeRecording(
         confidence: data.confidence ?? null,
         pronunciation: data.pronunciation ?? null,
         reviewAvailable: !!data.reviewAvailable,
+        audioId: data.audioId ?? null,
       };
     } finally {
       clearTimeout(timer);
@@ -97,34 +106,49 @@ export async function transcribeRecording(
   }
 }
 
+async function postReview(body: object): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 180_000);
+  try {
+    return await fetch(`${getApiBaseUrl()}/api/speech/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...apiHeaders() },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
- * Segunda pasada (más lenta, ~20 s): Gemini escucha la grabación y detecta errores que la
- * medición acústica no vio, además de devolver la transcripción literal con los errores del estudiante.
+ * Segunda pasada: Gemini escucha la grabación y detecta errores que la medición acústica no vio,
+ * además de devolver la transcripción literal con los errores del estudiante.
+ * Con `audioId` el servidor ya la empezó al transcribir: se recoge sin volver a subir el audio.
+ * Si el servidor ya no la tiene (reinicio u otra instancia), se reenvía la grabación.
  */
 export async function reviewRecording(
   source: string | Blob,
   locale: SupportedLocale,
-  referenceText?: string
+  referenceText?: string,
+  audioId?: string | null
 ): Promise<PronunciationReview | null> {
   try {
-    const encoded = await encodeAudio(source);
-    if (!encoded) return null;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 180_000);
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/speech/review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...apiHeaders() },
-        body: JSON.stringify({ ...encoded, language: locale, referenceText: referenceText ?? '', feedbackLanguage: getUiLanguage() }),
-        signal: controller.signal,
-      });
-      if (!res.ok) return null;
-      const data = (await res.json()) as Partial<PronunciationReview> & { silent?: boolean };
-      if (data.silent) return null;
-      return { transcript: data.transcript ?? '', pronunciation: data.pronunciation ?? null };
-    } finally {
-      clearTimeout(timer);
+    const meta = { language: locale, referenceText: referenceText ?? '', feedbackLanguage: getUiLanguage() };
+    let res: Response | null = null;
+    if (audioId) {
+      res = await postReview({ audioId, ...meta });
+      if (res.status === 404) res = null;
     }
+    if (!res) {
+      const encoded = await encodeAudio(source);
+      if (!encoded) return null;
+      res = await postReview({ ...encoded, ...meta });
+    }
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<PronunciationReview> & { silent?: boolean };
+    if (data.silent) return null;
+    return { transcript: data.transcript ?? '', pronunciation: data.pronunciation ?? null };
   } catch {
     return null;
   }
