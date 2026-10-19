@@ -33,32 +33,17 @@ import {
   ui,
 } from '../components/ui';
 import {
-  ACCESSORIES,
-  BELLY_COLORS,
-  BLUSH_STYLES,
-  BODY_COLORS,
-  BODY_SCALES,
-  BROW_STYLES,
   DEFAULT_PET,
-  EYE_STYLES,
   levelFromXp,
-  MOUTH_STYLES,
-  PERSONALITIES,
   randomizeTomodachiPet,
+  SKIN_TONES,
   SPECIES,
   SPECIES_PRESET_COLORS,
-  SUGGESTED_CATCHPHRASES,
-  VOICE_PRESETS,
-  type AccessoryId,
-  type BlushStyle,
-  type BodyScale,
-  type BrowStyle,
-  type EyeStyle,
-  type MouthStyle,
-  type PetMood,
-  type PetPersonality,
+  type PetConfig,
   type PetSpecies,
+  type PetMood,
 } from '../game/pet';
+import { MiiCreator } from '../components/MiiCreator';
 import { playSfx } from '../services/sfx';
 import { speakEnglishPhrase } from '../services/speech';
 import { GRADIENTS, petTint, SHADOW, THEME, TYPE } from '../theme/colors';
@@ -69,7 +54,6 @@ const TOON_INK = '#1E2436';
 
 type AuthView = 'landing' | 'login' | 'register';
 type RegisterStep = 1 | 2 | 3 | 4 | 5;
-type PetCustomTab = 'species' | 'face' | 'soul' | 'hats';
 
 /**
  * Fondo animado 2D estilo Waterllama (malla orgánica + destellos + cubos low-poly flotantes).
@@ -231,43 +215,32 @@ export function AuthScreen() {
 
   // Paso 2: Mascota 3D estilo Tomodachi Life
   const [petName, setPetName] = useState(DEFAULT_PET.name);
-  const [species, setSpecies] = useState<PetSpecies>(DEFAULT_PET.species);
-  const [bodyColor, setBodyColor] = useState(DEFAULT_PET.bodyColor);
-  const [bellyColor, setBellyColor] = useState(DEFAULT_PET.bellyColor);
-  const [eyeStyle, setEyeStyle] = useState<EyeStyle>(DEFAULT_PET.eyeStyle);
-  const [browStyle, setBrowStyle] = useState<BrowStyle>(DEFAULT_PET.browStyle ?? 'soft');
-  const [mouthStyle, setMouthStyle] = useState<MouthStyle>(DEFAULT_PET.mouthStyle ?? 'smile');
-  const [blushStyle, setBlushStyle] = useState<BlushStyle>(DEFAULT_PET.blushStyle ?? 'pink');
-  const [bodyScale, setBodyScale] = useState<BodyScale>(DEFAULT_PET.bodyScale ?? 'normal');
-  const [personality, setPersonality] = useState<PetPersonality>(
-    DEFAULT_PET.personality ?? 'energetic'
-  );
-  const [voicePitch, setVoicePitch] = useState<number>(DEFAULT_PET.voicePitch ?? 1.15);
-  const [voiceRate, setVoiceRate] = useState<number>(DEFAULT_PET.voiceRate ?? 1.0);
-  const [catchphrase, setCatchphrase] = useState<string>(
-    DEFAULT_PET.catchphrase ?? "Let's go!"
-  );
-  const [accessory, setAccessory] = useState<AccessoryId>('crown');
-  const [petTab, setPetTab] = useState<PetCustomTab>('species');
-  const [previewMood, setPreviewMood] = useState<PetMood>('happy');
+  // Lo que nacerá del huevo: por defecto una persona estilo Mii que el jugador arma pieza a pieza.
+  const [draft, setDraft] = useState<PetConfig>(() => ({
+    ...DEFAULT_PET,
+    species: 'human',
+    bodyColor: SKIN_TONES[3]!,
+    bellyColor: '#2563EB',
+    hairStyle: 'short',
+    hairColor: '#4A2E1B',
+    eyeStyle: 'round',
+    eyeColor: '#5B3A1E',
+    browStyle: 'soft',
+    mouthStyle: 'smile',
+    blushStyle: 'none',
+    noseStyle: 'button',
+    outfit: 'tshirt',
+    accessory: 'none',
+    personality: 'sweet',
+    voicePitch: 1.05,
+    voiceRate: 0.98,
+    catchphrase: 'Let’s learn!',
+    height: 0.5,
+    weight: 0.5,
+  }));
   const [reactKey, setReactKey] = useState(0);
 
-  const currentPetDraft = {
-    name: petName.trim() || 'Pip',
-    species,
-    bodyColor,
-    bellyColor,
-    eyeStyle,
-    browStyle,
-    mouthStyle,
-    blushStyle,
-    bodyScale,
-    personality,
-    voicePitch,
-    voiceRate,
-    catchphrase,
-    accessory,
-  };
+  const currentPetDraft: PetConfig = { ...draft, name: petName.trim() || 'Pip', customNamed: Boolean(petName.trim()) };
 
   // Paso 3 y 4: Nivel o Examen de Nivelación
   const [level, setLevel] = useState<PracticeLevel>('B1');
@@ -278,7 +251,7 @@ export function AuthScreen() {
 
   const [registerError, setRegisterError] = useState<string | null>(null);
 
-  const previewTint = petTint(bodyColor, 0.85);
+  const previewTint = petTint(draft.bodyColor, 0.85);
   const autoHandle =
     handle.trim() ||
     (playerName.trim()
@@ -291,29 +264,18 @@ export function AuthScreen() {
   const handleSelectSpeciesPreset = (spId: PetSpecies) => {
     const preset = SPECIES_PRESET_COLORS[spId];
     haptic('select');
-    setSpecies(spId);
-    setBodyColor(preset.bodyColor);
-    setBellyColor(preset.bellyColor);
+    setDraft((d) => ({
+      ...d,
+      species: spId,
+      bodyColor: spId === 'human' ? SKIN_TONES[3]! : preset.bodyColor,
+      bellyColor: preset.bellyColor,
+    }));
     setReactKey((k) => k + 1);
   };
 
   const handleRandomizeTomodachi = () => {
-    const r = randomizeTomodachiPet(petName);
     haptic('success');
-    setSpecies(r.species);
-    setBodyColor(r.bodyColor);
-    setBellyColor(r.bellyColor);
-    setEyeStyle(r.eyeStyle);
-    setBrowStyle(r.browStyle ?? 'soft');
-    setMouthStyle(r.mouthStyle ?? 'smile');
-    setBlushStyle(r.blushStyle ?? 'pink');
-    setBodyScale(r.bodyScale ?? 'normal');
-    setPersonality(r.personality ?? 'energetic');
-    setVoicePitch(r.voicePitch ?? 1.15);
-    setVoiceRate(r.voiceRate ?? 1.0);
-    setCatchphrase(r.catchphrase ?? "Let's go!");
-    setAccessory(r.accessory);
-    setPreviewMood('celebrate');
+    setDraft(randomizeTomodachiPet(petName));
     setReactKey((k) => k + 1);
   };
 
@@ -451,14 +413,7 @@ export function AuthScreen() {
               {/* Salvavidas / Halo 2D colorido detrás del modelo 3D como en el video */}
               <View style={styles.innerTubeHalo}>
                 <Pet3D
-                  config={{
-                    name: petName,
-                    species,
-                    bodyColor,
-                    bellyColor,
-                    eyeStyle,
-                    accessory,
-                  }}
+                  config={currentPetDraft}
                   mood="happy"
                   size={246}
                   reactKey={reactKey}
@@ -471,7 +426,7 @@ export function AuthScreen() {
             {/* Selector rápido de personaje 3D en vivo desde la portada */}
             <View style={styles.speciesQuickRow}>
               {SPECIES.map((sp) => {
-                const active = species === sp.id;
+                const active = draft.species === sp.id;
                 return (
                   <PressableScale
                     key={sp.id}
@@ -576,14 +531,7 @@ export function AuthScreen() {
                       eyeStyle: 'sparkle',
                       accessory: 'crown',
                     }
-                  : {
-                      name: petName,
-                      species,
-                      bodyColor,
-                      bellyColor,
-                      eyeStyle,
-                      accessory,
-                    }
+                  : currentPetDraft
               }
               mood="happy"
               size={165}
@@ -801,14 +749,7 @@ export function AuthScreen() {
           <Reveal index={0} style={styles.tealMascotStage}>
             <Float amplitude={7} duration={2400}>
               <Pet3D
-                config={{
-                  name: petName.trim() || 'Pip',
-                  species,
-                  bodyColor,
-                  bellyColor,
-                  eyeStyle,
-                  accessory,
-                }}
+                config={currentPetDraft}
                 mood="happy"
                 size={172}
                 reactKey={reactKey}
@@ -966,14 +907,9 @@ export function AuthScreen() {
         {step === 1 && (
           <Reveal index={0} style={styles.openStepWrap}>
             <Pet3D
-              config={{
-                name: petName,
-                species,
-                bodyColor,
-                bellyColor,
-                eyeStyle,
-                accessory,
-              }}
+              config={currentPetDraft}
+              stage="egg"
+              growth={0.2}
               mood="happy"
               size={170}
               reactKey={reactKey}
@@ -1065,10 +1001,10 @@ export function AuthScreen() {
             <View style={[ui.rowBetween, { width: '100%' }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.openCanvasTitle, { textAlign: 'left', fontSize: 24 }]}>
-                  Crea tu compañero 3D
+                  Crea tu compañero
                 </Text>
                 <Text style={[styles.openCanvasSubtitle, { textAlign: 'left' }]}>
-                  {SPECIES_PRESET_COLORS[species].taglineEs} · Estilo Tomodachi Life
+                  Diseña quién nacerá de tu huevo: cara, pelo, ropa y voz.
                 </Text>
               </View>
               <PressableScale
@@ -1089,44 +1025,6 @@ export function AuthScreen() {
               </PressableScale>
             </View>
 
-            <Pet3D
-              config={currentPetDraft}
-              mood={previewMood}
-              size={225}
-              reactKey={reactKey}
-              onTap={() => {
-                setPreviewMood('love');
-                playSfx('pet');
-                setReactKey((k) => k + 1);
-              }}
-              backgroundColor="transparent"
-            />
-
-            {/* Probador rápido de emociones Tomodachi en vivo */}
-            <View style={[ui.rowWrap, { justifyContent: 'center', marginTop: -8 }]}>
-              {(
-                [
-                  { id: 'happy', label: 'Feliz' },
-                  { id: 'love', label: 'Cariño' },
-                  { id: 'celebrate', label: 'Victoria' },
-                  { id: 'angry', label: 'Enojo' },
-                  { id: 'rage', label: 'Ira' },
-                  { id: 'sleepy', label: 'Dormid@' },
-                ] as const
-              ).map((em) => (
-                <Chip
-                  key={em.id}
-                  label={em.label}
-                  glyph={`face-${em.id}`}
-                  active={previewMood === em.id}
-                  onPress={() => {
-                    setPreviewMood(em.id);
-                    setReactKey((k) => k + 1);
-                  }}
-                />
-              ))}
-            </View>
-
             <View style={{ width: '100%', gap: 10 }}>
               <TextInput
                 value={petName}
@@ -1134,11 +1032,10 @@ export function AuthScreen() {
                   setPetName(t.slice(0, 14));
                   setRegisterError(null);
                 }}
-                placeholder="Nombre de tu mascota"
+                placeholder="Nombre de tu compañero"
                 placeholderTextColor={THEME.ink3}
                 style={[styles.pillInput, styles.pillInputCentered]}
               />
-
               <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
                 {SUGGESTED_PET_NAMES.map((n) => (
                   <Chip
@@ -1154,252 +1051,20 @@ export function AuthScreen() {
               </View>
             </View>
 
-            {/* Pestañas flotantes tipo píldora Tomodachi Life */}
-            <View style={styles.customTabs}>
-              {[
-                { id: 'species' as const, label: 'Cuerpo', glyph: 'scale-normal' },
-                { id: 'face' as const, label: 'Rostro', glyph: 'face-happy' },
-                { id: 'soul' as const, label: 'Voz y alma', glyph: 'mic' },
-                { id: 'hats' as const, label: 'Gorros', glyph: 'strawhat' },
-              ].map((t) => (
-                <PressableScale
-                  key={t.id}
-                  onPress={() => setPetTab(t.id)}
-                  style={[
-                    styles.customTabBtn,
-                    petTab === t.id && styles.customTabBtnActive,
-                  ]}
-                >
-                  <Glyph name={t.glyph} size={22} />
-                  <Text
-                    style={[
-                      styles.customTabText,
-                      petTab === t.id && styles.customTabTextActive,
-                    ]}
-                  >
-                    {t.label}
-                  </Text>
-                </PressableScale>
-              ))}
-            </View>
+            <MiiCreator
+              pet={currentPetDraft}
+              onChangePet={(patch) => {
+                setDraft((d) => ({ ...d, ...patch }));
+                setRegisterError(null);
+              }}
+              playerLevel={1}
+              previewSize={230}
+              onSpeakSample={(text, pitch, rate) =>
+                speakEnglishPhrase(`Hi! I am ${petName.trim() || 'Pip'}. ${text}`, locale, { pitch, rate })
+              }
+            />
 
-            <View style={styles.customPanelGlass}>
-              {petTab === 'species' && (
-                <View style={{ gap: 10, alignItems: 'center' }}>
-                  <Text style={TYPE.caption}>Especie 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {SPECIES.map((s) => (
-                      <Chip
-                        key={s.id}
-                        label={s.label} glyph={s.glyph}
-                        active={species === s.id}
-                        onPress={() => handleSelectSpeciesPreset(s.id)}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Complexión física 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {BODY_SCALES.map((bs) => (
-                      <Chip
-                        key={bs.id}
-                        label={bs.label} glyph={bs.glyph}
-                        active={bodyScale === bs.id}
-                        onPress={() => {
-                          setBodyScale(bs.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Color principal y detalles</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {BODY_COLORS.map((c) => (
-                      <PressableScale
-                        key={c}
-                        scaleTo={0.85}
-                        onPress={() => {
-                          setBodyColor(c);
-                          setReactKey((k) => k + 1);
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.swatchRing,
-                            bodyColor === c && { borderColor: THEME.blue },
-                          ]}
-                        >
-                          <View style={[styles.swatch, { backgroundColor: c }]} />
-                        </View>
-                      </PressableScale>
-                    ))}
-                  </View>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {BELLY_COLORS.map((c) => (
-                      <PressableScale
-                        key={c}
-                        scaleTo={0.85}
-                        onPress={() => {
-                          setBellyColor(c);
-                          setReactKey((k) => k + 1);
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.swatchRing,
-                            bellyColor === c && { borderColor: THEME.blue },
-                          ]}
-                        >
-                          <View style={[styles.swatch, { backgroundColor: c }]} />
-                        </View>
-                      </PressableScale>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {petTab === 'face' && (
-                <View style={{ gap: 10, alignItems: 'center' }}>
-                  <Text style={TYPE.caption}>Ojos 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {EYE_STYLES.map((e) => (
-                      <Chip
-                        key={e.id}
-                        label={e.label}
-                        active={eyeStyle === e.id}
-                        onPress={() => {
-                          setEyeStyle(e.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Cejas expresivas 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {BROW_STYLES.map((b) => (
-                      <Chip
-                        key={b.id}
-                        label={b.label} glyph={b.glyph}
-                        active={browStyle === b.id}
-                        onPress={() => {
-                          setBrowStyle(b.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Boca 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {MOUTH_STYLES.map((m) => (
-                      <Chip
-                        key={m.id}
-                        label={m.label} glyph={m.glyph}
-                        active={mouthStyle === m.id}
-                        onPress={() => {
-                          setMouthStyle(m.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Mejillas y Pecas 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {BLUSH_STYLES.map((bl) => (
-                      <Chip
-                        key={bl.id}
-                        label={bl.label} glyph={bl.glyph}
-                        active={blushStyle === bl.id}
-                        onPress={() => {
-                          setBlushStyle(bl.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {petTab === 'soul' && (
-                <View style={{ gap: 10, alignItems: 'center', width: '100%' }}>
-                  <Text style={TYPE.caption}>Personalidad Tomodachi</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {PERSONALITIES.map((p) => (
-                      <Chip
-                        key={p.id}
-                        label={p.labelEs} glyph={p.glyph}
-                        active={personality === p.id}
-                        onPress={() => {
-                          setPersonality(p.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Voz sintetizada (toca para escuchar)</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {VOICE_PRESETS.map((vp) => (
-                      <Chip
-                        key={vp.id}
-                        label={vp.labelEs} glyph={vp.glyph}
-                        active={Math.abs(voicePitch - vp.pitch) < 0.08}
-                        onPress={() => {
-                          setVoicePitch(vp.pitch);
-                          setVoiceRate(vp.rate);
-                          speakEnglishPhrase(
-                            `Hi! I am ${petName || 'Pip'}. ${catchphrase || "Let's go!"}`,
-                            locale,
-                            { pitch: vp.pitch, rate: vp.rate }
-                          );
-                        }}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={TYPE.caption}>Muletilla en inglés (Catchphrase)</Text>
-                  <TextInput
-                    value={catchphrase}
-                    onChangeText={(t) => setCatchphrase(t.slice(0, 28))}
-                    placeholder="Ej. Let's go!, Booyah!"
-                    placeholderTextColor={THEME.ink3}
-                    style={[styles.pillInput, styles.pillInputCentered]}
-                  />
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {SUGGESTED_CATCHPHRASES.slice(0, 5).map((ph) => (
-                      <Chip
-                        key={ph}
-                        label={`“${ph}”`}
-                        active={catchphrase === ph}
-                        onPress={() => setCatchphrase(ph)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {petTab === 'hats' && (
-                <View style={{ gap: 10, alignItems: 'center' }}>
-                  <Text style={TYPE.caption}>Sombrero o accesorio 3D</Text>
-                  <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
-                    {ACCESSORIES.map((a) => (
-                      <Chip
-                        key={a.id}
-                        label={a.label} glyph={a.glyph}
-                        active={accessory === a.id}
-                        onPress={() => {
-                          setAccessory(a.id);
-                          setReactKey((k) => k + 1);
-                        }}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
+            {registerError ? <Text style={styles.errorText}>{registerError}</Text> : null}
 
             <PressableScale
               onPress={() => {
@@ -1508,14 +1173,9 @@ export function AuthScreen() {
               icon="trophy"
             />
             <Pet3D
-              config={{
-                name: petName.trim() || 'Pip',
-                species,
-                bodyColor,
-                bellyColor,
-                eyeStyle,
-                accessory,
-              }}
+              config={currentPetDraft}
+              stage="egg"
+              growth={0.6}
               mood="happy"
               size={190}
               reactKey={reactKey}

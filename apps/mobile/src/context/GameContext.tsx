@@ -33,6 +33,8 @@ import {
   getMood,
   HABITAT_PROPS,
   levelFromXp,
+  petStageForXp,
+  PET_STAGES,
   DEFAULT_HOUSE,
   findFurniture,
   HOUSE_TIERS,
@@ -45,6 +47,7 @@ import {
   type PetConfig,
   type PetMood,
   type PetSpecies,
+  type PetStage,
   type PetStats,
   type StreakSurpriseGift,
 } from '../game/pet';
@@ -96,6 +99,8 @@ export interface Progress {
   reminders?: { enabled: boolean; hour: number };
   /** Progreso de las islas por tema (pasos hechos, mejor quiz, estrellas). */
   units?: Record<string, UnitProgress>;
+  /** Última etapa de crecimiento de la mascota que el jugador ya celebró (índice en PET_STAGES). */
+  petStageSeen?: number;
 }
 
 export interface PlayerAccount {
@@ -218,6 +223,11 @@ interface GameContextValue {
   stats: PetStats;
   mood: PetMood;
   playerLevel: number;
+  /** Etapa de crecimiento actual (huevo → adulto) y progreso hacia la siguiente. */
+  petStage: ReturnType<typeof petStageForXp>;
+  /** La mascota acaba de eclosionar o crecer y falta celebrarlo. */
+  pendingGrowth: { from: PetStage; to: PetStage } | null;
+  dismissGrowth: () => void;
   todayKey: string;
   todayActivities: ActivityEntry[];
   tab: TabId;
@@ -549,6 +559,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         ...DEFAULT_PROGRESS,
         level: input.level,
         onboarded: true,
+        petStageSeen: 0,
       };
       const newStats: PetStats = {
         ...DEFAULT_STATS,
@@ -765,6 +776,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [accounts, activeAccountId]
   );
 
+  const petStage = useMemo(() => petStageForXp(progress.xp), [progress.xp]);
+  // Cuentas antiguas: dan por vista su etapa actual (sin celebración retroactiva).
+  useEffect(() => {
+    if (ready && activeAccountId && progress.petStageSeen === undefined) {
+      setProgress((p) => (p.petStageSeen === undefined ? { ...p, petStageSeen: petStageForXp(p.xp).index } : p));
+    }
+  }, [ready, activeAccountId, progress.petStageSeen]);
+  const pendingGrowth = useMemo(() => {
+    const seen = progress.petStageSeen;
+    if (seen === undefined || petStage.index <= seen) return null;
+    return { from: PET_STAGES[seen]!.id, to: petStage.stage };
+  }, [progress.petStageSeen, petStage]);
+  const dismissGrowth = useCallback(() => {
+    setProgress((p) => ({ ...p, petStageSeen: petStageForXp(p.xp).index }));
+  }, []);
+
   const value = useMemo<GameContextValue>(() => {
     const todayActivities = progress.activityLog[todayKey] ?? [];
     const effectiveMood: PetMood = emotionOverride ?? getMood(stats);
@@ -777,6 +804,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       stats,
       mood: effectiveMood,
       playerLevel: levelFromXp(progress.xp),
+      petStage,
+      pendingGrowth,
+      dismissGrowth,
       todayKey,
       todayActivities,
       tab,
@@ -1155,6 +1185,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     stats,
     emotionOverride,
     streakCelebration,
+    petStage,
+    pendingGrowth,
+    dismissGrowth,
     todayKey,
     tab,
     stack,

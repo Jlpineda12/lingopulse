@@ -13,6 +13,7 @@ import { AppStateProvider } from './src/context/AppStateContext';
 import { GameProvider, useGame } from './src/context/GameContext';
 import { CompanionTraveler, RewardToast, TabBar, TopBar } from './src/components/AppChrome';
 import { SplashScreen } from './src/components/SplashScreen';
+import { GrowthCelebration } from './src/components/GrowthCelebration';
 import { StreakCelebration } from './src/components/FireStreakCard';
 import { scheduleReminders } from './src/services/reminders';
 import { preloadSfx } from './src/services/sfx';
@@ -184,6 +185,7 @@ function Shell() {
       <TabBar />
       <RewardToast />
       <StreakCelebration />
+      <GrowthCelebration />
     </View>
   );
 }

@@ -7,7 +7,7 @@
  *   eating (al alimentar) y celebrate (al acertar).
  */
 
-export type PetSpecies = 'puff' | 'cat' | 'meeseeks' | 'dragon' | 'bear' | 'bunny' | 'fox' | 'shark';
+export type PetSpecies = 'human' | 'puff' | 'cat' | 'meeseeks' | 'dragon' | 'bear' | 'bunny' | 'fox' | 'shark';
 
 export type HairStyleId =
   | 'spiky'
@@ -19,6 +19,12 @@ export type HairStyleId =
   | 'curly'
   | 'mohawk'
   | 'bun'
+  | 'long'
+  | 'short'
+  | 'braids'
+  | 'buzz'
+  | 'sidepart'
+  | 'wavy'
   | 'none';
 
 export type EyeStyle =
@@ -31,7 +37,13 @@ export type EyeStyle =
   | 'sleepy'
   | 'heart'
   | 'cool'
-  | 'starry';
+  | 'starry'
+  | 'almond'
+  | 'lashes'
+  | 'narrow'
+  | 'droopy'
+  | 'bright'
+  | 'calm';
 
 export type BrowStyle =
   | 'soft'
@@ -55,7 +67,12 @@ export type MouthStyle =
   | 'fangs'
   | 'pout'
   | 'wavy'
-  | 'kiss';
+  | 'kiss'
+  | 'line'
+  | 'small'
+  | 'lips'
+  | 'teeth'
+  | 'laugh';
 
 export type BlushStyle =
   | 'pink'
@@ -86,9 +103,78 @@ export type AccessoryId =
   | 'strawhat'
   | 'captain'
   | 'bandana'
-  | 'eyepatch';
+  | 'eyepatch'
+  | 'beanie'
+  | 'tophat'
+  | 'grad'
+  | 'cowboy';
 
-export type OutfitId = 'none' | 'vest' | 'sailor' | 'coat' | 'hoodie' | 'scarf';
+export type OutfitId =
+  | 'none'
+  | 'tshirt'
+  | 'shirttie'
+  | 'dress'
+  | 'overalls'
+  | 'sweater'
+  | 'jacket'
+  | 'polo'
+  | 'stripes'
+  | 'blazer'
+  | 'jersey'
+  | 'labcoat'
+  | 'raincoat'
+  | 'vest'
+  | 'sailor'
+  | 'coat'
+  | 'hoodie'
+  | 'scarf';
+
+/** Gafas: van en la cara, así que se combinan con cualquier gorro. */
+export type GlassesId = 'none' | 'round' | 'square' | 'sun' | 'star' | 'heart' | 'goggles';
+
+export type NoseStyle = 'none' | 'button' | 'round' | 'pointy' | 'wide' | 'snub';
+
+export type FaceShape = 'round' | 'oval' | 'square' | 'long' | 'heart' | 'wide';
+export type FacialHair = 'none' | 'stubble' | 'mustache' | 'curly' | 'goatee' | 'beard';
+
+/**
+ * Ajustes finos estilo Mii Maker: cada valor es un paso entero de -3 a +3
+ * (tamaño, altura en la cara y separación de cada rasgo).
+ */
+export interface FaceTuning {
+  eyeSize?: number;
+  eyeHeight?: number;
+  eyeSpacing?: number;
+  browSize?: number;
+  browHeight?: number;
+  noseSize?: number;
+  noseHeight?: number;
+  mouthSize?: number;
+  mouthHeight?: number;
+  /** Alargado vertical de los ojos (+ alargados, − rasgados). */
+  eyeStretch?: number;
+  /** Inclinación de los ojos. */
+  eyeRotation?: number;
+  browStretch?: number;
+  browRotation?: number;
+  browSpacing?: number;
+  /** Ancho de la boca. */
+  mouthStretch?: number;
+  mustacheSize?: number;
+  /** Ancho del bigote. */
+  mustacheStretch?: number;
+  mustacheHeight?: number;
+  glassesSize?: number;
+  glassesHeight?: number;
+  moleX?: number;
+  moleY?: number;
+}
+
+export const TUNING_MIN = -3;
+export const TUNING_MAX = 3;
+
+/** Etapas de crecimiento: nace de un huevo y crece mientras el jugador aprende. */
+export type PetStage = 'egg' | 'baby' | 'kid' | 'teen' | 'adult';
 
 export type HabitatPropId =
   | 'none'
@@ -118,8 +204,27 @@ export interface PetConfig {
   catchphrase?: string;
   habitatProp?: HabitatPropId;
   customNamed?: boolean;
-  /** Ropa del torso (chaleco pirata, marinero, abrigo de capitán…). */
+  /** Ropa del torso (camiseta, vestido, chaleco pirata, marinero, abrigo de capitán…). */
   outfit?: OutfitId;
+  glasses?: GlassesId;
+  noseStyle?: NoseStyle;
+  /** Color del iris. */
+  eyeColor?: string;
+  /** Color del pantalón / parte baja (humanos). */
+  pantsColor?: string;
+  faceShape?: FaceShape;
+  facialHair?: FacialHair;
+  /** Lunar en la mejilla. */
+  mole?: boolean;
+  lipColor?: string;
+  /** Color de barba y bigote (por defecto, el del pelo). */
+  beardColor?: string;
+  /** Color de la montura de las gafas. */
+  glassesColor?: string;
+  /** Altura y peso como en el Mii Maker: 0 = mínimo, 1 = máximo. */
+  height?: number;
+  weight?: number;
+  tuning?: FaceTuning;
 }
 
 export interface PetStats {
@@ -161,6 +266,14 @@ export const DEFAULT_PET: PetConfig = {
   habitatProp: 'campfire',
   customNamed: false,
   outfit: 'none',
+  glasses: 'none',
+  noseStyle: 'none',
+  eyeColor: '#3B7BFF',
+  pantsColor: '#3B4A6B',
+  faceShape: 'round',
+  facialHair: 'none',
+  mole: false,
+  tuning: {},
 };
 
 const LEGACY_PRESET_NAMES = new Set([
@@ -243,6 +356,127 @@ export const HAIR_COLORS = [
   '#312E81', // Azul Medianoche (sin negro)
 ];
 
+/** 10 tonos de piel realistas para humanos (de muy claro a muy oscuro). */
+export const SKIN_TONES = [
+  '#FFE7D6',
+  '#FFDCC2',
+  '#F7CBA4',
+  '#EDB98A',
+  '#D99E6E',
+  '#C1844F',
+  '#A86B3C',
+  '#8D5524',
+  '#6B4020',
+  '#4E2E17',
+];
+
+/** 10 colores de iris. */
+export const EYE_COLORS = [
+  '#3B7BFF', // Azul
+  '#5B3A1E', // Café
+  '#8B5A2B', // Avellana
+  '#2E9E5B', // Verde
+  '#6B7A8F', // Gris
+  '#1E2A4A', // Casi negro (azul noche)
+  '#9B5DE5', // Violeta
+  '#F2A900', // Ámbar
+  '#E11D48', // Rubí
+  '#14B8A6', // Turquesa
+];
+
+/** 10 colores de pantalón. */
+export const PANTS_COLORS = [
+  '#3B4A6B', // Mezclilla
+  '#1F2A44', // Azul marino
+  '#6B7280', // Gris
+  '#A16207', // Caqui
+  '#7C2D12', // Café
+  '#166534', // Verde oliva
+  '#F5F5F4', // Blanco
+  '#BE185D', // Frambuesa
+  '#4C1D95', // Morado
+  '#0F766E', // Petróleo
+];
+
+export const GLASSES: Array<{ id: GlassesId; label: string; glyph: string }> = [
+  { id: 'none', label: 'Sin gafas', glyph: 'clear' },
+  { id: 'round', label: 'Redondas', glyph: 'glasses' },
+  { id: 'square', label: 'Cuadradas', glyph: 'glasses' },
+  { id: 'sun', label: 'De sol', glyph: 'glasses' },
+  { id: 'star', label: 'Estrella', glyph: 'glasses' },
+  { id: 'heart', label: 'Corazón', glyph: 'glasses' },
+  { id: 'goggles', label: 'Gafas de nieve', glyph: 'glasses' },
+];
+
+export const FACE_SHAPES: Array<{ id: FaceShape; label: string }> = [
+  { id: 'round', label: 'Redonda' },
+  { id: 'oval', label: 'Ovalada' },
+  { id: 'square', label: 'Cuadrada' },
+  { id: 'long', label: 'Alargada' },
+  { id: 'heart', label: 'Corazón' },
+  { id: 'wide', label: 'Ancha' },
+];
+
+export const FACIAL_HAIR: Array<{ id: FacialHair; label: string }> = [
+  { id: 'none', label: 'Ninguno' },
+  { id: 'stubble', label: 'Barba de 3 días' },
+  { id: 'mustache', label: 'Bigote' },
+  { id: 'curly', label: 'Bigote rizado' },
+  { id: 'goatee', label: 'Perilla' },
+  { id: 'beard', label: 'Barba completa' },
+];
+
+export const GLASSES_COLORS = ['#1E2436', '#7C4A27', '#B91C1C', '#2563EB', '#16A34A', '#F4B942', '#9B5DE5', '#E2E8F0'];
+
+export const LIP_COLORS = ['#B23A48', '#E07A8B', '#C2593F', '#8C3B2E', '#F29EAE', '#7A2E3A'];
+
+/** Color favorito (como en el Mii Maker): tiñe la ropa base. */
+export const FAVORITE_COLORS = [
+  '#E11D48', // Rojo
+  '#FF7A1A', // Naranja
+  '#FACC15', // Amarillo
+  '#84CC16', // Verde lima
+  '#16A34A', // Verde
+  '#2563EB', // Azul
+  '#38BDF8', // Celeste
+  '#FB7185', // Rosa
+  '#9B5DE5', // Morado
+  '#8B5A2B', // Café
+  '#F8FAFC', // Blanco
+  '#334155', // Gris oscuro
+];
+
+export const NOSE_STYLES: Array<{ id: NoseStyle; label: string }> = [
+  { id: 'none', label: 'Sin nariz' },
+  { id: 'button', label: 'Botón' },
+  { id: 'round', label: 'Redonda' },
+  { id: 'pointy', label: 'Puntiaguda' },
+  { id: 'wide', label: 'Ancha' },
+  { id: 'snub', label: 'Respingada' },
+];
+
+/* ------------------------------------------------------------------ */
+/* Crecimiento: huevo → bebé → niño → joven → adulto                    */
+/* ------------------------------------------------------------------ */
+
+export const PET_STAGES: Array<{ id: PetStage; minXp: number; label: string; descEs: string }> = [
+  { id: 'egg', minXp: 0, label: 'Huevo', descEs: 'Termina tu primera actividad para que eclosione.' },
+  { id: 'baby', minXp: 20, label: 'Bebé', descEs: 'Acaba de nacer. ¡Cada lección lo hace crecer!' },
+  { id: 'kid', minXp: 400, label: 'Niño', descEs: 'Ya explora las islas contigo.' },
+  { id: 'teen', minXp: 1500, label: 'Joven', descEs: 'Casi listo para su forma final.' },
+  { id: 'adult', minXp: 4000, label: 'Adulto', descEs: 'Forma final desbloqueada. ¡Eres constante!' },
+];
+
+/** Etapa de la mascota según la XP total del jugador, con el progreso hacia la siguiente. */
+export function petStageForXp(xp: number) {
+  let i = 0;
+  while (i < PET_STAGES.length - 1 && xp >= PET_STAGES[i + 1]!.minXp) i++;
+  const current = PET_STAGES[i]!;
+  const next = PET_STAGES[i + 1];
+  const progress = next ? Math.max(0, Math.min(1, (xp - current.minXp) / (next.minXp - current.minXp))) : 1;
+  return { stage: current.id, index: i, current, next, progress, xpToNext: next ? Math.max(0, next.minXp - xp) : 0 };
+}
+
 /** Colores base sugeridos al cambiar la silueta del muñeco (sin nombres predefinidos). */
 export const SPECIES_PRESET_COLORS: Record<
   PetSpecies,
@@ -255,6 +489,14 @@ export const SPECIES_PRESET_COLORS: Record<
     defaultPitch: number;
   }
 > = {
+  human: {
+    bodyColor: '#EDB98A',
+    bellyColor: '#2563EB',
+    taglineEs: 'Persona estilo Mii: tú decides cara, piel, pelo y ropa',
+    defaultPersonality: 'sweet',
+    defaultCatchphrase: 'Let’s learn!',
+    defaultPitch: 1.05,
+  },
   puff: {
     bodyColor: '#FFE0C8',
     bellyColor: '#FF4F79',
@@ -328,6 +570,7 @@ export const SPECIES: Array<{
   glyph: string;
   unlockLevel: number;
 }> = [
+  { id: 'human', label: 'Persona', subtitleEs: 'Estilo Mii', glyph: 'species-meeseeks', unlockLevel: 1 },
   { id: 'puff', label: 'Chibi Redondo', subtitleEs: 'Clásico compacto', glyph: 'species-puff', unlockLevel: 1 },
   { id: 'meeseeks', label: 'Muñeco Esbelto', subtitleEs: 'Torso y cuello 3D', glyph: 'species-meeseeks', unlockLevel: 1 },
   { id: 'cat', label: 'Orejitas Felinas', subtitleEs: 'Con cola 3D', glyph: 'species-cat', unlockLevel: 1 },
@@ -349,11 +592,23 @@ export const HAIR_STYLES: Array<{ id: HairStyleId; label: string }> = [
   { id: 'curly', label: 'Rizos Suaves' },
   { id: 'mohawk', label: 'Cresta Punk' },
   { id: 'bun', label: 'Chongo Alto' },
+  { id: 'long', label: 'Pelo Largo' },
+  { id: 'short', label: 'Corto Clásico' },
+  { id: 'braids', label: 'Trenzas' },
+  { id: 'buzz', label: 'Rapado' },
+  { id: 'sidepart', label: 'Raya al lado' },
+  { id: 'wavy', label: 'Ondulado' },
   { id: 'none', label: 'Sin Cabello' },
 ];
 
 /** 10 Modelos 3D de Ojos para el Creador Tomodachi Life. */
 export const EYE_STYLES: Array<{ id: EyeStyle; label: string }> = [
+  { id: 'almond', label: 'Almendrados' },
+  { id: 'lashes', label: 'Con pestañas' },
+  { id: 'bright', label: 'Expresivos' },
+  { id: 'narrow', label: 'Rasgados' },
+  { id: 'droopy', label: 'Caídos' },
+  { id: 'calm', label: 'Tranquilos' },
   { id: 'round', label: 'Clásicos' },
   { id: 'sparkle', label: 'Estrellados' },
   { id: 'happy', label: 'Arcos ^^' },
@@ -392,6 +647,11 @@ export const MOUTH_STYLES: Array<{ id: MouthStyle; label: string; glyph: string 
   { id: 'pout', label: 'Puchero', glyph: 'mouth-pout' },
   { id: 'wavy', label: 'Ondulada ~', glyph: 'mouth-wavy' },
   { id: 'kiss', label: 'Besito 3', glyph: 'mouth-kiss' },
+  { id: 'line', label: 'Seria', glyph: 'mouth-smile' },
+  { id: 'small', label: 'Pequeña', glyph: 'mouth-smile' },
+  { id: 'lips', label: 'Labios', glyph: 'mouth-kiss' },
+  { id: 'teeth', label: 'Sonrisa amplia', glyph: 'mouth-grin' },
+  { id: 'laugh', label: 'Carcajada', glyph: 'mouth-grin' },
 ];
 
 /** 10 Modelos 3D de Mejillas y Rasgos Faciales para el Creador Tomodachi Life. */
@@ -498,6 +758,10 @@ export const ACCESSORIES: Array<{
   { id: 'bandana', label: 'Pañuelo Pirata', glyph: 'bandana', unlockLevel: 2, collection: 'pirate' },
   { id: 'eyepatch', label: 'Parche Valiente', glyph: 'eyepatch', unlockLevel: 3, collection: 'pirate' },
   { id: 'captain', label: 'Gorro de Capitán', glyph: 'captain', unlockLevel: 4, collection: 'pirate' },
+  { id: 'beanie', label: 'Gorro de Lana', glyph: 'cap', unlockLevel: 1 },
+  { id: 'grad', label: 'Birrete', glyph: 'crown', unlockLevel: 1 },
+  { id: 'tophat', label: 'Sombrero de Copa', glyph: 'wizard', unlockLevel: 2 },
+  { id: 'cowboy', label: 'Sombrero Vaquero', glyph: 'strawhat', unlockLevel: 2 },
 ];
 
 export interface FoodItem {
@@ -640,13 +904,18 @@ export function randomizeTomodachiPet(keepName?: string): PetConfig {
     mouthStyle: pick(MOUTH_STYLES).id,
     blushStyle: pick(BLUSH_STYLES).id,
     bodyScale: pick(BODY_SCALES).id,
-    accessory: pick(ACCESSORIES).id,
+    accessory: pick(ACCESSORIES.filter((a) => a.unlockLevel <= 1)).id,
     personality: pick(PERSONALITIES).id,
     voicePitch: voice.pitch,
     voiceRate: voice.rate,
     catchphrase: pick(SUGGESTED_CATCHPHRASES),
-    habitatProp: pick(HABITAT_PROPS).id,
-    outfit: pick(OUTFITS).id,
+    habitatProp: 'campfire',
+    outfit: pick(OUTFITS.filter((o) => o.cost === 0)).id,
+    glasses: Math.random() < 0.3 ? pick(GLASSES).id : 'none',
+    noseStyle: pick(NOSE_STYLES).id,
+    eyeColor: pick(EYE_COLORS),
+    pantsColor: pick(PANTS_COLORS),
+    ...(sp === 'human' ? { bodyColor: pick(SKIN_TONES) } : {}),
   };
 }
 
@@ -873,6 +1142,18 @@ export const OUTFITS: Array<{
   collection?: CollectionId;
 }> = [
   { id: 'none', label: 'Sin ropa', glyph: 'outfit-none', cost: 0, color: '#EDF1F9' },
+  { id: 'tshirt', label: 'Camiseta', glyph: 'outfit-hoodie', cost: 0, color: '#2563EB' },
+  { id: 'shirttie', label: 'Camisa y corbata', glyph: 'outfit-coat', cost: 0, color: '#1F2A44' },
+  { id: 'dress', label: 'Vestido', glyph: 'outfit-sailor', cost: 0, color: '#E11D48' },
+  { id: 'overalls', label: 'Overol', glyph: 'outfit-vest', cost: 0, color: '#3B4A6B' },
+  { id: 'sweater', label: 'Suéter', glyph: 'outfit-hoodie', cost: 0, color: '#D97706' },
+  { id: 'jacket', label: 'Chaqueta', glyph: 'outfit-coat', cost: 0, color: '#16A34A' },
+  { id: 'polo', label: 'Polo', glyph: 'outfit-hoodie', cost: 0, color: '#0EA5A0' },
+  { id: 'stripes', label: 'Rayas', glyph: 'outfit-sailor', cost: 0, color: '#2563EB' },
+  { id: 'blazer', label: 'Blazer escolar', glyph: 'outfit-coat', cost: 0, color: '#1F2A44' },
+  { id: 'jersey', label: 'Camiseta deportiva', glyph: 'outfit-hoodie', cost: 0, color: '#E11D48' },
+  { id: 'labcoat', label: 'Bata de laboratorio', glyph: 'outfit-coat', cost: 0, color: '#F8FAFC' },
+  { id: 'raincoat', label: 'Impermeable', glyph: 'outfit-hoodie', cost: 0, color: '#FACC15' },
   { id: 'vest', label: 'Chaleco Pirata', glyph: 'outfit-vest', cost: 30, color: '#E63946', collection: 'pirate' },
   { id: 'sailor', label: 'Marinero', glyph: 'outfit-sailor', cost: 25, color: '#2563EB', collection: 'pirate' },
   { id: 'coat', label: 'Abrigo de Capitán', glyph: 'outfit-coat', cost: 60, color: '#2B3B5C', collection: 'pirate' },

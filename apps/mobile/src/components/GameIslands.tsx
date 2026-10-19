@@ -940,7 +940,7 @@ export function FloatingIslandQuestNode({
   illustrationKind?: TopicIllustrationKind;
   onPress: () => void;
 }) {
-  const { pet, mood, stats, petThePet, setTab } = useGame();
+  const { pet, mood, stats, petThePet, setTab, petStage } = useGame();
   const b = BIOME_PALETTES[biomeKey];
   const isLeft = index % 2 === 0;
   const effectiveLevel: PracticeLevel = level ?? 'B1';
@@ -1017,7 +1017,7 @@ export function FloatingIslandQuestNode({
           </View>
           <View style={styles.porthole}>
             <View style={styles.portholeInner}>
-              <Pet3D config={pet} mood={mood} size={96} energy={stats.energy / 100} onTap={petThePet} backgroundColor="#CDEFFF" />
+              <Pet3D config={pet} mood={mood} stage={petStage.stage} growth={petStage.progress} size={96} energy={stats.energy / 100} onTap={petThePet} backgroundColor="#CDEFFF" />
             </View>
           </View>
           <PressableScale onPress={() => setTab('pet')} hapticKind="select" style={styles.companionTag}>

@@ -161,7 +161,7 @@ import { Glyph } from './Glyph';
  * Reacciona en tiempo real con enojo (😠), ira (🤬 💢), sueño (😴), amor (💖) o festejo (🎉).
  */
 export function CompanionTraveler() {
-  const { screen, tab, pet, mood, stats, petThePet, setTab, lastReward } = useGame();
+  const { screen, tab, pet, mood, stats, petThePet, setTab, lastReward, petStage } = useGame();
   const [minimized, setMinimized] = useState(false);
   const [reactKey, setReactKey] = useState(0);
 
@@ -278,6 +278,8 @@ export function CompanionTraveler() {
           <Pet3D
             config={pet}
             mood={mood}
+            stage={petStage.stage}
+            growth={petStage.progress}
             size={88}
             energy={stats.energy / 100}
             reactKey={reactKey}

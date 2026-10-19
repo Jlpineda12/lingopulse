@@ -6,33 +6,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAppState } from '../context/AppStateContext';
 import { useGame } from '../context/GameContext';
 import { Pet3D } from '../components/Pet3D';
+import { MiiCreator } from '../components/MiiCreator';
 import { Glyph } from '../components/Glyph';
 import { HouseSection, Price } from '../components/HouseSection';
 import { ActivityRings, AnimatedBar, PressableScale, Reveal } from '../components/motion';
 import { Badge, Button, Card, Eyebrow, ui, type IconName } from '../components/ui';
 import {
-  ACCESSORIES,
-  BELLY_COLORS,
-  BLUSH_STYLES,
-  BODY_COLORS,
-  BODY_SCALES,
-  BROW_STYLES,
-  EYE_STYLES,
   FOODS,
   HABITAT_PROPS,
   HOUSE_TIERS,
   levelProgress,
   MOOD_META,
   moodMessage,
-  MOUTH_STYLES,
   OUTFITS,
+  PET_STAGES,
   PERSONALITIES,
   randomizeTomodachiPet,
-  SPECIES,
-  SPECIES_PRESET_COLORS,
   STREAK_SURPRISE_GIFTS,
-  SUGGESTED_CATCHPHRASES,
-  VOICE_PRESETS,
   type PetMood,
 } from '../game/pet';
 import {
@@ -57,7 +47,7 @@ const LIVE_EMOTION_BUTTONS: Array<{
   { mood: 'sleepy', label: 'Dormid@', triggerHint: 'Baja energía' },
 ];
 
-type CreatorTab = 'body' | 'face' | 'soul' | 'hats' | 'outfit' | 'habitat';
+type CreatorTab = 'look' | 'outfit' | 'habitat';
 type PetSection = 'care' | 'house' | 'style' | 'gifts';
 
 const PET_SECTIONS: Array<{ id: PetSection; label: string; glyph: string; hint: string }> = [
@@ -84,12 +74,13 @@ export function PetScreen() {
     claimSurpriseGift,
     house,
     buyOrWearOutfit,
+    petStage,
   } = useGame();
   const { speakWithPip, pipIsSpeaking } = useAppState();
   const [reactKey, setReactKey] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [creatorTab, setCreatorTab] = useState<CreatorTab>('face');
+  const [creatorTab, setCreatorTab] = useState<CreatorTab>('look');
   const [dreamModalVisible, setDreamModalVisible] = useState(false);
   const [section, setSection] = useState<PetSection>('care');
   const nextTier = HOUSE_TIERS[house.tier + 1];
@@ -102,7 +93,6 @@ export function PetScreen() {
   const lvl = levelProgress(progress.xp);
   const msg = moodMessage(pet.name, mood, pet.catchphrase);
   const tint = petTint(pet.bodyColor, 0.82);
-  const speciesInfo = SPECIES_PRESET_COLORS[pet.species];
   const moodInfo = MOOD_META[mood] ?? MOOD_META.happy;
   const personalityObj =
     PERSONALITIES.find((p) => p.id === (pet.personality ?? 'energetic')) ?? PERSONALITIES[0]!;
@@ -194,6 +184,8 @@ export function PetScreen() {
           <Pet3D
             config={pet}
             mood={mood}
+            stage={petStage.stage}
+            growth={petStage.progress}
             size={320}
             aspectRatio={house.tier > 0 ? 0.82 : 0.95}
             house={{ tier: house.tier, placed: house.placed }}
@@ -208,6 +200,36 @@ export function PetScreen() {
             backgroundColor={tint}
           />
           <View style={styles.islandPedestal} />
+
+          {/* Crecimiento: huevo → bebé → niño → joven → adulto */}
+          <View style={styles.growthCard}>
+            <View style={styles.growthSteps}>
+              {PET_STAGES.map((st, i) => (
+                <View key={st.id} style={styles.growthStep}>
+                  <View
+                    style={[
+                      styles.growthDot,
+                      i < petStage.index && { backgroundColor: THEME.green },
+                      i === petStage.index && styles.growthDotNow,
+                    ]}
+                  />
+                  <Text style={[styles.growthLabel, i === petStage.index && { color: THEME.ink, fontWeight: '800' }]}>
+                    {st.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.growthTrack}>
+              <View style={[styles.growthFill, { width: `${Math.round(petStage.progress * 100)}%` }]} />
+            </View>
+            <Text style={styles.growthHint}>
+              {petStage.next
+                ? petStage.stage === 'egg'
+                  ? `Completa una actividad para que ${pet.name} salga del huevo (${petStage.xpToNext} XP).`
+                  : `${petStage.xpToNext} XP para que ${pet.name} pase a ${petStage.next.label.toLowerCase()}.`
+                : `${pet.name} alcanzó su forma final. ¡Eres constante!`}
+            </Text>
+          </View>
 
           <PressableScale
             onPress={() => speakWithPip(msg.en)}
@@ -435,11 +457,8 @@ export function PetScreen() {
           <View style={styles.creatorTabsRow}>
             {(
               [
-                { id: 'face', label: 'Rostro', glyph: 'face-happy' },
-                { id: 'body', label: 'Cuerpo', glyph: 'scale-normal' },
-                { id: 'outfit', label: 'Ropa', glyph: 'outfit-vest' },
-                { id: 'hats', label: 'Gorros', glyph: 'strawhat' },
-                { id: 'soul', label: 'Voz', glyph: 'mic' },
+                { id: 'look', label: 'Creador', glyph: 'face-happy' },
+                { id: 'outfit', label: 'Tienda de ropa', glyph: 'outfit-vest' },
                 { id: 'habitat', label: 'Isla', glyph: 'campfire' },
               ] as const
             ).map((t) => {
@@ -465,350 +484,17 @@ export function PetScreen() {
             })}
           </View>
 
-          {creatorTab === 'body' ? (
-            <View style={{ gap: 10 }}>
-              <Text style={styles.label}>Especie 3D ({speciesInfo.taglineEs})</Text>
-              <View style={styles.speciesGrid}>
-                {SPECIES.map((sp) => {
-                  const active = pet.species === sp.id;
-                  const preset = SPECIES_PRESET_COLORS[sp.id];
-                  const locked = playerLevel < sp.unlockLevel;
-                  return (
-                    <PressableScale
-                      key={sp.id}
-                      hapticKind="select"
-                      disabled={locked}
-                      onPress={() => {
-                        updatePet({
-                          species: sp.id,
-                          bodyColor: preset.bodyColor,
-                          bellyColor: preset.bellyColor,
-                        });
-                        setReactKey((k) => k + 1);
-                      }}
-                      style={[styles.speciesCard, active && styles.speciesCardActive, locked && { opacity: 0.5 }]}
-                    >
-                      <View
-                        style={[
-                          styles.speciesIconCircle,
-                          { backgroundColor: active ? '#FFFFFF' : preset.bodyColor },
-                        ]}
-                      >
-                        <Glyph name={locked ? 'lock' : sp.glyph} size={36} />
-                      </View>
-                      <Text
-                        style={[styles.speciesLabel, active && { color: '#FFFFFF' }]}
-                        numberOfLines={1}
-                      >
-                        {sp.label}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.speciesSub,
-                          active && { color: 'rgba(255,255,255,0.88)' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {locked ? `Nivel ${sp.unlockLevel}` : sp.subtitleEs}
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>Complexión física 3D</Text>
-              <View style={styles.optionGrid}>
-                {BODY_SCALES.map((bs) => {
-                  const active = (pet.bodyScale ?? 'normal') === bs.id;
-                  return (
-                    <PressableScale
-                      key={bs.id}
-                      hapticKind="select"
-                      onPress={() => updatePet({ bodyScale: bs.id })}
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Glyph name={bs.glyph} size={34} />
-                      <Text
-                        style={[
-                          styles.optionText,
-                          active && { color: '#FFFFFF', fontWeight: '800' },
-                        ]}
-                      >
-                        {bs.label}
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>Color principal del cuerpo</Text>
-              <View style={ui.rowWrap}>
-                {BODY_COLORS.map((c) => (
-                  <Swatch
-                    key={c}
-                    color={c}
-                    active={pet.bodyColor === c}
-                    onPress={() => updatePet({ bodyColor: c })}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>Color de zapatos, pancita y detalles</Text>
-              <View style={ui.rowWrap}>
-                {BELLY_COLORS.map((c) => (
-                  <Swatch
-                    key={c}
-                    color={c}
-                    active={pet.bellyColor === c}
-                    onPress={() => updatePet({ bellyColor: c })}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          {creatorTab === 'face' ? (
-            <View style={{ gap: 10 }}>
-              <Text style={styles.label}>Expresión de ojos 3D</Text>
-              <View style={styles.optionGrid}>
-                {EYE_STYLES.map((e) => (
-                  <OptionTile
-                    key={e.id}
-                    glyph={`eyes-${e.id}`}
-                    label={e.label}
-                    active={pet.eyeStyle === e.id}
-                    onPress={() => updatePet({ eyeStyle: e.id })}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>Cejas expresivas 3D</Text>
-              <View style={styles.optionGrid}>
-                {BROW_STYLES.map((b) => {
-                  const active = (pet.browStyle ?? 'soft') === b.id;
-                  return (
-                    <PressableScale
-                      key={b.id}
-                      hapticKind="select"
-                      onPress={() => updatePet({ browStyle: b.id })}
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Glyph name={b.glyph} size={34} />
-                      <Text
-                        style={[
-                          styles.optionText,
-                          active && { color: '#FFFFFF', fontWeight: '700' },
-                        ]}
-                      >
-                        {b.label}
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>Forma de boca 3D</Text>
-              <View style={styles.optionGrid}>
-                {MOUTH_STYLES.map((m) => {
-                  const active = (pet.mouthStyle ?? 'smile') === m.id;
-                  return (
-                    <PressableScale
-                      key={m.id}
-                      hapticKind="select"
-                      onPress={() => updatePet({ mouthStyle: m.id })}
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Glyph name={m.glyph} size={34} />
-                      <Text
-                        style={[
-                          styles.optionText,
-                          active && { color: '#FFFFFF', fontWeight: '700' },
-                        ]}
-                      >
-                        {m.label}
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>Mejillas, Pecas y Estrellitas 3D</Text>
-              <View style={styles.optionGrid}>
-                {BLUSH_STYLES.map((bl) => {
-                  const active = (pet.blushStyle ?? 'pink') === bl.id;
-                  return (
-                    <PressableScale
-                      key={bl.id}
-                      hapticKind="select"
-                      onPress={() => updatePet({ blushStyle: bl.id })}
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Glyph name={bl.glyph} size={34} />
-                      <Text
-                        style={[
-                          styles.optionText,
-                          active && { color: '#FFFFFF', fontWeight: '700' },
-                        ]}
-                      >
-                        {bl.label}
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          {creatorTab === 'soul' ? (
-            <View style={{ gap: 12 }}>
-              <Text style={styles.label}>Personalidad Tomodachi (afecta sus reacciones)</Text>
-              <View style={styles.optionGrid}>
-                {PERSONALITIES.map((p) => {
-                  const active = (pet.personality ?? 'energetic') === p.id;
-                  return (
-                    <PressableScale
-                      key={p.id}
-                      hapticKind="select"
-                      onPress={() =>
-                        updatePet({
-                          personality: p.id,
-                        })
-                      }
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Glyph name={p.glyph} size={34} />
-                      <Text
-                        style={[
-                          styles.optionText,
-                          active && { color: '#FFFFFF', fontWeight: '800' },
-                        ]}
-                      >
-                        {p.labelEs}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.speciesSub,
-                          active && { color: 'rgba(255,255,255,0.88)' },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {p.descEs}
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>Sintetizador de Voz (Tono y Velocidad)</Text>
-              <View style={styles.optionGrid}>
-                {VOICE_PRESETS.map((vp) => {
-                  const active =
-                    Math.abs((pet.voicePitch ?? 1.1) - vp.pitch) < 0.08 &&
-                    Math.abs((pet.voiceRate ?? 1.0) - vp.rate) < 0.08;
-                  return (
-                    <PressableScale
-                      key={vp.id}
-                      hapticKind="select"
-                      onPress={() => {
-                        updatePet({ voicePitch: vp.pitch, voiceRate: vp.rate });
-                        speakWithPip(
-                          `Hi! I am ${pet.name}. ${pet.catchphrase || "Let's go!"}`
-                        );
-                      }}
-                      style={[styles.option, active && styles.optionActive]}
-                    >
-                      <Glyph name={vp.glyph} size={34} />
-                      <Text
-                        style={[
-                          styles.optionText,
-                          active && { color: '#FFFFFF', fontWeight: '800' },
-                        ]}
-                      >
-                        {vp.labelEs}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.speciesSub,
-                          active && { color: 'rgba(255,255,255,0.85)' },
-                        ]}
-                      >
-                        Tono {vp.pitch}x · Vel {vp.rate}x
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.label}>Muletilla en Inglés (Catchphrase al celebrar o enojarse)</Text>
-              <View style={styles.catchphraseInputWrap}>
-                <TextInput
-                  value={pet.catchphrase ?? "Let's go!"}
-                  onChangeText={(txt) => updatePet({ catchphrase: txt.slice(0, 28) })}
-                  placeholder="Ej. Oh yeah!, Easy peasy!, Booyah!"
-                  placeholderTextColor={THEME.ink3}
-                  style={styles.catchphraseInput}
-                />
-                <PressableScale
-                  hapticKind="light"
-                  onPress={() =>
-                    speakWithPip(
-                      `Hi! My name is ${pet.name}, and I always say: ${pet.catchphrase || "Let's go!"}`
-                    )
-                  }
-                  style={styles.testVoiceBtn}
-                >
-                  <Ionicons name="volume-high" size={16} color="#FFFFFF" />
-                  <Text style={styles.testVoiceBtnText}>Probar Voz</Text>
-                </PressableScale>
-              </View>
-
-              <View style={ui.rowWrap}>
-                {SUGGESTED_CATCHPHRASES.map((phrase) => {
-                  const active = pet.catchphrase === phrase;
-                  return (
-                    <PressableScale
-                      key={phrase}
-                      hapticKind="select"
-                      onPress={() => updatePet({ catchphrase: phrase })}
-                      style={[
-                        styles.phraseChip,
-                        active && { backgroundColor: THEME.blue, borderColor: THEME.blue },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.phraseChipText,
-                          active && { color: '#FFFFFF', fontWeight: '800' },
-                        ]}
-                      >
-                        “{phrase}”
-                      </Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          {creatorTab === 'hats' ? (
-            <View style={{ gap: 10 }}>
-              <Text style={styles.label}>Sombrero o accesorio 3D</Text>
-              <View style={styles.optionGrid}>
-                {ACCESSORIES.map((a) => {
-                  const locked = playerLevel < a.unlockLevel;
-                  return (
-                    <OptionTile
-                      key={a.id}
-                      glyph={locked ? 'lock' : a.glyph}
-                      label={locked ? `Nivel ${a.unlockLevel}` : a.label}
-                      active={pet.accessory === a.id}
-                      disabled={locked}
-                      onPress={() => updatePet({ accessory: a.id })}
-                    />
-                  );
-                })}
-              </View>
-            </View>
+          {creatorTab === 'look' ? (
+            <MiiCreator
+              pet={pet}
+              onChangePet={(patch) => {
+                updatePet(patch);
+                setReactKey((k) => k + 1);
+              }}
+              playerLevel={playerLevel}
+              previewSize={260}
+              onSpeakSample={(text) => speakWithPip(text)}
+            />
           ) : null}
 
           {creatorTab === 'outfit' ? (
@@ -985,63 +671,23 @@ function Need({
   );
 }
 
-function OptionTile({
-  glyph,
-  label,
-  active,
-  onPress,
-  disabled,
-}: {
-  glyph: string;
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <PressableScale
-      onPress={onPress}
-      disabled={disabled}
-      hapticKind="select"
-      style={[styles.option, active && styles.optionActive, disabled && { opacity: 0.5 }]}
-    >
-      <Glyph name={glyph} size={34} />
-      <Text
-        style={[styles.optionText, active && { color: '#FFFFFF', fontWeight: '700' }]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </PressableScale>
-  );
-}
-
-function Swatch({
-  color,
-  active,
-  onPress,
-}: {
-  color: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <PressableScale
-      onPress={onPress}
-      hapticKind="select"
-      scaleTo={0.85}
-      accessibilityLabel={`Color ${color}`}
-    >
-      <View style={[styles.swatchRing, active && { borderColor: THEME.blue }]}>
-        <View style={[styles.swatch, { backgroundColor: color }]}>
-          {active ? <Ionicons name="checkmark" size={16} color={THEME.ink} /> : null}
-        </View>
-      </View>
-    </PressableScale>
-  );
-}
-
 const styles = StyleSheet.create({
+  growthCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 20,
+    padding: 12,
+    gap: 8,
+    marginTop: 6,
+  },
+  growthSteps: { flexDirection: 'row', justifyContent: 'space-between' },
+  growthStep: { alignItems: 'center', gap: 4, flex: 1 },
+  growthDot: { width: 12, height: 12, borderRadius: 999, backgroundColor: THEME.fill2 },
+  growthDotNow: { width: 16, height: 16, backgroundColor: '#F5B841', borderWidth: 2, borderColor: '#FFFFFF' },
+  growthLabel: { fontSize: 11, color: THEME.ink3, fontWeight: '700' },
+  growthTrack: { height: 8, borderRadius: 999, backgroundColor: THEME.fill, overflow: 'hidden' },
+  growthFill: { height: 8, borderRadius: 999, backgroundColor: '#F5B841' },
+  growthHint: { fontSize: 12.5, color: THEME.ink2, textAlign: 'center' },
   noticeBar: {
     flexDirection: 'row',
     alignItems: 'center',

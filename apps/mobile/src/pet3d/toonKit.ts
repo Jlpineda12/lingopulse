@@ -5,17 +5,23 @@ import * as THREE from 'three';
  * rampa de luz de 4 escalones, material de contorno de tinta y primitivas con contorno.
  */
 
-/** Rampa de iluminación cel-shaded de 4 escalones nítidos (estilo PS2 / Cairn / Wind Waker). */
+/**
+ * Rampa de luz toon suave (16 pasos filtrados): sombras cálidas y degradado continuo,
+ * combinada con el contorno de tinta. Es el look elegido para personajes, casa e isla.
+ */
 export function createToonRamp(): THREE.DataTexture {
-  const steps = new Uint8Array([
-    105, 105, 120, 255,
-    165, 168, 182, 255,
-    222, 224, 232, 255,
-    255, 255, 255, 255,
-  ]);
-  const tex = new THREE.DataTexture(steps, 4, 1, THREE.RGBAFormat);
-  tex.minFilter = THREE.NearestFilter;
-  tex.magFilter = THREE.NearestFilter;
+  const n = 16;
+  const data = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const k = Math.pow(i / (n - 1), 0.85);
+    data[i * 4] = Math.round(170 + (255 - 170) * k);
+    data[i * 4 + 1] = Math.round(160 + (255 - 160) * k);
+    data[i * 4 + 2] = Math.round(190 + (255 - 190) * k);
+    data[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, n, 1, THREE.RGBAFormat);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
   tex.needsUpdate = true;
   return tex;

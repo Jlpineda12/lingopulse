@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { PetConfig, PetMood } from '../game/pet';
-import { createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon } from './toonKit';
+import type { PetConfig, PetMood, PetStage } from '../game/pet';
+import { box, createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon } from './toonKit';
 import { buildHouseDiorama, buildIslandFurniture, type HouseDiorama, type HouseSceneOptions } from './petHouse';
 
 /**
@@ -275,6 +275,12 @@ function createHabitatProp3D(
 export interface PetSceneOptions {
   /** Casa de la mascota: nivel 0 = isla de campamento, 1–4 = diorama con paredes y muebles. */
   house?: HouseSceneOptions;
+  /** Etapa de crecimiento (huevo → adulto). Por defecto adulto. */
+  stage?: PetStage;
+  /** 0–1: progreso hacia la siguiente etapa (el huevo se agrieta al acercarse a eclosionar). */
+  growth?: number;
+  /** 'face' acerca la cámara a la cara (editor de rasgos estilo Mii Maker). */
+  focus?: 'face' | 'body';
 }
 
 export function createPetScene(
@@ -289,7 +295,9 @@ export function createPetScene(
 
   const toonRamp = createToonRamp();
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  // Relleno de cielo/suelo para un sombreado limpio y suave.
+  scene.add(new THREE.HemisphereLight(0xfff7ee, 0xc9d6ff, 0.55));
   const key = new THREE.DirectionalLight(0xfff6e5, 1.85);
   key.position.set(3.2, 4.8, 5.0);
   scene.add(key);
@@ -337,6 +345,63 @@ export function createPetScene(
   }
 
   const isMeeseeks = config.species === 'meeseeks';
+  const isHuman = config.species === 'human';
+  /** Siluetas con cabeza pequeña sobre torso (muñeco esbelto y persona). */
+  const isSlim = isMeeseeks || isHuman;
+  const petStage = options.stage ?? 'adult';
+  const tune = config.tuning ?? {};
+  const tstep = (v?: number) => Math.max(-3, Math.min(3, Math.round(v ?? 0)));
+  // Las personas llevan ojos algo más pequeños, como los Mii.
+  const eyeK =
+    (config.species === 'human' ? 0.82 : 1) *
+    (petStage === 'baby' ? 1.2 : 1) *
+    (1 + tstep(tune.eyeSize) * 0.09);
+  const eyeDY = tstep(tune.eyeHeight) * 0.025;
+  const eyeDX = tstep(tune.eyeSpacing) * 0.022;
+  const browK = 1 + tstep(tune.browSize) * 0.12;
+  const browDY = tstep(tune.browHeight) * 0.022;
+  const noseK = 1 + tstep(tune.noseSize) * 0.12;
+  const noseDY = tstep(tune.noseHeight) * 0.022;
+  const mouthK = 1 + tstep(tune.mouthSize) * 0.1;
+  const mouthDY = tstep(tune.mouthHeight) * 0.022;
+  const eyeSY = 1 + tstep(tune.eyeStretch) * 0.1;
+  const eyeSX = 1 - tstep(tune.eyeStretch) * 0.04;
+  const eyeRot = tstep(tune.eyeRotation) * 0.09;
+  const browSX = 1 + tstep(tune.browStretch) * 0.13;
+  const browRot = tstep(tune.browRotation) * 0.09;
+  const browDX = tstep(tune.browSpacing) * 0.022;
+  const mouthSX = 1 + tstep(tune.mouthStretch) * 0.12;
+  const mustK = 1 + tstep(tune.mustacheSize) * 0.12;
+  const mustSX = 1 + tstep(tune.mustacheStretch) * 0.12;
+  const mustDY = tstep(tune.mustacheHeight) * 0.02;
+  const glassK = 1 + tstep(tune.glassesSize) * 0.07;
+  const glassDY = tstep(tune.glassesHeight) * 0.02;
+  /** Forma de la cara (solo personas): ancho, alto y fondo de la cabeza. */
+  const faceShape = config.faceShape ?? 'round';
+  const humanHead =
+    faceShape === 'oval'
+      ? { w: 0.64, h: 0.76, d: 0.64 }
+      : faceShape === 'square'
+        ? { w: 0.72, h: 0.7, d: 0.66 }
+        : faceShape === 'long'
+          ? { w: 0.62, h: 0.82, d: 0.62 }
+          : faceShape === 'wide'
+            ? { w: 0.8, h: 0.66, d: 0.68 }
+            : faceShape === 'heart'
+              ? { w: 0.72, h: 0.72, d: 0.66 }
+              : { w: 0.7, h: 0.72, d: 0.66 };
+  /**
+   * Proporciones de persona: la cara se modela a escala "chibi" (centro en y = 0.42) y luego
+   * toda la cabeza se reduce y se sube sobre un cuerpo más largo, como un Mii.
+   */
+  const HUMAN_HEAD_K = 0.74;
+  const HUMAN_HEAD_Y = 0.74;
+  const rigY = isHuman ? 0.42 : 0;
+  const humanHeadParts: THREE.Object3D[] = [];
+  /** Parches de barriga: se ocultan cuando la ropa cubre el torso. */
+  const bellyParts: THREE.Object3D[] = [];
+  const humanSleeves: THREE.Mesh[] = [];
+  let humanArms: THREE.Group[] | null = null;
   const isCat = config.species === 'cat';
   const isDragon = config.species === 'dragon';
   const isBear = config.species === 'bear';
@@ -364,21 +429,78 @@ export function createPetScene(
 
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0x151a3d });
   const irisMat = new THREE.MeshBasicMaterial({
-    color: isMeeseeks ? 0x151a3d : 0x3b7bff,
+    color: config.eyeColor ? new THREE.Color(config.eyeColor) : isMeeseeks ? 0x151a3d : 0x3b7bff,
   });
   const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const mouthMat = new THREE.MeshBasicMaterial({ color: 0x2b1020 });
+  const mouthMat = new THREE.MeshBasicMaterial({
+    color: config.lipColor ? new THREE.Color(config.lipColor).multiplyScalar(0.7) : 0x2b1020,
+  });
   const tongueMat = new THREE.MeshBasicMaterial({ color: 0xff6b8b });
 
-  const headY = isMeeseeks ? 0.36 : isCat ? 0.24 : isDragon ? 0.16 : 0.0;
-  const faceZ = isMeeseeks ? 0.66 : isCat ? 0.82 : isDragon ? 0.88 : 0.95;
+  const headY = isHuman ? 0.42 : isSlim ? 0.36 : isCat ? 0.24 : isDragon ? 0.16 : 0.0;
+  const faceZ = isSlim ? 0.66 : isCat ? 0.82 : isDragon ? 0.88 : 0.95;
 
   let tailGroup: THREE.Group | null = null;
   let wingL: THREE.Group | null = null;
   let wingR: THREE.Group | null = null;
   const bunnyEars: THREE.Object3D[] = [];
 
-  if (isMeeseeks) {
+  if (isHuman) {
+    // Persona estilo Mii: cabeza redonda, torso con camiseta, pantalón, piernas y zapatos.
+    // Con camisa y corbata u overol, la camiseta de base es blanca.
+    const shirtMat = toon(
+      config.outfit === 'shirttie' || config.outfit === 'overalls' || config.outfit === 'stripes' ? 0xffffff : accent,
+      toonRamp
+    );
+    const pantsMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B'), toonRamp);
+    const headMesh = ellipsoid(humanHead.w, humanHead.h, humanHead.d, bodyMat, 28, true, 0.045);
+    headMesh.position.set(0, 0.42, 0);
+    humanHeadParts.push(headMesh);
+    if (faceShape === 'square') {
+      // Mandíbula marcada
+      const jaw = ellipsoid(humanHead.w * 0.95, 0.36, humanHead.d * 0.9, bodyMat, 24, true, 0.04);
+      jaw.position.set(0, 0.12, 0.02);
+      humanHeadParts.push(jaw);
+    } else if (faceShape === 'heart') {
+      // Barbilla en punta suave
+      const chin = ellipsoid(0.28, 0.24, 0.36, bodyMat, 18, true, 0.035);
+      chin.position.set(0, -0.12, 0.28);
+      humanHeadParts.push(chin);
+    }
+    [-1, 1].forEach((side) => {
+      const ear = ellipsoid(0.11, 0.15, 0.08, bodyMat, 14, true, 0.022);
+      ear.position.set(side * (humanHead.w - 0.01), 0.38, 0.02);
+      humanHeadParts.push(ear);
+    });
+    body.add(...humanHeadParts);
+    const neck = cylinder(0.1, 0.11, 0.18, bodyMat, 14, 0);
+    neck.position.set(0, 0.17, 0);
+    const shirt = ellipsoid(0.38, 0.36, 0.28, shirtMat, 26, true, 0.04);
+    shirt.position.set(0, -0.19, 0);
+    const hips = ellipsoid(0.33, 0.15, 0.25, pantsMat, 22, true, 0.035);
+    hips.position.set(0, -0.47, 0);
+    body.add(neck, shirt, hips);
+    [-1, 1].forEach((side) => {
+      const leg = cylinder(0.105, 0.095, 0.36, pantsMat, 14);
+      leg.position.set(side * 0.13, -0.66, 0.0);
+      body.add(leg);
+    });
+    // Brazos con hombro como pivote: manga del color favorito, brazo y mano.
+    humanArms = [-1, 1].map((side) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.33, 0.0, 0.0);
+      const sleeve = ellipsoid(0.105, 0.15, 0.105, toon(accent, toonRamp), 16, true, 0.025);
+      sleeve.position.y = -0.1;
+      humanSleeves.push(sleeve);
+      const arm = cylinder(0.062, 0.056, 0.3, bodyMat, 12, 1.12);
+      arm.position.y = -0.32;
+      const hand = ellipsoid(0.078, 0.085, 0.072, bodyMat, 14, true, 0.02);
+      hand.position.y = -0.5;
+      pivot.add(arm, sleeve, hand);
+      body.add(pivot);
+      return pivot;
+    });
+  } else if (isMeeseeks) {
     const headMesh = ellipsoid(0.68, 0.76, 0.64, bodyMat, 28, true, 0.045);
     headMesh.position.set(0, 0.36, 0);
     const neckTorso = ellipsoid(0.52, 0.78, 0.46, bodyMat, 28, true, 0.045);
@@ -396,6 +518,7 @@ export function createPetScene(
     catTorso.position.set(0, -0.36, -0.02);
     const bellyPatch = ellipsoid(0.48, 0.44, 0.22, creamBellyMat, 20, false);
     bellyPatch.position.set(0, -0.36, 0.5);
+    bellyParts.push(bellyPatch);
     body.add(catHead, catTorso, bellyPatch);
 
     [-1, 1].forEach((side) => {
@@ -450,6 +573,7 @@ export function createPetScene(
     dracoTorso.position.set(0, -0.34, -0.02);
     const dracoBelly = ellipsoid(0.54, 0.48, 0.24, creamBellyMat, 20, false);
     dracoBelly.position.set(0, -0.34, 0.56);
+    bellyParts.push(dracoBelly);
     const snout = ellipsoid(0.28, 0.18, 0.22, limbMat, 18, false);
     snout.position.set(0, 0.14, 0.78);
     body.add(dracoHead, dracoTorso, dracoBelly, snout);
@@ -503,8 +627,9 @@ export function createPetScene(
     body.add(torso);
 
     if (isBear) {
-      const bearBelly = ellipsoid(0.58, 0.52, 0.2, creamBellyMat, 22, false);
-      bearBelly.position.set(0, -0.22, 0.82);
+      const bearBelly = ellipsoid(0.46, 0.36, 0.2, creamBellyMat, 22, false);
+      bearBelly.position.set(0, -0.5, 0.74);
+      bellyParts.push(bearBelly);
       const muzzle = ellipsoid(0.24, 0.18, 0.16, creamBellyMat, 18, false);
       muzzle.position.set(0, 0.04, 0.92);
       const bearNose = ellipsoid(0.08, 0.06, 0.05, darkNoseMat, 12, false);
@@ -520,8 +645,9 @@ export function createPetScene(
         body.add(ear);
       });
     } else if (isBunny) {
-      const bunnyBelly = ellipsoid(0.54, 0.5, 0.18, creamBellyMat, 22, false);
-      bunnyBelly.position.set(0, -0.24, 0.82);
+      const bunnyBelly = ellipsoid(0.44, 0.36, 0.18, creamBellyMat, 22, false);
+      bunnyBelly.position.set(0, -0.5, 0.74);
+      bellyParts.push(bunnyBelly);
       const bunnyNose = ellipsoid(0.065, 0.05, 0.05, pinkNoseMat, 12, false);
       bunnyNose.position.set(0, 0.1, 0.97);
       const cottonTail = ellipsoid(0.22, 0.22, 0.22, creamBellyMat, 16, true, 0.035);
@@ -550,6 +676,7 @@ export function createPetScene(
     muzzle.position.set(0, -0.08, 0.86);
     const chest = ellipsoid(0.5, 0.42, 0.18, foxWhite, 20, false);
     chest.position.set(0, -0.42, 0.8);
+    bellyParts.push(chest);
     const nose = ellipsoid(0.07, 0.05, 0.05, foxDark, 12, false);
     nose.position.set(0, 0.06, 1.02);
     body.add(muzzle, chest, nose);
@@ -583,6 +710,7 @@ export function createPetScene(
     const sharkBelly = toon(0xf2f7ff, toonRamp);
     const belly = ellipsoid(0.66, 0.6, 0.22, sharkBelly, 22, false);
     belly.position.set(0, -0.28, 0.78);
+    bellyParts.push(belly);
     body.add(belly);
     const dorsalGeo = new THREE.ConeGeometry(0.26, 0.62, 3);
     const dorsal = new THREE.Mesh(dorsalGeo, finMat);
@@ -616,12 +744,15 @@ export function createPetScene(
     body.add(tailGroup);
   }
 
+  // A partir de aquí y hasta los brazos, todo lo que se añade es parte de la cabeza.
+  const headStartIdx = body.children.length;
   // --- 10 MODELOS DE CABELLO 3D ESTILO TOMODACHI LIFE ---
-  const hairStyle = config.hairStyle ?? (isMeeseeks ? 'spiky' : 'none');
+  // Solo las siluetas humanas llevan pelo: el chibi y los animales conservan su forma.
+  const hairStyle = isSlim ? config.hairStyle ?? (isHuman ? 'short' : 'spiky') : 'none';
   if (hairStyle !== 'none') {
     const hairGroup = new THREE.Group();
-    const hairCrownY = isMeeseeks ? 1.02 : isCat ? 0.9 : isDragon ? 0.92 : 0.88;
-    const hairScale = isMeeseeks ? 0.88 : 1.05;
+    const hairCrownY = isHuman ? 1.0 : isSlim ? 1.02 : isCat ? 0.9 : isDragon ? 0.92 : 0.88;
+    const hairScale = isHuman ? 0.96 : isMeeseeks ? 0.88 : 1.05;
     hairGroup.position.set(0, hairCrownY, 0.04);
     hairGroup.scale.setScalar(hairScale);
 
@@ -748,6 +879,99 @@ export function createPetScene(
       band.rotation.x = Math.PI / 2;
       band.position.set(0, 0.14, -0.08);
       hairGroup.add(base, bunBall, band);
+    } else if (hairStyle === 'short') {
+      const cap = ellipsoid(0.7, 0.3, 0.66, hairMat, 22, true, 0.03);
+      cap.position.set(0, -0.04, -0.04);
+      const fringe = ellipsoid(0.46, 0.13, 0.16, hairMat, 16, true, 0.022);
+      fringe.position.set(0.06, -0.08, 0.5);
+      fringe.rotation.z = -0.12;
+      hairGroup.add(cap, fringe);
+      [-1, 1].forEach((side) => {
+        const side_ = ellipsoid(0.12, 0.24, 0.3, hairMat, 14, true, 0.02);
+        side_.position.set(side * 0.64, -0.24, -0.04);
+        hairGroup.add(side_);
+      });
+    } else if (hairStyle === 'long') {
+      const cap = ellipsoid(0.72, 0.32, 0.68, hairMat, 22, true, 0.03);
+      cap.position.set(0, -0.02, -0.04);
+      const back = ellipsoid(0.7, 0.78, 0.3, hairMat, 22, true, 0.03);
+      back.position.set(0, -0.62, -0.36);
+      hairGroup.add(cap, back);
+      [-0.24, -0.08, 0.08, 0.24].forEach((bx, idx) => {
+        const bang = ellipsoid(0.11, 0.15, 0.08, hairMat, 12, true, 0.02);
+        bang.position.set(bx, -0.12, 0.56 - Math.abs(bx) * 0.25);
+        bang.rotation.z = (idx - 1.5) * 0.08;
+        hairGroup.add(bang);
+      });
+      [-1, 1].forEach((side) => {
+        const lock = ellipsoid(0.15, 0.62, 0.2, hairMat, 16, true, 0.026);
+        lock.position.set(side * 0.68, -0.56, 0.08);
+        lock.rotation.z = side * 0.06;
+        hairGroup.add(lock);
+      });
+    } else if (hairStyle === 'buzz') {
+      // Pelo al ras: casquete que sigue la forma de la cabeza
+      const hd = isHuman ? humanHead : { w: 0.68, h: 0.76, d: 0.64 };
+      const hcY = isHuman ? 0.42 : 0.36;
+      const buzz = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI * 0.4),
+        hairMat
+      );
+      buzz.scale.set((hd.w * 1.03) / hairScale, (hd.h * 1.03) / hairScale, (hd.d * 1.03) / hairScale);
+      buzz.position.set(0, (hcY - hairCrownY) / hairScale, -0.04 / hairScale);
+      buzz.rotation.x = -0.18;
+      const out = new THREE.Mesh(buzz.geometry, OUTLINE_MAT);
+      out.scale.setScalar(1.02);
+      buzz.add(out);
+      hairGroup.add(buzz);
+    } else if (hairStyle === 'sidepart') {
+      const cap = ellipsoid(0.7, 0.3, 0.66, hairMat, 22, true, 0.03);
+      cap.position.set(0, -0.04, -0.04);
+      const swoop = ellipsoid(0.42, 0.17, 0.3, hairMat, 18, true, 0.025);
+      swoop.position.set(0.16, 0.02, 0.38);
+      swoop.rotation.z = -0.3;
+      const part = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.5), toon(customHairColor.clone().offsetHSL(0, 0, -0.12), toonRamp));
+      part.position.set(-0.22, 0.25, 0.05);
+      hairGroup.add(cap, swoop, part);
+      [-1, 1].forEach((side) => {
+        const sd = ellipsoid(0.12, 0.24, 0.3, hairMat, 14, true, 0.02);
+        sd.position.set(side * 0.64, -0.24, -0.04);
+        hairGroup.add(sd);
+      });
+    } else if (hairStyle === 'wavy') {
+      const cap = ellipsoid(0.72, 0.32, 0.68, hairMat, 22, true, 0.03);
+      cap.position.set(0, -0.02, -0.04);
+      hairGroup.add(cap);
+      [-1, 1].forEach((side) => {
+        for (let i = 0; i < 3; i++) {
+          const wave = ellipsoid(0.17, 0.17, 0.2, hairMat, 14, true, 0.022);
+          wave.position.set(side * (0.66 + (i % 2) * 0.05), -0.28 - i * 0.2, 0.06 - i * 0.04);
+          hairGroup.add(wave);
+        }
+      });
+      const back = ellipsoid(0.68, 0.55, 0.28, hairMat, 20, true, 0.03);
+      back.position.set(0, -0.45, -0.36);
+      hairGroup.add(back);
+      const fringe = ellipsoid(0.5, 0.14, 0.18, hairMat, 16, true, 0.022);
+      fringe.position.set(-0.08, -0.07, 0.48);
+      fringe.rotation.z = 0.15;
+      hairGroup.add(fringe);
+    } else if (hairStyle === 'braids') {
+      const cap = ellipsoid(0.7, 0.3, 0.66, hairMat, 22, true, 0.03);
+      cap.position.set(0, -0.03, -0.02);
+      const part = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.6), toon(customHairColor.clone().offsetHSL(0, 0, -0.12), toonRamp));
+      part.position.set(0, 0.27, 0.02);
+      hairGroup.add(cap, part);
+      [-1, 1].forEach((side) => {
+        for (let i = 0; i < 5; i++) {
+          const knot = ellipsoid(0.12 - i * 0.008, 0.11, 0.12 - i * 0.008, hairMat, 12, true, 0.02);
+          knot.position.set(side * (0.62 + i * 0.02), -0.3 - i * 0.17, 0.04);
+          hairGroup.add(knot);
+        }
+        const tie = ellipsoid(0.06, 0.05, 0.06, feetMat, 10, true, 0.015);
+        tie.position.set(side * 0.72, -1.15, 0.04);
+        hairGroup.add(tie);
+      });
     }
 
     body.add(hairGroup);
@@ -755,14 +979,15 @@ export function createPetScene(
 
   // --- 10 MODELOS DE OJOS 3D ESTILO TOMODACHI LIFE ---
   const eyes = new THREE.Group();
-  eyes.position.set(0, 0.2 + headY, 0);
+  eyes.position.set(0, 0.2 + headY + eyeDY, 0);
   body.add(eyes);
   const eyeParts: THREE.Group[] = [];
   const makeEye = (side: number) => {
     const g = new THREE.Group();
-    const eyeSpread = isMeeseeks ? 0.2 : 0.25;
+    const eyeSpread = (isSlim ? 0.2 : 0.25) + eyeDX;
     g.position.set(side * eyeSpread, 0, faceZ - 0.04);
-    g.rotation.set(-0.14, side * 0.25, 0);
+    // Inclinación tipo Mii: rasgos positivos suben la esquina exterior.
+    g.rotation.set(-0.14, side * 0.25, -side * eyeRot);
 
     const isWinkRightEye = config.eyeStyle === 'wink' && side === 1;
 
@@ -803,8 +1028,58 @@ export function createPetScene(
       const shine = ellipsoid(0.028, 0.04, 0.02, whiteMat, 10, false);
       shine.position.set(-0.03, 0.08, 0.055);
       g.add(eye, starPupil, shine);
-    } else if (isMeeseeks && config.eyeStyle === 'round') {
+    } else if (
+      config.eyeStyle === 'almond' ||
+      config.eyeStyle === 'lashes' ||
+      config.eyeStyle === 'narrow' ||
+      config.eyeStyle === 'droopy' ||
+      config.eyeStyle === 'bright' ||
+      config.eyeStyle === 'calm'
+    ) {
+      // Ojos "de persona": esclerótica, iris del color elegido, pupila y brillo.
+      const st = config.eyeStyle;
+      const dims =
+        st === 'almond' ? { w: 0.14, h: 0.09, ir: 0.062 }
+        : st === 'narrow' ? { w: 0.13, h: 0.055, ir: 0.048 }
+        : st === 'bright' ? { w: 0.125, h: 0.145, ir: 0.085 }
+        : { w: 0.12, h: 0.125, ir: 0.068 };
+      const sclera = ellipsoid(dims.w, dims.h, 0.05, whiteMat, 18, true, 0.018);
+      const iris = ellipsoid(dims.ir, Math.min(dims.ir * 1.12, dims.h * 0.95), 0.035, irisMat, 16, false);
+      iris.position.set(0, -0.004, 0.032);
+      const pupil = ellipsoid(dims.ir * 0.5, Math.min(dims.ir * 0.56, dims.h * 0.5), 0.03, eyeMat, 12, false);
+      pupil.position.set(0, -0.004, 0.048);
+      const shine = ellipsoid(0.02, 0.024, 0.012, whiteMat, 8, false);
+      shine.position.set(-dims.ir * 0.35, dims.h * 0.25, 0.062);
+      g.add(sclera, iris, pupil, shine);
+      if (st === 'bright') {
+        const s2 = ellipsoid(0.012, 0.012, 0.01, whiteMat, 8, false);
+        s2.position.set(dims.ir * 0.35, -dims.h * 0.25, 0.062);
+        g.add(s2);
+      }
+      if (st === 'almond') sclera.rotation.z = side * 0.12;
+      if (st === 'lashes') {
+        [0, 1, 2].forEach((i) => {
+          const lash = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.04, 4, 6), eyeMat);
+          const a = 0.5 + i * 0.35;
+          lash.position.set(side * Math.cos(a) * dims.w * 0.95, Math.sin(a) * dims.h * 0.95, 0.03);
+          lash.rotation.z = side * (a - Math.PI / 2);
+          g.add(lash);
+        });
+      }
+      if (st === 'droopy' || st === 'calm') {
+        // Párpado superior del color de la piel
+        const lid = ellipsoid(dims.w * 1.06, dims.h * 0.62, 0.06, limbMat, 16, true, 0.016);
+        lid.position.set(0, dims.h * (st === 'calm' ? 0.5 : 0.62), 0.012);
+        if (st === 'droopy') lid.rotation.z = side * -0.35;
+        g.add(lid);
+      }
+    } else if (isSlim && config.eyeStyle === 'round') {
       const sclera = ellipsoid(0.135, 0.165, 0.06, whiteMat, 18, true, 0.02);
+      if (isHuman) {
+        const ring = ellipsoid(0.08, 0.095, 0.035, irisMat, 16, false);
+        ring.position.set(0, -0.005, 0.04);
+        g.add(ring);
+      }
       const pupil = ellipsoid(0.055, 0.065, 0.04, eyeMat, 14, false);
       pupil.position.set(0, 0, 0.045);
       const shine = ellipsoid(0.022, 0.028, 0.02, whiteMat, 10, false);
@@ -840,8 +1115,8 @@ export function createPetScene(
 
   // --- 10 MODELOS DE CEJAS 3D ESTILO TOMODACHI LIFE ---
   const browStyle = config.browStyle ?? 'soft';
-  const browSpread = isMeeseeks ? 0.21 : 0.26;
-  const browBaseY = headY + (isMeeseeks ? 0.34 : 0.43);
+  const browSpread = (isSlim ? 0.21 : 0.26) + eyeDX + browDX;
+  const browBaseY = headY + (isSlim ? 0.34 : 0.43) + eyeDY + browDY;
   const browThickness =
     browStyle === 'bold' || browStyle === 'unibrow'
       ? 0.038
@@ -895,6 +1170,8 @@ export function createPetScene(
   };
   const browL = makeBrow(-1);
   const browR = makeBrow(1);
+  browL.scale.set(browK * browSX, browK, browK);
+  browR.scale.set(browK * browSX, browK, browK);
   body.add(browL, browR);
 
   if (browStyle === 'unibrow') {
@@ -918,7 +1195,7 @@ export function createPetScene(
 
   // --- 10 MODELOS DE MEJILLAS Y RASGOS FACIALES 3D ---
   const blushStyle = config.blushStyle ?? 'pink';
-  const cheekX = isMeeseeks ? 0.36 : 0.45;
+  const cheekX = isSlim ? 0.36 : 0.45;
   if (blushStyle !== 'none') {
     if (blushStyle === 'bandaid') {
       const bandGroup = new THREE.Group();
@@ -1011,7 +1288,8 @@ export function createPetScene(
 
   // --- 10 MODELOS DE BOCA 3D PERSONALIZABLES ---
   const mouth = new THREE.Group();
-  mouth.position.set(0, headY + (isMeeseeks ? -0.04 : 0.02), faceZ + 0.01);
+  mouth.position.set(0, headY + (isSlim ? -0.04 : 0.02) + mouthDY, faceZ + 0.01);
+  mouth.scale.set(mouthK * mouthSX, mouthK, mouthK);
   mouth.rotation.x = -0.05;
   body.add(mouth);
 
@@ -1044,6 +1322,36 @@ export function createPetScene(
       lip.position.y = sy * 0.024;
       smileGroup.add(lip);
     });
+  } else if (mouthStyle === 'line') {
+    const line = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.09, 4, 8), mouthMat);
+    line.rotation.z = Math.PI / 2;
+    smileGroup.add(line);
+  } else if (mouthStyle === 'small') {
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.015, 8, 16, Math.PI), mouthMat);
+    arc.rotation.z = Math.PI;
+    smileGroup.add(arc);
+  } else if (mouthStyle === 'lips') {
+    const lipMat = toon(new THREE.Color(config.lipColor ?? '#D9606E'), toonRamp);
+    const upper = ellipsoid(0.075, 0.022, 0.025, lipMat, 12, true, 0.008);
+    upper.position.y = 0.014;
+    const lower = ellipsoid(0.068, 0.03, 0.025, lipMat, 12, true, 0.008);
+    lower.position.y = -0.02;
+    const seam = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.11, 4, 8), mouthMat);
+    seam.rotation.z = Math.PI / 2;
+    seam.position.z = 0.02;
+    smileGroup.add(upper, lower, seam);
+  } else if (mouthStyle === 'teeth' || mouthStyle === 'laugh') {
+    const big = mouthStyle === 'laugh';
+    const cav = ellipsoid(big ? 0.09 : 0.08, big ? 0.07 : 0.042, 0.02, mouthMat, 16, false);
+    cav.position.y = big ? -0.03 : -0.018;
+    const teeth = ellipsoid(big ? 0.074 : 0.072, 0.022, 0.02, whiteMat, 12, false);
+    teeth.position.set(0, big ? 0.012 : -0.006, 0.012);
+    smileGroup.add(cav, teeth);
+    if (big) {
+      const tng = ellipsoid(0.045, 0.024, 0.016, tongueMat, 12, false);
+      tng.position.set(0, -0.07, 0.014);
+      smileGroup.add(tng);
+    }
   } else if (mouthStyle === 'pout') {
     const poutArc = new THREE.Mesh(
       new THREE.TorusGeometry(0.056, 0.017, 10, 20, Math.PI),
@@ -1108,18 +1416,229 @@ export function createPetScene(
   frown.position.y = -0.055;
   mouth.add(smileGroup, open, frown);
 
+  // Medidas aproximadas de la cabeza de cada silueta (para barba y gafas de nieve).
+  const headInfo = isHuman
+    ? { w: humanHead.w, h: humanHead.h, d: humanHead.d, y: 0.42 }
+    : isMeeseeks
+      ? { w: 0.68, h: 0.76, d: 0.64, y: 0.36 }
+      : isCat
+        ? { w: 0.86, h: 0.74, d: 0.8, y: 0.24 }
+        : isDragon
+          ? { w: 0.88, h: 0.78, d: 0.84, y: 0.2 }
+          : { w: 1.0, h: 0.95, d: 0.96, y: 0 };
+
+  // --- NARIZ (personas, chibi y muñeco esbelto) ---
+  const noseStyle = config.noseStyle ?? (isHuman ? 'button' : 'none');
+  if (noseStyle !== 'none' && isSlim) {
+    const noseMat = toon(baseBodyColor.clone().offsetHSL(0, 0.05, -0.08), toonRamp);
+    const nostrilMat = new THREE.MeshBasicMaterial({ color: 0x5a2e2a });
+    const nose = new THREE.Group();
+    nose.position.set(0, headY + (isSlim ? 0.08 : 0.11) + noseDY, faceZ + 0.02);
+    nose.scale.setScalar(noseK);
+    if (noseStyle === 'button') {
+      nose.add(ellipsoid(0.045, 0.04, 0.04, noseMat, 12, true, 0.012));
+    } else if (noseStyle === 'round') {
+      nose.add(ellipsoid(0.075, 0.065, 0.06, noseMat, 14, true, 0.014));
+    } else if (noseStyle === 'pointy') {
+      const geo = new THREE.ConeGeometry(0.05, 0.15, 10);
+      const cone = new THREE.Mesh(geo, noseMat);
+      cone.rotation.x = Math.PI / 2;
+      cone.position.z = 0.05;
+      const out = new THREE.Mesh(geo, OUTLINE_MAT);
+      out.scale.set(1.2, 1.08, 1.2);
+      cone.add(out);
+      nose.add(cone);
+    } else if (noseStyle === 'wide' || noseStyle === 'snub') {
+      const n = noseStyle === 'wide'
+        ? ellipsoid(0.1, 0.045, 0.045, noseMat, 14, true, 0.012)
+        : ellipsoid(0.055, 0.05, 0.055, noseMat, 12, true, 0.012);
+      if (noseStyle === 'snub') n.rotation.x = -0.5;
+      nose.add(n);
+      [-1, 1].forEach((side) => {
+        const nostril = ellipsoid(0.014, 0.01, 0.01, nostrilMat, 8, false);
+        nostril.position.set(side * (noseStyle === 'wide' ? 0.045 : 0.022), -0.025, 0.035);
+        nose.add(nostril);
+      });
+    }
+    body.add(nose);
+  }
+
+  // --- BARBA Y BIGOTE (mismo color que el cabello) ---
+  // Barba y bigote solo en siluetas humanas: los animales y el chibi conservan su cara.
+  const facialHair = isSlim ? config.facialHair ?? 'none' : 'none';
+  const fhColor = config.beardColor ? new THREE.Color(config.beardColor) : customHairColor;
+  const fhMat = config.beardColor ? toon(fhColor, toonRamp) : hairMat;
+  if (facialHair !== 'none') {
+    const fh = new THREE.Group();
+    fh.position.copy(mouth.position);
+    fh.position.y += mustDY;
+    fh.scale.set(mustK * mustSX * (isSlim ? 1 : 1.1), mustK * (isSlim ? 1 : 1.1), mustK);
+    const addMustache = () => {
+      [-1, 1].forEach((side) => {
+        const half = ellipsoid(0.085, 0.035, 0.03, fhMat, 12, true, 0.012);
+        half.position.set(side * 0.06, 0.06, 0.02);
+        half.rotation.z = side * 0.25;
+        fh.add(half);
+        if (facialHair === 'curly') {
+          const curl = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.012, 6, 14, Math.PI * 1.5), fhMat);
+          curl.position.set(side * 0.155, 0.075, 0.015);
+          curl.rotation.z = side > 0 ? -Math.PI / 2 : Math.PI;
+          fh.add(curl);
+        }
+      });
+    };
+    if (facialHair === 'mustache' || facialHair === 'curly') addMustache();
+    if (facialHair === 'goatee') {
+      const g = ellipsoid(0.06, 0.08, 0.04, fhMat, 12, true, 0.012);
+      g.position.set(0, -0.11, -0.01);
+      fh.add(g);
+    }
+    if (facialHair === 'beard') {
+      addMustache();
+    }
+    body.add(fh);
+    if (facialHair === 'beard') {
+      // Barba completa: casquete que abraza la mandíbula por debajo de la boca.
+      const beardGeo = new THREE.SphereGeometry(1, 30, 10, Math.PI / 2 - 1.3, 2.6, Math.PI * 0.58, Math.PI * 0.34);
+      const beardMat = toon(fhColor, toonRamp);
+      (beardMat as THREE.Material).side = THREE.DoubleSide;
+      const beard = new THREE.Mesh(beardGeo, beardMat);
+      beard.scale.set(headInfo.w * 1.06, headInfo.h * 1.08, headInfo.d * 1.1);
+      beard.position.y = headInfo.y + mouthDY;
+      const out = new THREE.Mesh(beardGeo, OUTLINE_MAT);
+      out.scale.setScalar(1.03);
+      beard.add(out);
+      body.add(beard);
+      // Patillas que unen la barba con el pelo
+      [-1, 1].forEach((side) => {
+        const burn = ellipsoid(0.06, 0.2, 0.13, fhMat, 12, true, 0.015);
+        burn.position.set(side * (headInfo.w - 0.04), headInfo.y - 0.08, headInfo.d * 0.3);
+        burn.rotation.y = side * 0.5;
+        body.add(burn);
+      });
+    } else if (facialHair === 'stubble') {
+      const stubbleMat = new THREE.MeshBasicMaterial({
+        color: fhColor,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+      });
+      const shadow = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 28, 10, Math.PI / 2 - 1.1, 2.2, Math.PI * 0.62, Math.PI * 0.28),
+        stubbleMat
+      );
+      shadow.scale.set(headInfo.w * 1.012, headInfo.h * 1.012, headInfo.d * 1.012);
+      shadow.position.y = headInfo.y;
+      body.add(shadow);
+    }
+  }
+
+  // --- LUNAR ---
+  if (config.mole) {
+    const moleMesh = ellipsoid(0.024, 0.024, 0.012, darkNoseMat, 10, false);
+    const mx = (isSlim ? 0.27 : 0.36) + tstep(tune.moleX) * 0.05;
+    moleMesh.position.set(mx, headY + tstep(tune.moleY) * 0.05, faceZ * Math.sqrt(Math.max(0.2, 1 - (mx / headInfo.w) ** 2)) + 0.01);
+    body.add(moleMesh);
+  }
+
+  // --- GAFAS (independientes del gorro) ---
+  const glassesId =
+    config.glasses && config.glasses !== 'none'
+      ? config.glasses
+      : config.accessory === 'glasses'
+        ? 'round'
+        : 'none';
+  if (glassesId !== 'none') {
+    const gl = new THREE.Group();
+    gl.position.set(0, 0.2 + headY + eyeDY + glassDY, faceZ + 0.04);
+    gl.scale.setScalar(glassK);
+    const spread = (isSlim ? 0.2 : 0.25) + eyeDX;
+    const r = (isSlim ? 0.13 : 0.15) * Math.max(1, eyeK);
+    const frameMat = new THREE.MeshBasicMaterial({
+      color: config.glassesColor
+        ? new THREE.Color(config.glassesColor)
+        : glassesId === 'star' ? 0xf4b942 : glassesId === 'heart' ? 0xff4d79 : glassesId === 'goggles' ? 0xff7a1a : 0x1e2436,
+    });
+    const lensMat = new THREE.MeshBasicMaterial({
+      color:
+        glassesId === 'sun' ? 0x1e2436 : glassesId === 'goggles' ? 0x7dd3fc : glassesId === 'heart' ? 0xff9eb5 : 0xbfd8ff,
+      transparent: true,
+      opacity: glassesId === 'sun' ? 0.9 : glassesId === 'goggles' || glassesId === 'heart' ? 0.6 : 0.28,
+      depthWrite: false,
+    });
+    [-1, 1].forEach((side) => {
+      const lensG = new THREE.Group();
+      lensG.position.set(side * spread, 0, 0);
+      lensG.rotation.y = side * 0.24;
+      if (glassesId === 'heart') {
+        const h = createHeartMesh(lensMat);
+        h.scale.setScalar(r / 0.075);
+        lensG.add(h);
+      } else {
+        const segs = glassesId === 'square' ? 4 : glassesId === 'star' ? 5 : 28;
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(r, glassesId === 'goggles' ? 0.045 : 0.024, 8, segs),
+          frameMat
+        );
+        const lens = new THREE.Mesh(new THREE.CircleGeometry(r * 0.97, segs), lensMat);
+        const spin = glassesId === 'square' ? Math.PI / 4 : glassesId === 'star' ? Math.PI / 2 : 0;
+        ring.rotation.z = spin;
+        lens.rotation.z = spin;
+        if (glassesId === 'square') {
+          ring.scale.set(1.1, 0.8, 1);
+          lens.scale.set(1.1, 0.8, 1);
+        }
+        lensG.add(ring, lens);
+      }
+      gl.add(lensG);
+    });
+    if (glassesId !== 'goggles') {
+      // Patillas: siguen la curva de la cabeza desde la montura hasta la oreja.
+      const ew = headInfo.w + 0.035;
+      const ed = headInfo.d + 0.035;
+      [-1, 1].forEach((side) => {
+        const pts = [new THREE.Vector3(side * (spread + r * 0.97), 0, 0)];
+        const a0 = Math.asin(Math.min(0.98, (spread + r) / ew));
+        for (let i = 0; i <= 6; i++) {
+          const a = a0 + ((Math.PI / 2 - a0) * i) / 6;
+          pts.push(new THREE.Vector3(side * ew * Math.sin(a), 0.01 * i, ed * Math.cos(a) - (faceZ + 0.04)));
+        }
+        const arm = new THREE.Mesh(
+          new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.014, 5, false),
+          frameMat
+        );
+        gl.add(arm);
+      });
+    }
+    if (glassesId === 'goggles') {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(1, 0.035, 6, 48), frameMat);
+      band.rotation.x = Math.PI / 2;
+      band.scale.set(headInfo.w + 0.03, headInfo.d + 0.03, 1);
+      band.position.z = -(faceZ + 0.04);
+      gl.add(band);
+    } else if (glassesId !== 'heart') {
+      const bridge = new THREE.Mesh(new THREE.TorusGeometry(spread - r, 0.018, 8, 14, Math.PI), frameMat);
+      bridge.position.set(0, 0.02, 0.02);
+      gl.add(bridge);
+    }
+    body.add(gl);
+  }
+
+  const headEndIdx = body.children.length;
+
   // --- BRAZOS Y PIES TOON ---
-  const armL = ellipsoid(
-    isMeeseeks ? 0.13 : 0.17,
-    isMeeseeks ? 0.42 : 0.27,
-    isMeeseeks ? 0.13 : 0.17,
+  // (En personas son pivotes invisibles: la animación se copia a los brazos con hombro.)
+  const armL = isHuman ? new THREE.Mesh() : ellipsoid(
+    isHuman ? 0.11 : isSlim ? 0.13 : 0.17,
+    isHuman ? 0.25 : isSlim ? 0.42 : 0.27,
+    isHuman ? 0.11 : isSlim ? 0.13 : 0.17,
     limbMat,
     20,
     true,
     0.032
   );
-  const armX = isMeeseeks ? 0.62 : isCat || isDragon ? 0.78 : 0.94;
-  const armY = isMeeseeks ? -0.18 : -0.12;
+  const armX = isHuman ? 0.52 : isSlim ? 0.62 : isCat || isDragon ? 0.78 : 0.94;
+  const armY = isHuman ? -0.4 : isSlim ? -0.18 : -0.12;
   armL.position.set(-armX, armY, 0.14);
   const armR = armL.clone();
   armR.position.x = armX;
@@ -1128,15 +1647,17 @@ export function createPetScene(
   const footMeshes: THREE.Mesh[] = [];
   [-1, 1].forEach((side) => {
     const f = ellipsoid(
-      isMeeseeks ? 0.22 : 0.31,
-      isMeeseeks ? 0.15 : 0.17,
-      isMeeseeks ? 0.36 : 0.43,
-      feetMat,
+      isHuman ? 0.16 : isSlim ? 0.22 : 0.31,
+      isHuman ? 0.12 : isSlim ? 0.15 : 0.17,
+      isHuman ? 0.27 : isSlim ? 0.36 : 0.43,
+      isHuman
+        ? toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').multiplyScalar(0.5), toonRamp)
+        : feetMat,
       20,
       true,
       0.035
     );
-    f.position.set(side * (isMeeseeks ? 0.28 : 0.42), -0.88, 0.12);
+    f.position.set(side * (isHuman ? 0.14 : isSlim ? 0.28 : 0.42), -0.88, 0.12);
     f.rotation.y = side * 0.22;
     body.add(f);
     footMeshes.push(f);
@@ -1167,6 +1688,8 @@ export function createPetScene(
   const halo = new THREE.Mesh(new THREE.OctahedronGeometry(0.21, 0), haloMat);
   halo.position.copy(orb.position);
   antenna.add(stalk, orb, halo);
+  // Solo el muñeco esbelto lleva antena de voz; personas, chibi y animales hablan con la boca.
+  antenna.visible = isMeeseeks;
   body.add(antenna);
 
   // --- 10 ACCESORIOS / SOMBREROS 3D TOON ---
@@ -1175,7 +1698,9 @@ export function createPetScene(
   const royalIndigo = toon(0x3b4cca, toonRamp);
   const coral = toon(0xff4d6d, toonRamp);
   const gold = toon(0xf4c44e, toonRamp);
-  switch (config.accessory) {
+  // Las gafas antiguas ahora viven en su propia casilla (ver arriba).
+  const accessoryId: PetConfig['accessory'] = config.accessory === 'glasses' ? 'none' : config.accessory;
+  switch (accessoryId) {
     case 'beret': {
       const b = ellipsoid(0.56, 0.17, 0.52, royalIndigo, 20, true, 0.03);
       b.position.set(-0.08, 0.93, 0.08);
@@ -1214,33 +1739,6 @@ export function createPetScene(
       r.position.x = 0.1;
       bow.add(l, r, ellipsoid(0.055, 0.055, 0.055, coral, 10, false));
       acc.add(bow);
-      break;
-    }
-    case 'glasses': {
-      const frame = new THREE.MeshBasicMaterial({ color: 0x1e2436 });
-      const lens = new THREE.MeshBasicMaterial({
-        color: 0xbfd8ff,
-        transparent: true,
-        opacity: 0.28,
-      });
-      [-1, 1].forEach((side) => {
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(0.15, 0.024, 10, 28),
-          frame
-        );
-        ring.position.set(side * 0.24, 0.2, faceZ + 0.03);
-        ring.rotation.y = side * 0.24;
-        const glass = new THREE.Mesh(new THREE.CircleGeometry(0.145, 24), lens);
-        glass.position.copy(ring.position);
-        glass.rotation.copy(ring.rotation);
-        acc.add(ring, glass);
-      });
-      const bridge = new THREE.Mesh(
-        new THREE.TorusGeometry(0.06, 0.018, 8, 14, Math.PI),
-        frame
-      );
-      bridge.position.set(0, 0.22, faceZ + 0.05);
-      acc.add(bridge);
       break;
     }
     case 'headphones': {
@@ -1413,22 +1911,149 @@ export function createPetScene(
       acc.position.y = 0;
       break;
     }
+    case 'beanie': {
+      const wool = toon(accent, toonRamp);
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.62, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.52),
+        wool
+      );
+      dome.scale.set(1, 0.85, 1);
+      dome.position.set(0, 0.6, 0.02);
+      const domeOut = new THREE.Mesh(dome.geometry, OUTLINE_MAT);
+      domeOut.scale.setScalar(1.04);
+      dome.add(domeOut);
+      const cuff = cylinder(0.63, 0.63, 0.16, toon(accent.clone().offsetHSL(0, 0, -0.1), toonRamp), 28);
+      cuff.position.set(0, 0.6, 0.02);
+      const pom = ellipsoid(0.13, 0.13, 0.13, toon(0xffffff, toonRamp), 12, true, 0.02);
+      pom.position.set(0, 1.18, 0.02);
+      acc.add(dome, cuff, pom);
+      break;
+    }
+    case 'grad': {
+      const ink = toon(0x1f2a44, toonRamp);
+      const cap = cylinder(0.42, 0.46, 0.22, ink, 24);
+      cap.position.set(0, 0.88, 0.02);
+      const board = box(0.98, 0.05, 0.98, ink);
+      board.position.set(0, 1.01, 0.02);
+      board.rotation.y = Math.PI / 4;
+      const button = ellipsoid(0.05, 0.03, 0.05, gold, 8, false);
+      button.position.set(0, 1.05, 0.02);
+      const tassel = cylinder(0.02, 0.02, 0.32, gold, 6, 0);
+      tassel.position.set(0.42, 0.88, 0.3);
+      acc.add(cap, board, button, tassel);
+      break;
+    }
+    case 'tophat': {
+      const ink = toon(0x22263a, toonRamp);
+      const brim = cylinder(0.62, 0.62, 0.05, ink, 28);
+      brim.position.set(0, 0.88, 0.02);
+      const tube = cylinder(0.4, 0.42, 0.58, ink, 24);
+      tube.position.set(0, 1.18, 0.02);
+      const band = cylinder(0.425, 0.425, 0.1, coral, 24, 0);
+      band.position.set(0, 0.96, 0.02);
+      acc.add(brim, tube, band);
+      break;
+    }
+    case 'cowboy': {
+      const leather = toon(0xa0673a, toonRamp);
+      const brim = cylinder(0.98, 0.98, 0.05, leather, 32);
+      brim.scale.set(1, 1, 0.82);
+      brim.position.set(0, 0.86, 0.02);
+      const crownC = ellipsoid(0.46, 0.3, 0.42, leather, 20, true, 0.03);
+      crownC.position.set(0, 1.04, 0.02);
+      const dent = ellipsoid(0.12, 0.05, 0.3, toon(0x7c4a27, toonRamp), 12, false);
+      dent.position.set(0, 1.3, 0.02);
+      const band = cylinder(0.46, 0.46, 0.08, toon(0x3b2416, toonRamp), 24, 0);
+      band.position.set(0, 0.93, 0.02);
+      acc.add(brim, crownC, dent, band);
+      break;
+    }
     default:
       break;
   }
   body.add(acc);
+  if (accessoryId !== 'eyepatch' && accessoryId !== 'none') {
+    // Los gorros se modelaron sobre la cabeza del chibi (ancho 1, cima en 0.95):
+    // se ajustan al ancho, fondo y altura de la cabeza de cada especie para que asienten bien.
+    // El pelo da volumen: el gorro se apoya encima y algo más ancho.
+    const hairLift: Record<string, number> = {
+      none: 0, short: 0.15, bob: 0.15, long: 0.15, braids: 0.14, ponytail: 0.13, twintails: 0.13,
+      spiky: 0.2, curly: 0.2, bun: 0.16, pompadour: 0.22, mohawk: 0.24, afro: 0.38,
+    };
+    const lift = hairLift[hairStyle] ?? 0.15;
+    const widen = 1 + lift * 0.6;
+    const kx = (headInfo.w / 1.0) * widen;
+    const kz = (headInfo.d / 0.96) * widen;
+    const ky = (kx + kz) / 2;
+    acc.scale.set(kx * 1.03, ky, kz * 1.04);
+    acc.position.y = headInfo.y + headInfo.h + lift - 0.95 * ky;
+  }
+  if (isHuman) {
+    // Reunimos la cabeza (cara, pelo, gafas, gorro…) y la ponemos a escala Mii sobre el cuerpo.
+    const headRig = new THREE.Group();
+    const parts = [...humanHeadParts, ...body.children.slice(headStartIdx, headEndIdx), acc];
+    parts.forEach((o) => {
+      body.remove(o);
+      o.position.y -= rigY;
+      headRig.add(o);
+    });
+    headRig.scale.setScalar(HUMAN_HEAD_K);
+    headRig.position.y = HUMAN_HEAD_Y;
+    body.add(headRig);
+  }
 
   // --- ROPA DEL TORSO (chaleco pirata, marinero, abrigo, sudadera, bufanda) ---
   const outfitId = config.outfit ?? 'none';
-  if (outfitId !== 'none') {
-    const torso =
-      isMeeseeks
+  const torso =
+      isHuman
+        ? { y: -0.19, sx: 0.38, sy: 0.36, sz: 0.28, from: 0.3 }
+        : isMeeseeks
         ? { y: -0.28, sx: 0.52, sy: 0.78, sz: 0.46, from: 0.3 }
         : isCat
           ? { y: -0.36, sx: 0.72, sy: 0.66, sz: 0.68, from: 0.3 }
           : isDragon
             ? { y: -0.34, sx: 0.78, sy: 0.68, sz: 0.74, from: 0.3 }
-            : { y: 0, sx: 1.0, sy: 0.95, sz: 0.96, from: 0.58 };
+            : { y: 0, sx: 1.0, sy: 0.95, sz: 0.96, from: 0.53 };
+  /** Color de las mangas de cada prenda (null = prenda sin mangas). */
+  const sleeveColorFor = (id: string): THREE.ColorRepresentation | null => {
+    switch (id) {
+      case 'none':
+      case 'vest':
+      case 'scarf':
+        return null;
+      case 'sailor':
+      case 'shirttie':
+      case 'overalls':
+      case 'labcoat':
+      case 'stripes':
+        return 0xffffff;
+      case 'coat':
+        return 0x2b3b5c;
+      case 'hoodie':
+        return 0x22b567;
+      default:
+        return accent;
+    }
+  };
+  const sleeveColor = sleeveColorFor(outfitId);
+  if (isHuman) {
+    humanSleeves.forEach((sl) => {
+      (sl.material as THREE.MeshToonMaterial).color.set(sleeveColor ?? accent);
+    });
+  } else if (sleeveColor !== null) {
+    // Mangas sobre los brazos de cualquier especie: así la ropa se lee como ropa.
+    const ax = isSlim ? 0.13 : 0.17;
+    const ay = isSlim ? 0.42 : 0.27;
+    [armL, armR].forEach((arm) => {
+      const sl = ellipsoid(ax * 1.14, ay * 0.58, ax * 1.14, toon(sleeveColor, toonRamp), 16, true, 0.025);
+      sl.position.y = ay * 0.45;
+      arm.add(sl);
+    });
+  }
+  if (outfitId !== 'none' && outfitId !== 'scarf' && outfitId !== 'vest') {
+    bellyParts.forEach((b) => (b.visible = false));
+  }
+  if (outfitId !== 'none') {
     const shell = (
       color: THREE.ColorRepresentation,
       opts: { gap?: number; from?: number; grow?: number } = {}
@@ -1445,7 +2070,7 @@ export function createPetScene(
         Math.PI * (1 - (opts.from ?? torso.from)) * 0.86
       );
       const mat = toon(color, toonRamp);
-      (mat as THREE.MeshToonMaterial).side = THREE.DoubleSide;
+      (mat as THREE.Material).side = THREE.DoubleSide;
       const m = new THREE.Mesh(geo, mat);
       m.scale.set(torso.sx * grow, torso.sy * grow, torso.sz * grow);
       m.position.y = torso.y;
@@ -1457,7 +2082,169 @@ export function createPetScene(
     };
     const collarY = torso.y + torso.sy * Math.cos(Math.PI * torso.from) * 1.03;
     const collarR = Math.sqrt(Math.max(0.05, 1 - Math.cos(Math.PI * torso.from) ** 2)) * torso.sx * 1.04;
-    if (outfitId === 'vest') {
+    const clothColor = accent.clone();
+    if (outfitId === 'tshirt') {
+      shell(clothColor);
+      const emblem = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), toon(0xffffff, toonRamp));
+      emblem.scale.set(1, 1, 0.35);
+      emblem.position.set(0.12 * torso.sx, torso.y - 0.05 * torso.sy + 0.12 * torso.sy, torso.sz * 1.02);
+      body.add(emblem);
+    } else if (outfitId === 'polo') {
+      shell(clothColor);
+      const collarMat = toon(clothColor.clone().offsetHSL(0, 0, 0.12), toonRamp);
+      [-1, 1].forEach((side) => {
+        const flap = ellipsoid(0.11 * Math.max(0.6, torso.sx), 0.05, 0.08, collarMat, 10, true, 0.015);
+        flap.position.set(side * collarR * 0.45, collarY - 0.02, torso.sz * 0.78);
+        flap.rotation.set(0.5, side * 0.4, side * -0.4);
+        body.add(flap);
+      });
+      [0, 1].forEach((i) => {
+        const btn = ellipsoid(0.022, 0.022, 0.012, toon(0xffffff, toonRamp), 8, false);
+        const y = collarY - 0.08 - i * 0.07;
+        btn.position.set(0, y, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((y - torso.y) / torso.sy) ** 2)) + 0.025);
+        body.add(btn);
+      });
+    } else if (outfitId === 'stripes') {
+      shell(0xffffff);
+      const stripeMat = toon(clothColor, toonRamp);
+      [0.42, 0.52, 0.62, 0.72, 0.82].forEach((f) => {
+        const y = torso.y + torso.sy * Math.cos(Math.PI * f) * 1.035;
+        const r = Math.sin(Math.PI * f) * torso.sx * 1.04;
+        if (f < torso.from) return;
+        const stripe = new THREE.Mesh(new THREE.TorusGeometry(r, 0.03, 6, 40), stripeMat);
+        stripe.rotation.x = Math.PI / 2;
+        stripe.scale.set(1, torso.sz / torso.sx, 1);
+        stripe.position.y = y;
+        body.add(stripe);
+      });
+    } else if (outfitId === 'blazer') {
+      shell(0xffffff, { grow: 1.02 });
+      shell(clothColor, { gap: 0.7, grow: 1.06 });
+      const lapelMat = toon(clothColor.clone().offsetHSL(0, 0, -0.12), toonRamp);
+      [-1, 1].forEach((side) => {
+        const lapel = new THREE.Mesh(new THREE.BoxGeometry(0.06, torso.sy * 0.55, 0.03), lapelMat);
+        const y = collarY - torso.sy * 0.3;
+        lapel.position.set(side * 0.1 * Math.max(0.6, torso.sx), y, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((y - torso.y) / torso.sy) ** 2)) + 0.04);
+        lapel.rotation.z = side * 0.35;
+        body.add(lapel);
+      });
+      const crest = ellipsoid(0.045, 0.05, 0.015, gold, 8, false);
+      const cy = torso.y + torso.sy * 0.25;
+      crest.position.set(-0.24 * torso.sx, cy, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((cy - torso.y) / torso.sy) ** 2 - 0.06)) + 0.04);
+      body.add(crest);
+    } else if (outfitId === 'jersey') {
+      shell(clothColor);
+      const white = toon(0xffffff, toonRamp);
+      const band = new THREE.Mesh(new THREE.TorusGeometry(Math.sin(Math.PI * 0.62) * torso.sx * 1.045, 0.045, 6, 40), white);
+      band.rotation.x = Math.PI / 2;
+      band.scale.set(1, torso.sz / torso.sx, 1);
+      band.position.y = torso.y + torso.sy * Math.cos(Math.PI * 0.62) * 1.035;
+      const neck = new THREE.Mesh(new THREE.TorusGeometry(collarR * 0.95, 0.04, 8, 36), white);
+      neck.rotation.x = Math.PI / 2;
+      neck.scale.set(1, torso.sz / torso.sx, 1);
+      neck.position.y = collarY;
+      body.add(band, neck);
+    } else if (outfitId === 'labcoat') {
+      shell(clothColor, { grow: 1.02 });
+      shell(0xffffff, { gap: 0.5, grow: 1.07 });
+      const coatMat = toon(0xffffff, toonRamp);
+      (coatMat as THREE.Material).side = THREE.DoubleSide;
+      const tailGeo = new THREE.CylinderGeometry(torso.sx * 1.02, torso.sx * 1.12, torso.sy * 0.7, 28, 1, true, 0.35, Math.PI * 2 - 0.7);
+      const tails = new THREE.Mesh(tailGeo, coatMat);
+      tails.position.y = torso.y - torso.sy * 0.95;
+      const tailsOut = new THREE.Mesh(tailGeo, OUTLINE_MAT);
+      tailsOut.scale.set(1.03, 1, 1.03);
+      tails.add(tailsOut);
+      const pocket = ellipsoid(0.07, 0.05, 0.015, toon(0x60a5fa, toonRamp), 8, false);
+      const py = torso.y + torso.sy * 0.2;
+      pocket.position.set(-0.26 * torso.sx, py, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((py - torso.y) / torso.sy) ** 2 - 0.08)) + 0.05);
+      body.add(tails, pocket);
+    } else if (outfitId === 'raincoat') {
+      shell(clothColor, { grow: 1.05 });
+      const hood = ellipsoid(0.55 * torso.sx, 0.28, 0.28, toon(clothColor, toonRamp), 16, true, 0.03);
+      hood.position.set(0, collarY + 0.04, -torso.sz * 0.72);
+      body.add(hood);
+      [0, 1, 2].forEach((i) => {
+        const toggle = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.05, 4, 8), toon(0x7c4a27, toonRamp));
+        toggle.rotation.z = Math.PI / 2;
+        const y = collarY - 0.1 - i * torso.sy * 0.28;
+        toggle.position.set(0, y, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((y - torso.y) / torso.sy) ** 2)) + 0.05);
+        body.add(toggle);
+      });
+    } else if (outfitId === 'shirttie') {
+      shell(0xffffff);
+      const tieMat = toon(clothColor, toonRamp);
+      const knot = ellipsoid(0.05, 0.045, 0.035, tieMat, 10, true, 0.012);
+      knot.position.set(0, collarY - 0.05, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((collarY - 0.05 - torso.y) / torso.sy) ** 2)) + 0.03);
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.07, torso.sy * 0.9, 4), tieMat);
+      blade.rotation.z = Math.PI;
+      blade.rotation.y = Math.PI / 4;
+      blade.scale.set(1, 1, 0.35);
+      const by = collarY - 0.07 - torso.sy * 0.45;
+      blade.position.set(0, by, torso.sz * Math.sqrt(Math.max(0.1, 1 - ((by - torso.y) / torso.sy) ** 2)) + 0.03);
+      const bladeOut = new THREE.Mesh(blade.geometry, OUTLINE_MAT);
+      bladeOut.scale.setScalar(1.12);
+      blade.add(bladeOut);
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(collarR * 0.98, 0.04, 8, 36), toon(0xffffff, toonRamp));
+      collar.rotation.x = Math.PI / 2;
+      collar.scale.set(1, torso.sz / torso.sx, 1);
+      collar.position.y = collarY;
+      body.add(knot, blade, collar);
+    } else if (outfitId === 'dress') {
+      shell(clothColor);
+      const skirtMat = toon(clothColor, toonRamp);
+      (skirtMat as THREE.Material).side = THREE.DoubleSide;
+      const skirtGeo = new THREE.CylinderGeometry(torso.sx * 0.9, torso.sx * 1.35, torso.sy * 1.1, 28, 1, true);
+      const skirt = new THREE.Mesh(skirtGeo, skirtMat);
+      skirt.position.y = torso.y - torso.sy * 0.75;
+      const skirtOut = new THREE.Mesh(skirtGeo, OUTLINE_MAT);
+      skirtOut.scale.set(1.03, 1, 1.03);
+      skirt.add(skirtOut);
+      const belt = new THREE.Mesh(new THREE.TorusGeometry(torso.sx * 0.9, 0.03, 6, 36), toon(0xffffff, toonRamp));
+      belt.rotation.x = Math.PI / 2;
+      belt.position.y = torso.y - torso.sy * 0.2;
+      body.add(skirt, belt);
+    } else if (outfitId === 'overalls') {
+      shell(0xffffff, { grow: 1.02 });
+      shell(clothColor, { from: 0.55, grow: 1.05 });
+      const denim = toon(clothColor, toonRamp);
+      const bib = ellipsoid(0.42 * torso.sx, 0.3 * torso.sy, 0.05, denim, 14, true, 0.015);
+      bib.position.set(0, torso.y + 0.08 * torso.sy, torso.sz * 0.97);
+      body.add(bib);
+      [-1, 1].forEach((side) => {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.06, torso.sy * 0.75, 0.03), denim);
+        strap.position.set(side * 0.28 * torso.sx, torso.y + 0.45 * torso.sy, torso.sz * 0.86);
+        strap.rotation.x = -0.35;
+        const btn = ellipsoid(0.03, 0.03, 0.02, gold, 8, false);
+        btn.position.set(side * 0.28 * torso.sx, torso.y + 0.22 * torso.sy, torso.sz * 1.0);
+        body.add(strap, btn);
+      });
+    } else if (outfitId === 'sweater') {
+      shell(clothColor);
+      const knit = toon(0xffffff, toonRamp);
+      [0.6, 0.7].forEach((f) => {
+        const y = torso.y + torso.sy * Math.cos(Math.PI * f) * 1.035;
+        const r = Math.sin(Math.PI * f) * torso.sx * 1.04;
+        const stripe = new THREE.Mesh(new THREE.TorusGeometry(r, 0.026, 6, 40), knit);
+        stripe.rotation.x = Math.PI / 2;
+        stripe.scale.set(1, torso.sz / torso.sx, 1);
+        stripe.position.y = y;
+        body.add(stripe);
+      });
+      const neck = new THREE.Mesh(new THREE.TorusGeometry(collarR * 0.95, 0.05, 8, 36), toon(clothColor.clone().offsetHSL(0, 0, -0.1), toonRamp));
+      neck.rotation.x = Math.PI / 2;
+      neck.scale.set(1, torso.sz / torso.sx, 1);
+      neck.position.y = collarY;
+      body.add(neck);
+    } else if (outfitId === 'jacket') {
+      shell(0xffffff, { grow: 1.02 });
+      shell(clothColor, { gap: 0.55, grow: 1.06 });
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(collarR * 1.02, 0.055, 8, 36), toon(clothColor.clone().offsetHSL(0, 0, -0.14), toonRamp));
+      collar.rotation.x = Math.PI / 2;
+      collar.scale.set(1, torso.sz / torso.sx, 1);
+      collar.position.y = collarY;
+      body.add(collar);
+    } else if (outfitId === 'vest') {
       shell(0xe63946, { gap: 0.9 });
       [-1, 1].forEach((side) => {
         const btn = ellipsoid(0.035, 0.035, 0.02, gold, 8, false);
@@ -1521,7 +2308,7 @@ export function createPetScene(
       body.add(ring, hang);
     }
   }
-  if (['cap', 'wizard', 'crown', 'beret', 'halo', 'strawhat', 'captain', 'bandana'].includes(config.accessory)) {
+  if (['cap', 'wizard', 'crown', 'beret', 'halo', 'strawhat', 'captain', 'bandana', 'beanie', 'grad', 'tophat', 'cowboy'].includes(accessoryId)) {
     antenna.rotation.z = -0.35;
   }
 
@@ -1599,12 +2386,168 @@ export function createPetScene(
   sleepBubble.position.set(0.16, headY + 0.08, faceZ + 0.08);
   body.add(sleepBubble);
 
+  // --- CRECIMIENTO: HUEVO → BEBÉ → NIÑO → JOVEN → ADULTO ---
+  const growth = Math.max(0, Math.min(1, options.growth ?? 0));
+  const stageScale = petStage === 'baby' ? 0.62 : petStage === 'kid' ? 0.78 : petStage === 'teen' ? 0.9 : 1;
+  /** Baja al personaje escalado para que siga pisando la roca. */
+  const stageLift = -0.98 * (1 - stageScale);
+  root.scale.setScalar(stageScale);
+  const headTop = isHuman ? HUMAN_HEAD_Y + humanHead.h * HUMAN_HEAD_K : isSlim ? 1.12 : isCat || isDragon ? 0.98 : 0.95;
+  const eggTint = new THREE.Color(0xfff8ec).lerp(baseBodyColor, 0.3);
+  const eggMat = toon(eggTint, toonRamp);
+  let eggGroup: THREE.Group | null = null;
+  const eggCracks: THREE.Object3D[] = [];
+
+  if (petStage === 'egg') {
+    body.visible = false;
+    eggGroup = new THREE.Group();
+    // Silueta de huevo (más estrecha arriba) con contorno toon
+    const profile: THREE.Vector2[] = [];
+    for (let i = 0; i <= 28; i++) {
+      const a = (i / 28) * Math.PI;
+      const y = -Math.cos(a) * 0.86;
+      const r = Math.sin(a) * 0.66 * (y > 0 ? 1 - 0.2 * (y / 0.86) : 1);
+      profile.push(new THREE.Vector2(Math.max(0.001, r), y));
+    }
+    const eggGeo = new THREE.LatheGeometry(profile, 36);
+    const shellMesh = new THREE.Mesh(eggGeo, eggMat);
+    const shellOut = new THREE.Mesh(eggGeo, OUTLINE_MAT);
+    shellOut.scale.setScalar(1.045);
+    shellMesh.add(shellOut);
+    eggGroup.add(shellMesh);
+    const radiusAt = (y: number) => {
+      const a = Math.acos(Math.max(-1, Math.min(1, -y / 0.86)));
+      return Math.sin(a) * 0.66 * (y > 0 ? 1 - 0.2 * (y / 0.86) : 1);
+    };
+    // Manchas del color de los detalles
+    const spotMat = toon(accent, toonRamp);
+    [
+      [-0.45, 0.4], [0.35, 1.3], [0.2, 2.5], [-0.25, 3.4], [0.5, 4.4], [-0.5, 5.3], [0.05, 0.1], [0.55, 2.0],
+    ].forEach(([y, th]) => {
+      const r = radiusAt(y!);
+      const spot = ellipsoid(0.1, 0.085, 0.03, spotMat, 12, false);
+      spot.position.set(Math.sin(th!) * r, y!, Math.cos(th!) * r);
+      spot.lookAt(spot.position.clone().multiplyScalar(2));
+      eggGroup!.add(spot);
+    });
+    // Franja en zigzag del color principal
+    const zigMat = toon(baseBodyColor, toonRamp);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(radiusAt(-0.02) + 0.005, 0.035, 8, 48), zigMat);
+    band.rotation.x = Math.PI / 2;
+    band.position.y = -0.04;
+    eggGroup.add(band);
+    for (let i = 0; i < 16; i++) {
+      const th = (i / 16) * Math.PI * 2;
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.13, 4), zigMat);
+      const r = radiusAt(0.04);
+      tooth.position.set(Math.sin(th) * r, 0.04, Math.cos(th) * r);
+      tooth.rotation.y = th;
+      tooth.scale.set(1, 1, 0.3);
+      eggGroup.add(tooth);
+    }
+    // Grietas que aparecen al acercarse a la eclosión
+    const crackMat = new THREE.MeshBasicMaterial({ color: 0x3a2a1e });
+    const crackPath = [
+      [-0.26, 0.36, 0.5], [-0.12, 0.28, -0.6], [0.0, 0.38, 0.6], [0.13, 0.28, -0.6], [0.26, 0.37, 0.5],
+    ];
+    crackPath.forEach(([x, y, rot], i) => {
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.022, 0.02), crackMat);
+      const r = radiusAt(y!);
+      const z = Math.sqrt(Math.max(0, r * r - x! * x!)) + 0.005;
+      seg.position.set(x!, y!, z);
+      seg.lookAt(new THREE.Vector3(x! * 2, y!, z * 2));
+      seg.rotateZ(rot!);
+      seg.visible = growth > 0.25 + i * 0.12;
+      eggGroup!.add(seg);
+      eggCracks.push(seg);
+    });
+    // Nido de paja
+    const straw = toon(0xd9a85b, toonRamp);
+    const nest = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.15, 8, 28), straw);
+    nest.rotation.x = Math.PI / 2;
+    nest.position.y = -0.8;
+    const nestOut = new THREE.Mesh(nest.geometry, OUTLINE_MAT);
+    nestOut.scale.setScalar(1.04);
+    nest.add(nestOut);
+    eggGroup.add(nest);
+    for (let i = 0; i < 9; i++) {
+      const th = (i / 9) * Math.PI * 2;
+      const twig = cylinder(0.018, 0.018, 0.34, toon(0xb7853f, toonRamp), 6, 0);
+      twig.position.set(Math.sin(th) * 0.6, -0.74, Math.cos(th) * 0.6);
+      twig.rotation.set(Math.PI / 2, 0, th + 0.6);
+      eggGroup.add(twig);
+    }
+    eggGroup.position.y = -0.08;
+    root.add(eggGroup);
+  } else if (petStage === 'baby') {
+    // Recién nacido: lleva la mitad del cascarón como gorrito.
+    acc.visible = false;
+    const capGroup = new THREE.Group();
+    const capMat = toon(eggTint, toonRamp);
+    (capMat as THREE.Material).side = THREE.DoubleSide;
+    const capGeo = new THREE.SphereGeometry(0.5, 22, 10, 0, Math.PI * 2, 0, Math.PI * 0.42);
+    const cap = new THREE.Mesh(capGeo, capMat);
+    const capOut = new THREE.Mesh(capGeo, OUTLINE_MAT);
+    capOut.scale.setScalar(1.05);
+    cap.add(capOut);
+    capGroup.add(cap);
+    const rimY = 0.5 * Math.cos(Math.PI * 0.42);
+    const rimR = 0.5 * Math.sin(Math.PI * 0.42);
+    for (let i = 0; i < 12; i++) {
+      const th = (i / 12) * Math.PI * 2;
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 4), capMat);
+      tooth.position.set(Math.sin(th) * rimR, rimY - 0.05, Math.cos(th) * rimR);
+      tooth.rotation.set(Math.PI, th, 0);
+      tooth.scale.set(1, 1, 0.35);
+      capGroup.add(tooth);
+    }
+    const spot = ellipsoid(0.09, 0.08, 0.03, toon(accent, toonRamp), 10, false);
+    spot.position.set(0.18, 0.4, 0.22);
+    spot.lookAt(spot.position.clone().multiplyScalar(2));
+    capGroup.add(spot);
+    capGroup.scale.setScalar(isSlim ? 0.8 : 1);
+    const hasHair = (config.hairStyle ?? (isHuman ? 'short' : isMeeseeks ? 'spiky' : 'none')) !== 'none';
+    capGroup.position.set(0, headTop - (hasHair ? 0.16 : 0.32), -0.02);
+    capGroup.rotation.z = 0.22;
+    body.add(capGroup);
+    if (config.species === 'puff' && !hasHair) {
+      // Rizo de recién nacido
+      const curl = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 8, 18, Math.PI * 1.6), toon(baseBodyColor.clone().offsetHSL(0, 0.05, -0.1), toonRamp));
+      curl.position.set(-0.22, headTop + 0.02, 0.2);
+      curl.rotation.set(0, 0.4, 0.6);
+      body.add(curl);
+    }
+  } else if (petStage === 'kid') {
+    // Pequeño explorador: mochila escolar a la espalda.
+    const packMat = toon(accent.clone().offsetHSL(0.5, 0, 0), toonRamp);
+    const pack = ellipsoid(0.36 * Math.max(0.7, torso.sx), 0.34, 0.16, packMat, 18, true, 0.025);
+    pack.position.set(0, torso.y + 0.04, -torso.sz - 0.08);
+    const flap = ellipsoid(0.3 * Math.max(0.7, torso.sx), 0.14, 0.06, toon(accent.clone().offsetHSL(0.5, 0, -0.1), toonRamp), 14, true, 0.015);
+    flap.position.set(0, torso.y + 0.24, -torso.sz - 0.2);
+    body.add(pack, flap);
+  }
+
+  if (options.focus === 'face' && !inHouse && !options.house) {
+    // Primer plano de la cara, como al editar rasgos en el Mii Maker.
+    const fy = isHuman ? HUMAN_HEAD_Y : headY;
+    camera.position.set(0, fy + 0.3, isHuman ? 3.4 : 4.1);
+    camera.lookAt(0, fy + 0.18, 0);
+  }
+
   // Multiplicadores de complexión física (bodyScale)
   const scaleConfig = config.bodyScale ?? 'normal';
+  // Altura y peso estilo Mii Maker (si existen) o la complexión clásica.
   const baseScaleX =
-    scaleConfig === 'chubby' ? 1.15 : scaleConfig === 'tall' ? 0.9 : scaleConfig === 'chibi' ? 1.05 : 1;
+    config.weight !== undefined
+      ? 0.86 + Math.max(0, Math.min(1, config.weight)) * 0.3
+      : scaleConfig === 'chubby' ? 1.15 : scaleConfig === 'tall' ? 0.9 : scaleConfig === 'chibi' ? 1.05 : 1;
+  // El chibi bebé es todavía más redondito.
+  const babyRound = petStage === 'baby' && config.species === 'puff' ? 0.92 : 1;
   const baseScaleY =
-    scaleConfig === 'tall' ? 1.13 : scaleConfig === 'chibi' ? 0.92 : scaleConfig === 'chubby' ? 0.95 : 1;
+    babyRound *
+    (config.height !== undefined
+      ? 0.86 + Math.max(0, Math.min(1, config.height)) * 0.28
+      : scaleConfig === 'tall' ? 1.13 : scaleConfig === 'chibi' ? 0.92 : scaleConfig === 'chubby' ? 0.95 : 1);
 
   const s = {
     mood: 'ok' as PetMood,
@@ -1691,7 +2634,14 @@ export function createPetScene(
 
     root.position.x = rageJitterX;
     root.position.y =
-      s.jumpY + Math.sin(t * breath) * 0.03 - (sad || sleepy ? 0.04 : 0);
+      stageLift + s.jumpY + Math.sin(t * breath) * 0.03 - (sad || sleepy ? 0.04 : 0);
+    if (eggGroup) {
+      // El huevo se mece; más fuerte cuanto más cerca está de eclosionar o al tocarlo.
+      const shake = 0.05 * (1 + growth * 2.2) + s.joy * 0.12 + (s.speaking ? 0.05 : 0);
+      eggGroup.rotation.z = Math.sin(t * (2.2 + growth * 3)) * shake;
+      eggGroup.rotation.x = Math.sin(t * 1.7) * 0.03;
+      eggCracks.forEach((c, i) => (c.visible = growth > 0.25 + i * 0.12 || s.joy > 0.5));
+    }
 
     islandPedestal.position.y = -1.04 + Math.sin(t * 1.4) * 0.025;
     islandPedestal.rotation.y = s.rotY * 0.35;
@@ -1726,7 +2676,7 @@ export function createPetScene(
       s.lookAt = t + 1.2 + Math.random() * 2.5;
     }
     s.look.lerp(s.lookTarget, Math.min(1, dt * 6));
-    eyes.position.set(s.look.x, 0.17 + headY + s.look.y, 0);
+    eyes.position.set(s.look.x, 0.17 + headY + eyeDY - rigY + s.look.y, 0);
 
     const eyeOpen = sleepy
       ? 0.16
@@ -1737,7 +2687,7 @@ export function createPetScene(
           : happy && config.eyeStyle !== 'happy' && s.joy > 0
             ? 0.45
             : 1;
-    eyeParts.forEach((e) => (e.scale.y = blinkScale * eyeOpen));
+    eyeParts.forEach((e) => e.scale.set(eyeK * eyeSX, blinkScale * eyeOpen * eyeK * eyeSY, eyeK));
 
     // Cejas expresivas 3D según emoción (enojo \ /, tristeza / \, normal)
     const targetBrowTilt =
@@ -1750,9 +2700,9 @@ export function createPetScene(
             : celebrate || love
               ? 0.16
               : baseBrowAngle;
-    browL.rotation.z = targetBrowTilt;
-    browR.rotation.z = -targetBrowTilt;
-    browL.position.y = browBaseY + (rage || angry ? -0.05 : celebrate ? 0.04 : 0);
+    browL.rotation.z = targetBrowTilt - browRot;
+    browR.rotation.z = -targetBrowTilt + browRot;
+    browL.position.y = browBaseY - rigY + (rage || angry ? -0.05 : celebrate ? 0.04 : 0);
     browR.position.y = browL.position.y;
 
     // Boca según estado (hablando, comiendo, enojado, feliz)
@@ -1798,6 +2748,11 @@ export function createPetScene(
         (wave ? Math.sin(t * 14 + 1) * 0.55 + 0.45 : Math.sin(t * breath) * 0.08);
       footMeshes[0]!.position.y = -0.88;
       footMeshes[1]!.position.y = -0.88;
+    }
+    if (humanArms) {
+      // Brazos colgando desde el hombro (el ángulo base de la animación es para brazos-bolita).
+      humanArms[0]!.rotation.z = -armL.rotation.z + 0.42;
+      humanArms[1]!.rotation.z = -armR.rotation.z - 0.42;
     }
 
     if (tailGroup) {

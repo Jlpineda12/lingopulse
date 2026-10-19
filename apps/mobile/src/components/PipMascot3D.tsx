@@ -17,7 +17,7 @@ const PET_MESSAGES_ES = [
 /** Mascota de la Ruta guiada: tu compañero con boina (UK) o gorra (US). */
 export function PipMascot3D() {
   const { locale, pipMessage, setPipMessage, pipIsSpeaking, speakWithPip, lesson } = useAppState();
-  const { pet, mood, stats, petThePet } = useGame();
+  const { pet, mood, stats, petThePet, petStage } = useGame();
   const [count, setCount] = useState(0);
   const isUK = locale === 'en-GB';
 
@@ -27,6 +27,8 @@ export function PipMascot3D() {
         <Pet3D
           config={{ ...pet, accessory: isUK ? 'beret' : 'cap' }}
           mood={mood}
+          stage={petStage.stage}
+          growth={petStage.progress}
           energy={stats.energy / 100}
           speaking={pipIsSpeaking}
           size={140}
