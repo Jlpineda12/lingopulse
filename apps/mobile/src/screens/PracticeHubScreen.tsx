@@ -12,7 +12,7 @@ import {
   READING_PASSAGES,
   scorePlacementTest,
   SPEAKING_TOPICS,
-  isUnitUnlocked,
+  unitLockState,
   unitsForLevel,
   unitStars,
   WRITING_PROMPTS,
@@ -84,7 +84,7 @@ interface IslandItem {
 
 export function PracticeHubScreen() {
   const { locale } = useAppState();
-  const { progress, setLevel, openScreen, completeActivity } = useGame();
+  const { progress, setLevel, openScreen, completeActivity, todayKey } = useGame();
   const [activeTab, setActiveTab] = useState<HubCategory>('topics');
   const [lockedHint, setLockedHint] = useState<string | null>(null);
   const [levelPickerOpen, setLevelPickerOpen] = useState(false);
@@ -218,7 +218,7 @@ export function PracticeHubScreen() {
         <Reveal index={2}>
           <WorldBiomeHeader
             biomeKey="topics"
-            description={`Cada isla es una clase: primero la teoría (vocabulario y gramática), luego reading, listening, speaking y writing, y al final un quiz. ${conquered}/${units.length} islas conquistadas · ${totalStars} estrellas.`}
+            description={`Cada isla es una unidad completa: vocabulario, gramática, situaciones de la vida diaria, reading, listening, speaking, writing y un quiz final. Una isla nueva cada día. ${conquered}/${units.length} conquistadas · ${totalStars} ⭐`}
             totalCount={units.length}
           />
         </Reveal>
@@ -235,14 +235,15 @@ export function PracticeHubScreen() {
         <IslandSkyBackdrop>
           {units.map((u, idx) => {
             const stars = unitStars(all[u.id]);
-            const unlocked = isUnitUnlocked(units, u.id, all);
+            const lock = unitLockState(units, u.id, all, todayKey);
+            const unlocked = lock === 'open';
             const isLast = idx === units.length - 1;
             return (
               <Reveal key={u.id} index={3 + Math.min(idx, 8)}>
                 <FloatingIslandQuestNode
                   index={idx}
                   biomeKey="topics"
-                  stepLabel={`ISLA ${u.n} · ${stars ? '★'.repeat(stars) + '☆'.repeat(3 - stars) : unlocked ? u.titleEs : '🔒'}`}
+                  stepLabel={`ISLA ${u.n} · ${stars ? '★'.repeat(stars) + '☆'.repeat(3 - stars) : unlocked ? u.titleEs : lock === 'tomorrow' ? '🌙 mañana' : '🔒'}`}
                   title={`${u.emoji} ${u.title}`}
                   level={u.level}
                   done={stars > 0}
@@ -250,7 +251,11 @@ export function PracticeHubScreen() {
                   showCompanion={idx === currentIdx}
                   onPress={() => {
                     if (!unlocked) {
-                      setLockedHint(`🔒 "${u.title}" se abre cuando conquistes la isla ${u.n - 1} (aprueba su quiz final).`);
+                      setLockedHint(
+                        lock === 'tomorrow'
+                          ? `🌙 "${u.title}" se abre mañana. Una isla por día: hoy repasa lo aprendido con la práctica extra o el Cofre Diario.`
+                          : `🔒 "${u.title}" se abre cuando conquistes la isla ${u.n - 1} (aprueba su quiz final).`
+                      );
                       playSfx('wrong');
                       return;
                     }
@@ -622,7 +627,7 @@ export function PracticeHubScreen() {
       <Reveal index={0}>
         <View style={ui.rowBetween}>
           <View style={{ flex: 1 }}>
-            <LargeTitle subtitle="Elige un mundo">Islas</LargeTitle>
+            <LargeTitle subtitle={activeTab === 'topics' ? 'Tu ruta de unidades' : 'Práctica extra'}>Islas</LargeTitle>
           </View>
           <PressableScale onPress={() => setLevelPickerOpen((v) => !v)} hapticKind="select">
             <View style={[styles.rankPill, { borderColor: levelMeta.color }]}>
@@ -658,10 +663,32 @@ export function PracticeHubScreen() {
         </Reveal>
       ) : null}
 
-      {/* Mundos: cuadrícula 3×2, todos visibles */}
+      {/* La ruta de unidades es el camino principal; las islas por habilidad son práctica extra. */}
+      <Reveal index={1}>
+        <View style={styles.segment}>
+          {(['route', 'extra'] as const).map((sec) => {
+            const active = sec === 'route' ? activeTab === 'topics' : activeTab !== 'topics';
+            return (
+              <PressableScale
+                key={sec}
+                hapticKind="select"
+                onPress={() => setActiveTab(sec === 'route' ? 'topics' : activeTab === 'topics' ? 'speaking' : activeTab)}
+                style={[styles.segmentItem, active && styles.segmentItemActive]}
+              >
+                <Ionicons name={sec === 'route' ? 'map' : 'barbell'} size={15} color={active ? THEME.ink : THEME.ink2} />
+                <Text style={[styles.segmentText, active && { color: THEME.ink }]}>
+                  {sec === 'route' ? 'Mi ruta' : 'Práctica extra'}
+                </Text>
+              </PressableScale>
+            );
+          })}
+        </View>
+      </Reveal>
+
+      {activeTab !== 'topics' ? (
       <Reveal index={1}>
         <View style={styles.worldGrid}>
-          {HUB_WORLDS.map((w) => {
+          {HUB_WORLDS.filter((w) => w.id !== 'topics').map((w) => {
             const active = activeTab === w.id;
             const palette = BIOME_PALETTES[w.biome];
             return (
@@ -686,6 +713,7 @@ export function PracticeHubScreen() {
           })}
         </View>
       </Reveal>
+      ) : null}
 
       {/* Mapa de Islas Flotantes del Mundo Activo */}
       {(activeTab === 'speaking' ||
@@ -721,6 +749,24 @@ const styles = StyleSheet.create({
     color: THEME.ink,
   },
   worldGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: THEME.fill,
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  segmentItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 11,
+  },
+  segmentItemActive: { backgroundColor: '#FFFFFF', ...SHADOW.card },
+  segmentText: { fontSize: 14, fontWeight: '800', color: THEME.ink2 },
   worldTile: {
     width: '31.6%',
     flexGrow: 1,

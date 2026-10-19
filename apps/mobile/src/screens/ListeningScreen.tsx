@@ -16,7 +16,7 @@ import { Badge, Body, Button, Card, Chip, Eyebrow, Muted, ScreenHeader, ui } fro
 import { speakSequence, stopSpeaking } from '../services/speech';
 import { COLORS } from '../theme/colors';
 
-export function ListeningScreen({ trackId }: { trackId?: string }) {
+export function ListeningScreen({ trackId, embedded = false }: { trackId?: string; embedded?: boolean }) {
   const { goBack, completeActivity } = useGame();
   const { locale } = useAppState();
   const [track, setTrack] = useState<ListeningTrack>(
@@ -80,7 +80,9 @@ export function ListeningScreen({ trackId }: { trackId?: string }) {
 
   return (
     <View style={ui.screen}>
-      <ScreenHeader title={track.title} subtitle={`Listening · ${track.level}`} onBack={goBack} icon="headset" gradient="listening" />
+      {embedded ? null : (
+        <ScreenHeader title={track.title} subtitle={`Listening · ${track.level}`} onBack={goBack} icon="headset" gradient="listening" />
+      )}
 
       <Card tone="purple">
         <Eyebrow color={COLORS.purple} icon="information-circle">Contexto</Eyebrow>
@@ -220,6 +222,10 @@ export function ListeningScreen({ trackId }: { trackId?: string }) {
           disabled={!allAnswered}
           onPress={finish}
         />
+      ) : embedded ? (
+        <Card tone="green">
+          <Text style={styles.done}>Listening completado</Text>
+        </Card>
       ) : (
         <Card tone="green">
           <Text style={styles.done}>Listening completado</Text>

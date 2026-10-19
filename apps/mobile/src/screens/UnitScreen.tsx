@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -14,6 +14,7 @@ import {
   unitStars,
   UNIT_STEPS,
   type Unit,
+  type UnitLesson,
   type UnitQuestion,
   type UnitStep,
 } from '@lingopulse/shared';
@@ -22,14 +23,20 @@ import { useAppState } from '../context/AppStateContext';
 import { useGame, type UnitQuizResult } from '../context/GameContext';
 import { OptionButton } from '../components/MultipleChoice';
 import { PressableScale, Reveal } from '../components/motion';
+import { RecorderPanel, type RecorderOutput } from '../components/RecorderPanel';
 import { Badge, Body, Button, Card, Eyebrow, Muted, ProgressBar, ScreenHeader, Title, ui } from '../components/ui';
 import { playSfx } from '../services/sfx';
-import { speakEnglishPhrase } from '../services/speech';
+import { speakEnglishPhrase, speakSequence, stopSpeaking } from '../services/speech';
 import { THEME, TYPE } from '../theme/colors';
+import { ListeningScreen } from './ListeningScreen';
+import { ReadingScreen } from './ReadingScreen';
+import { SpeakingScreen } from './SpeakingScreen';
+import { WritingScreen } from './WritingScreen';
 
 const STEP_META: Record<UnitStep, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string }> = {
   vocab: { label: 'Vocabulario', icon: 'book', color: '#007AFF' },
   grammar: { label: 'Gramática', icon: 'construct', color: '#7B5CFF' },
+  functions: { label: 'Situaciones', icon: 'chatbubbles', color: '#0EA5A0' },
   reading: { label: 'Reading', icon: 'newspaper', color: '#18A86B' },
   listening: { label: 'Listening', icon: 'headset', color: '#6A4DFF' },
   speaking: { label: 'Speaking', icon: 'mic', color: '#FF375F' },
@@ -38,6 +45,11 @@ const STEP_META: Record<UnitStep, { label: string; icon: keyof typeof Ionicons.g
 };
 
 const spanishSupport = (u: Unit) => u.level === 'A1' || u.level === 'A2';
+
+function nextStepOf(step: UnitStep): UnitStep | null {
+  const i = UNIT_STEPS.indexOf(step);
+  return i >= 0 && i < UNIT_STEPS.length - 1 ? UNIT_STEPS[i + 1]! : null;
+}
 
 function Speaker({ text }: { text: string }) {
   const { locale } = useAppState();
@@ -216,7 +228,155 @@ function GrammarStep({ unit, onDone, done }: { unit: Unit; onDone: () => void; d
         {allAnswered ? <Badge label={`${correct}/${items.length} correctas`} icon="checkmark-done" color={THEME.green} bg="#EDFAF3" /> : null}
       </Card>
       <Button
-        label={done ? 'Ir al reading' : 'Continuar → Reading'}
+        label={done ? 'Ir a las situaciones' : 'Continuar → Situaciones'}
+        icon="arrow-forward"
+        disabled={!allAnswered && !done}
+        onPress={onDone}
+      />
+    </View>
+  );
+}
+
+/* ----------------------- Funciones comunicativas ----------------------- */
+
+function LessonCard({ unit, lesson, onAnswered }: { unit: Unit; lesson: UnitLesson; onAnswered: () => void }) {
+  const { locale } = useAppState();
+  const profile = LISTENING_PROFILES[unit.level];
+  const [playing, setPlaying] = useState(false);
+  const [showScript, setShowScript] = useState(profile.transcript === 'always');
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [said, setSaid] = useState<RecorderOutput | null>(null);
+  const speakers = useMemo(() => [...new Set(lesson.dialogue.map(([who]) => who))], [lesson]);
+
+  const play = () => {
+    if (playing) {
+      stopSpeaking();
+      setPlaying(false);
+      return;
+    }
+    setPlaying(true);
+    speakSequence(
+      lesson.dialogue.map(([who, text]) => ({ text, voice: speakers.indexOf(who) === 1 ? 1 : 0 })),
+      locale,
+      {
+        rate: profile.rate,
+        gapMs: profile.gapMs,
+        mixAccents: profile.mixAccents,
+        onDone: () => {
+          setPlaying(false);
+          setShowScript(true);
+        },
+      }
+    );
+  };
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Card tone="ink" style={{ gap: 6 }}>
+        <Eyebrow icon="location" color="#0EA5A0">Situación</Eyebrow>
+        <Title>{lesson.title}</Title>
+        <Text style={styles.es}>{lesson.titleEs}</Text>
+        <Body>{lesson.situation}</Body>
+      </Card>
+
+      <Card style={{ gap: 8 }}>
+        <Eyebrow icon="sparkles">Expresiones clave</Eyebrow>
+        {lesson.phrases.map((ph) => (
+          <View key={ph.en} style={styles.phraseRow}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.phraseEn}>{ph.en}</Text>
+              <Text style={styles.phraseEs}>{ph.es}</Text>
+              {ph.note ? <Muted>💡 {ph.note}</Muted> : null}
+            </View>
+            <Speaker text={ph.en} />
+          </View>
+        ))}
+      </Card>
+
+      <Card style={{ gap: 10 }}>
+        <View style={ui.rowBetween}>
+          <Eyebrow icon="people">Diálogo modelo</Eyebrow>
+          <Button label={playing ? 'Detener' : 'Escuchar'} icon={playing ? 'stop' : 'play'} small variant="blue" onPress={play} />
+        </View>
+        {showScript ? (
+          lesson.dialogue.map(([who, text], i) => (
+            <View key={i} style={[styles.bubble, speakers.indexOf(who) === 1 && styles.bubbleRight]}>
+              <Text style={styles.bubbleWho}>{who}</Text>
+              <Text style={styles.bubbleText}>{text}</Text>
+            </View>
+          ))
+        ) : (
+          <Muted>Escucha primero; el texto aparece al terminar el audio.</Muted>
+        )}
+      </Card>
+
+      <Card style={{ gap: 14 }}>
+        <Eyebrow icon="checkmark-circle">¿Qué dirías?</Eyebrow>
+        {lesson.practice.map((q, i) => (
+          <Question
+            key={q.q}
+            q={q}
+            index={i}
+            picked={answers[i]}
+            onPick={(opt) => {
+              const next = { ...answers, [i]: opt };
+              setAnswers(next);
+              if (Object.keys(next).length === lesson.practice.length) onAnswered();
+            }}
+          />
+        ))}
+      </Card>
+
+      <Card tone="coral" style={{ gap: 8 }}>
+        <Eyebrow icon="mic" color={THEME.red}>Ahora tú</Eyebrow>
+        <Body>{lesson.task}</Body>
+        <RecorderPanel locale={locale} hint="Grábate diciéndolo con las expresiones de arriba" onResult={setSaid} />
+        {said?.transcript ? (
+          <View style={styles.example}>
+            <Text style={styles.exampleText}>“{said.transcript}”</Text>
+          </View>
+        ) : null}
+      </Card>
+    </View>
+  );
+}
+
+function FunctionsStep({ unit, onDone, done }: { unit: Unit; onDone: () => void; done: boolean }) {
+  const lessons = unit.lessons ?? [];
+  const [idx, setIdx] = useState(0);
+  const [answered, setAnswered] = useState<Record<number, boolean>>({});
+  const allAnswered = lessons.every((_, i) => answered[i]);
+  const lesson = lessons[idx];
+  if (!lesson) return null;
+  return (
+    <View style={{ gap: 12 }}>
+      <Card style={{ gap: 8 }}>
+        <Eyebrow icon="chatbubbles" color="#0EA5A0">Situaciones de la vida diaria · paso 3</Eyebrow>
+        <Muted>Practica {lessons.length} situaciones del tema. Responde cada una para continuar.</Muted>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+          {lessons.map((l, i) => (
+            <PressableScale
+              key={l.title}
+              hapticKind="select"
+              onPress={() => setIdx(i)}
+              style={[styles.railItem, i === idx && { borderColor: '#0EA5A0', backgroundColor: '#FFFFFF' }]}
+            >
+              <View style={[styles.railIcon, { backgroundColor: answered[i] ? THEME.green : '#0EA5A0' }]}>
+                {answered[i] ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : <Text style={styles.railNum}>{i + 1}</Text>}
+              </View>
+              <Text style={[styles.railLabel, i === idx && { color: THEME.ink }]} numberOfLines={1}>
+                {l.titleEs}
+              </Text>
+            </PressableScale>
+          ))}
+        </ScrollView>
+      </Card>
+      <LessonCard key={`${unit.id}-${idx}`} unit={unit} lesson={lesson} onAnswered={() => setAnswered((a) => ({ ...a, [idx]: true }))} />
+      {idx + 1 < lessons.length ? (
+        <Button label="Siguiente situación" icon="arrow-forward" variant="secondary" onPress={() => setIdx(idx + 1)} />
+      ) : null}
+      <Button
+        label={done ? 'Ir al reading' : 'Terminé las situaciones → Reading'}
         icon="arrow-forward"
         disabled={!allAnswered && !done}
         onPress={onDone}
@@ -227,66 +387,54 @@ function GrammarStep({ unit, onDone, done }: { unit: Unit; onDone: () => void; d
 
 /* --------------------- Reading / Listening / Speaking / Writing --------------------- */
 
-function SkillStep({ unit, step, done }: { unit: Unit; step: 'reading' | 'listening' | 'speaking' | 'writing'; done: boolean }) {
-  const { openScreen } = useGame();
+/** Las habilidades se hacen dentro de la isla: la pantalla de cada una va incrustada aquí. */
+function SkillStep({
+  unit,
+  step,
+  done,
+  onNext,
+}: {
+  unit: Unit;
+  step: 'reading' | 'listening' | 'speaking' | 'writing';
+  done: boolean;
+  onNext: () => void;
+}) {
   const id = unitActivityId(unit.id, step);
   const meta = STEP_META[step];
-  const open = () => {
-    if (step === 'reading') openScreen({ name: 'reading', passageId: id });
-    if (step === 'listening') openScreen({ name: 'listening', trackId: id });
-    if (step === 'speaking') openScreen({ name: 'speaking', topicId: id });
-    if (step === 'writing') openScreen({ name: 'writing', promptId: id });
-  };
-  const words = unit.reading.paragraphs.join(' ').split(/\s+/).length;
+  const n = UNIT_STEPS.indexOf(step) + 1;
   return (
-    <Card style={{ gap: 10 }}>
-      <View style={ui.rowBetween}>
-        <Eyebrow icon={meta.icon} color={meta.color}>
-          {meta.label}
-        </Eyebrow>
-        {done ? <Badge label="Hecho" icon="checkmark-circle" color={THEME.green} bg="#EDFAF3" /> : null}
-      </View>
-      {step === 'reading' ? (
-        <>
-          <Title>{unit.reading.title}</Title>
-          <Muted>
-            {unit.reading.genre} · {words} palabras · {unit.reading.questions.length} preguntas. Las palabras nuevas de la isla tienen glosario.
-          </Muted>
-        </>
-      ) : null}
-      {step === 'listening' ? (
-        <>
-          <Body>{unit.listening.context}</Body>
+    <View style={{ gap: 12 }}>
+      <Card style={{ gap: 6 }}>
+        <View style={ui.rowBetween}>
+          <Eyebrow icon={meta.icon} color={meta.color}>
+            {meta.label} · paso {n}
+          </Eyebrow>
+          {done ? <Badge label="Hecho" icon="checkmark-circle" color={THEME.green} bg="#EDFAF3" /> : null}
+        </View>
+        {step === 'listening' ? (
           <Badge label={LISTENING_PROFILES[unit.level].labelEs} icon="speedometer-outline" color={THEME.violet} bg="#F3EEFF" />
-          <Muted>
-            {unit.listening.questions.length} preguntas + {unit.listening.dictation.length} dictados.
-          </Muted>
-        </>
+        ) : null}
+        {step === 'speaking' || step === 'writing' ? (
+          <Muted>Usa el vocabulario, la gramática y las expresiones de la isla. Este paso da la 3.ª estrella ⭐</Muted>
+        ) : null}
+      </Card>
+      {step === 'reading' ? <ReadingScreen passageId={id} embedded /> : null}
+      {step === 'listening' ? <ListeningScreen trackId={id} embedded /> : null}
+      {step === 'speaking' ? <SpeakingScreen topicId={id} embedded /> : null}
+      {step === 'writing' ? <WritingScreen promptId={id} embedded /> : null}
+      {done ? (
+        <Reveal index={0}>
+          <Button label={`Continuar → ${STEP_META[nextStepOf(step) ?? 'quiz'].label}`} icon="arrow-forward" variant="success" onPress={onNext} />
+        </Reveal>
       ) : null}
-      {step === 'speaking' ? (
-        <>
-          <Body>{unit.speaking.prompt}</Body>
-          <Muted>Usa el vocabulario y la gramática de la isla. Habla unos {unit.speaking.seconds} segundos.</Muted>
-        </>
-      ) : null}
-      {step === 'writing' ? (
-        <>
-          <Body>{unit.writing.prompt}</Body>
-          <Muted>Mínimo {unit.writing.minWords} palabras. La IA corrige y explica tus errores.</Muted>
-        </>
-      ) : null}
-      <Button label={done ? 'Repetir' : 'Empezar'} icon="play" variant={done ? 'secondary' : 'primary'} onPress={open} />
-      {step === 'speaking' || step === 'writing' ? (
-        <Muted>Opcional para el quiz, pero necesario para la 3.ª estrella ⭐</Muted>
-      ) : null}
-    </Card>
+    </View>
   );
 }
 
 /* -------------------------------- Quiz final -------------------------------- */
 
 function QuizStep({ unit }: { unit: Unit }) {
-  const { finishUnitQuiz, openScreen, goBack } = useGame();
+  const { finishUnitQuiz, goBack } = useGame();
   const [attempt, setAttempt] = useState(0);
   const quiz = useMemo(() => buildUnitQuiz(unit, attempt), [unit, attempt]);
   const [idx, setIdx] = useState(0);
@@ -330,6 +478,14 @@ function QuizStep({ unit }: { unit: Unit }) {
               : '¡Perfecto! Tienes las 3 estrellas de esta isla.'
             : `Necesitas ${QUIZ_PASS}% para conquistar la isla. Repasa la teoría y vuelve a intentarlo (las preguntas cambian).`}
         </Muted>
+        {result.passed && nextUnit ? (
+          <View style={styles.tomorrow}>
+            <Ionicons name="moon" size={18} color={THEME.violet} />
+            <Text style={[TYPE.callout, { flex: 1 }]}>
+              Mañana se abre la isla {nextUnit.n}: “{nextUnit.title}”. Una isla por día para que lo aprendido se quede contigo.
+            </Text>
+          </View>
+        ) : null}
         <View style={[ui.rowWrap, { justifyContent: 'center' }]}>
           <Button
             label="Intentar otra vez"
@@ -343,19 +499,7 @@ function QuizStep({ unit }: { unit: Unit }) {
               setResult(null);
             }}
           />
-          {result.passed && nextUnit ? (
-            <Button
-              label="Siguiente isla"
-              icon="boat"
-              variant="gold"
-              onPress={() => {
-                goBack();
-                openScreen({ name: 'unit', unitId: nextUnit.id });
-              }}
-            />
-          ) : (
-            <Button label="Volver al mapa" icon="map" onPress={goBack} />
-          )}
+          <Button label="Volver al mapa" icon="map" onPress={goBack} />
         </View>
       </Card>
     );
@@ -385,13 +529,6 @@ export function UnitScreen({ unitId }: { unitId: string }) {
   const done = up?.done ?? [];
   const firstPending = UNIT_STEPS.find((s) => !done.includes(s) && isStepUnlocked(s, up)) ?? 'quiz';
   const [step, setStep] = useState<UnitStep>(firstPending);
-  const doneCount = useRef(done.length);
-
-  // Al volver de un ejercicio terminado, se pasa solo al siguiente paso pendiente.
-  useEffect(() => {
-    if (done.length > doneCount.current) setStep(firstPending);
-    doneCount.current = done.length;
-  }, [done.length, firstPending]);
 
   if (!unit) {
     return (
@@ -402,6 +539,7 @@ export function UnitScreen({ unitId }: { unitId: string }) {
   }
 
   const stars = unitStars(up);
+  const progressRatio = done.filter((s) => s !== 'quiz').length / (UNIT_STEPS.length - 1);
   const complete = (s: UnitStep, nextStep: UnitStep) => {
     markUnitStep(unit.id, s);
     playSfx('correct');
@@ -433,6 +571,7 @@ export function UnitScreen({ unitId }: { unitId: string }) {
             <Text style={[TYPE.callout, { flex: 1 }]}>{g}</Text>
           </View>
         ))}
+        <ProgressBar value={progressRatio} color="#0EA5A0" />
         {done.length === 0 ? (
           <View style={styles.warmUp}>
             <Text style={styles.warmUpLabel}>Para entrar en calor</Text>
@@ -470,9 +609,10 @@ export function UnitScreen({ unitId }: { unitId: string }) {
       </ScrollView>
 
       {step === 'vocab' ? <VocabStep unit={unit} done={done.includes('vocab')} onDone={() => complete('vocab', 'grammar')} /> : null}
-      {step === 'grammar' ? <GrammarStep unit={unit} done={done.includes('grammar')} onDone={() => complete('grammar', 'reading')} /> : null}
+      {step === 'grammar' ? <GrammarStep unit={unit} done={done.includes('grammar')} onDone={() => complete('grammar', 'functions')} /> : null}
+      {step === 'functions' ? <FunctionsStep unit={unit} done={done.includes('functions')} onDone={() => complete('functions', 'reading')} /> : null}
       {step === 'reading' || step === 'listening' || step === 'speaking' || step === 'writing' ? (
-        <SkillStep unit={unit} step={step} done={done.includes(step)} />
+        <SkillStep key={step} unit={unit} step={step} done={done.includes(step)} onNext={() => setStep(nextStepOf(step) ?? 'quiz')} />
       ) : null}
       {step === 'quiz' ? <QuizStep unit={unit} /> : null}
     </View>
@@ -520,6 +660,44 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.fill,
   },
   railIcon: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  railLabel: { fontSize: 12, fontWeight: '800', color: THEME.ink2 },
+  railNum: { fontSize: 12, fontWeight: '900', color: '#FFFFFF' },
+  railLabel: { fontSize: 12, fontWeight: '800', color: THEME.ink2, maxWidth: 160 },
   bigScore: { fontSize: 48, fontWeight: '900', color: THEME.ink, letterSpacing: -1 },
+  phraseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: THEME.hairline,
+  },
+  phraseEn: { fontSize: 16, fontWeight: '800', color: THEME.ink },
+  phraseEs: { fontSize: 14, color: THEME.ink2 },
+  bubble: {
+    alignSelf: 'flex-start',
+    maxWidth: '88%',
+    backgroundColor: THEME.fill,
+    borderRadius: 16,
+    borderTopLeftRadius: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 2,
+  },
+  bubbleRight: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#E6F7F6',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 4,
+  },
+  bubbleWho: { fontSize: 11, fontWeight: '900', color: '#0EA5A0', textTransform: 'uppercase', letterSpacing: 0.5 },
+  bubbleText: { fontSize: 15, lineHeight: 21, color: THEME.ink },
+  tomorrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3EEFF',
+    borderRadius: 12,
+    padding: 12,
+    alignSelf: 'stretch',
+  },
 });

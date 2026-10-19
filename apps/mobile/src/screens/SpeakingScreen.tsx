@@ -29,9 +29,14 @@ import { THEME, TYPE } from '../theme/colors';
 
 type Mode = 'topic' | 'readaloud';
 
-export function SpeakingScreen({ topicId }: { topicId?: string }) {
+/**
+ * `embedded`: la pantalla vive dentro de una isla (UnitScreen): sin cabecera propia,
+ * sin cambiar de tema y sin el modo pronunciación.
+ */
+export function SpeakingScreen({ topicId, embedded = false }: { topicId?: string; embedded?: boolean }) {
   const { goBack } = useGame();
   const [mode, setMode] = useState<Mode>('topic');
+  if (embedded) return <TopicPractice initialTopicId={topicId} embedded />;
   return (
     <View style={ui.screen}>
       <ScreenHeader title="Speaking" subtitle="Habla, grábate y recibe feedback" onBack={goBack} icon="mic" gradient="speaking" />
@@ -44,7 +49,7 @@ export function SpeakingScreen({ topicId }: { topicId?: string }) {
   );
 }
 
-function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
+function TopicPractice({ initialTopicId, embedded = false }: { initialTopicId?: string; embedded?: boolean }) {
   const { locale } = useAppState();
   const { progress, completeActivity } = useGame();
   const initial =
@@ -116,7 +121,7 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
         <Card>
           <View style={ui.rowBetween}>
             <Badge label={`Tema · ${topic.level}`} color={THEME.red} bg="#FFF0F3" icon="chatbubbles" />
-            <Button label="Otro tema" small variant="secondary" icon="shuffle" onPress={nextTopic} />
+            {embedded ? null : <Button label="Otro tema" small variant="secondary" icon="shuffle" onPress={nextTopic} />}
           </View>
           <Text style={TYPE.title1}>{topic.title}</Text>
           <Text style={[TYPE.body, { fontWeight: '500' }]}>{question}</Text>

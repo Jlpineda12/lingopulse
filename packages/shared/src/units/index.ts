@@ -14,13 +14,32 @@ import { B1_UNITS } from './content/b1.js';
 import { B2_UNITS } from './content/b2.js';
 import { C1_UNITS } from './content/c1.js';
 import { C2_UNITS } from './content/c2.js';
+import { A1_LESSONS } from './content/lessons-a1.js';
+import { A2_LESSONS } from './content/lessons-a2.js';
+import { B1_LESSONS } from './content/lessons-b1.js';
+import { B2_LESSONS } from './content/lessons-b2.js';
+import { C1_LESSONS } from './content/lessons-c1.js';
+import { C2_LESSONS } from './content/lessons-c2.js';
 import { blankTerm, seededShuffle } from './engine.js';
-import type { Unit, UnitQuestion } from './types.js';
+import type { Unit, UnitLesson, UnitQuestion } from './types.js';
 
 export * from './types.js';
 export * from './engine.js';
 
-export const ALL_UNITS: Unit[] = [...A1_UNITS, ...A2_UNITS, ...B1_UNITS, ...B2_UNITS, ...C1_UNITS, ...C2_UNITS];
+const LESSONS: Record<string, UnitLesson[]> = {
+  ...A1_LESSONS,
+  ...A2_LESSONS,
+  ...B1_LESSONS,
+  ...B2_LESSONS,
+  ...C1_LESSONS,
+  ...C2_LESSONS,
+};
+
+/** Unidades con sus funciones comunicativas (viven en content/lessons-*.ts para no alargar cada archivo). */
+export const ALL_UNITS: Unit[] = [...A1_UNITS, ...A2_UNITS, ...B1_UNITS, ...B2_UNITS, ...C1_UNITS, ...C2_UNITS].map((u) => ({
+  ...u,
+  lessons: LESSONS[u.id] ?? u.lessons ?? [],
+}));
 
 export function unitsForLevel(level: PracticeLevel): Unit[] {
   return ALL_UNITS.filter((u) => u.level === level).sort((a, b) => a.n - b.n);

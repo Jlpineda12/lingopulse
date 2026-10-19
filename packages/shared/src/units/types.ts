@@ -88,6 +88,31 @@ export interface UnitWriting {
   model: string;
 }
 
+/** Expresión clave de una función comunicativa. */
+export interface FunctionPhrase {
+  en: string;
+  es: string;
+  /** Cuándo / cómo usarla (registro, matiz). */
+  note?: string;
+}
+
+/**
+ * Función comunicativa de la unidad (como en Passages): una situación de la vida diaria,
+ * las expresiones para resolverla, un diálogo modelo, práctica rápida y una mini-tarea oral.
+ * Ej.: unidad "Relationships" → definir una amistad, dar opiniones, estar en desacuerdo…
+ */
+export interface UnitLesson {
+  title: string;
+  titleEs: string;
+  /** Situación cotidiana donde se usa. */
+  situation: string;
+  phrases: FunctionPhrase[];
+  dialogue: Array<[string, string]>;
+  practice: UnitQuestion[];
+  /** Mini-tarea para decir en voz alta. */
+  task: string;
+}
+
 export interface Unit {
   /** p. ej. "a1-03" */
   id: string;
@@ -103,6 +128,8 @@ export interface Unit {
   warmUp: string;
   vocab: UnitVocab[];
   grammar: GrammarPoint;
+  /** Funciones comunicativas (3–5) que se practican antes de las habilidades. */
+  lessons?: UnitLesson[];
   reading: UnitReading;
   listening: UnitListening;
   speaking: UnitSpeaking;
@@ -111,12 +138,12 @@ export interface Unit {
   extraQuiz?: UnitQuestion[];
 }
 
-export type UnitStep = 'vocab' | 'grammar' | 'reading' | 'listening' | 'speaking' | 'writing' | 'quiz';
+export type UnitStep = 'vocab' | 'grammar' | 'functions' | 'reading' | 'listening' | 'speaking' | 'writing' | 'quiz';
 
-export const UNIT_STEPS: UnitStep[] = ['vocab', 'grammar', 'reading', 'listening', 'speaking', 'writing', 'quiz'];
+export const UNIT_STEPS: UnitStep[] = ['vocab', 'grammar', 'functions', 'reading', 'listening', 'speaking', 'writing', 'quiz'];
 
 /** Pasos obligatorios antes del quiz (speaking y writing dan la tercera estrella). */
-export const REQUIRED_BEFORE_QUIZ: UnitStep[] = ['vocab', 'grammar', 'reading', 'listening'];
+export const REQUIRED_BEFORE_QUIZ: UnitStep[] = ['vocab', 'grammar', 'functions', 'reading', 'listening'];
 
 export interface UnitProgress {
   done: UnitStep[];

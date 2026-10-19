@@ -20,9 +20,12 @@ import { COLORS } from '../theme/colors';
 export function WritingScreen({
   promptId,
   custom,
+  embedded = false,
 }: {
   promptId?: string;
   custom?: { title: string; promptEn: string };
+  /** Dentro de una isla: sin cabecera y sin cambiar de consigna. */
+  embedded?: boolean;
 }) {
   const { goBack, completeActivity, progress } = useGame();
   const { locale } = useAppState();
@@ -67,7 +70,9 @@ export function WritingScreen({
 
   return (
     <View style={ui.screen}>
-      <ScreenHeader title={prompt.title} subtitle={`Writing · ${prompt.type} · ${prompt.level}`} onBack={goBack} icon="create" gradient="writing" />
+      {embedded ? null : (
+        <ScreenHeader title={prompt.title} subtitle={`Writing · ${prompt.type} · ${prompt.level}`} onBack={goBack} icon="create" gradient="writing" />
+      )}
 
       <Card tone="amber">
         <Eyebrow color={COLORS.amber} icon="document-text">Consigna</Eyebrow>
@@ -137,7 +142,7 @@ export function WritingScreen({
               }}
               style={{ flex: 1 }}
             />
-            <Button
+            {embedded ? null : <Button
               label="Otra consigna"
               icon="shuffle"
               onPress={() => {
@@ -149,7 +154,7 @@ export function WritingScreen({
                 setAttempt(0);
               }}
               style={{ flex: 1 }}
-            />
+            />}
           </View>
         </>
       ) : null}

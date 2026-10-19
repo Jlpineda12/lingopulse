@@ -9,6 +9,7 @@ import {
   LISTENING_PROFILES,
   unitQuestionBank,
   unitStars,
+  unitLockState,
   unitsForLevel,
 } from './index.js';
 import { CEFR_LEVELS } from '../practice/placement-test.js';
@@ -51,6 +52,14 @@ describe('Islas por tema: contenido', () => {
       assert.ok(u.listening.questions.length >= 4, 'listening con al menos 4 preguntas');
       assert.ok(u.listening.lines.length >= 5, 'listening con al menos 5 intervenciones');
       assert.ok(u.listening.dictation.length >= 2, 'al menos 2 dictados');
+      assert.ok((u.lessons?.length ?? 0) >= 3, `${u.id}: necesita al menos 3 funciones comunicativas`);
+      for (const l of u.lessons ?? []) {
+        assert.ok(l.phrases.length >= 3 && l.dialogue.length >= 3 && l.practice.length >= 2, `${u.id} · ${l.title}: función incompleta`);
+        for (const q of l.practice) {
+          assert.ok(q.a >= 0 && q.a < q.opts.length, `${u.id} · ${l.title}: índice fuera de rango en "${q.q}"`);
+          assert.equal(new Set(q.opts).size, q.opts.length, `${u.id} · ${l.title}: opciones repetidas en "${q.q}"`);
+        }
+      }
       assert.ok(u.writing.minWords > 0 && u.writing.model.split(/\s+/).length >= u.writing.minWords * 0.8, 'el modelo de writing es muy corto');
     });
   }
@@ -80,8 +89,9 @@ describe('Islas por tema: progreso', () => {
     assert.equal(isStepUnlocked('grammar', undefined), false);
     assert.equal(isStepUnlocked('grammar', { done: ['vocab'] }), true);
     assert.equal(isStepUnlocked('quiz', { done: ['vocab', 'grammar', 'reading'] }), false);
-    assert.equal(isStepUnlocked('quiz', { done: ['vocab', 'grammar', 'reading', 'listening'] }), true);
-    assert.equal(isStepUnlocked('writing', { done: ['vocab', 'grammar', 'reading', 'listening'] }), true);
+    assert.equal(isStepUnlocked('reading', { done: ['vocab', 'grammar'] }), false);
+    assert.equal(isStepUnlocked('quiz', { done: ['vocab', 'grammar', 'functions', 'reading', 'listening'] }), true);
+    assert.equal(isStepUnlocked('writing', { done: ['vocab', 'grammar', 'functions', 'reading', 'listening'] }), true);
   });
 
   it('estrellas: aprobar, sacar 90+ y hacer speaking + writing', () => {
@@ -91,11 +101,19 @@ describe('Islas por tema: progreso', () => {
     assert.equal(unitStars({ done: ['speaking', 'writing'], bestQuiz: 95 }), 3);
   });
 
-  it('la isla siguiente se abre al conquistar la anterior', () => {
+  it('una isla por día: la siguiente se abre al día siguiente de conquistar la anterior', () => {
     const units = unitsForLevel('A1');
-    assert.equal(isUnitUnlocked(units, units[0]!.id, {}), true);
-    assert.equal(isUnitUnlocked(units, units[1]!.id, {}), false);
-    assert.equal(isUnitUnlocked(units, units[1]!.id, { [units[0]!.id]: { done: [], bestQuiz: 80 } }), true);
+    const first = units[0]!.id;
+    const second = units[1]!.id;
+    const today = new Date(2026, 9, 20, 15, 0).getTime();
+    const yesterday = new Date(2026, 9, 19, 22, 0).getTime();
+    assert.equal(unitLockState(units, first, {}, '2026-10-20'), 'open');
+    assert.equal(unitLockState(units, second, {}, '2026-10-20'), 'previous_not_done');
+    assert.equal(unitLockState(units, second, { [first]: { done: [], bestQuiz: 80, completedAt: today } }, '2026-10-20'), 'tomorrow');
+    assert.equal(unitLockState(units, second, { [first]: { done: [], bestQuiz: 80, completedAt: yesterday } }, '2026-10-20'), 'open');
+    assert.equal(isUnitUnlocked(units, second, { [first]: { done: [], bestQuiz: 80, completedAt: yesterday } }, '2026-10-20'), true);
+    // Una isla ya empezada no se vuelve a bloquear.
+    assert.equal(unitLockState(units, second, { [second]: { done: ['vocab'] } }, '2026-10-20'), 'open');
   });
 
   it('el listening se vuelve más difícil con el nivel', () => {

@@ -174,6 +174,27 @@ export function unitQuestionBank(unit: Unit): UnitQuestion[] {
     }
   });
 
+  (unit.lessons ?? []).forEach((l, li) => {
+    l.practice.forEach((q) => bank.push({ ...q, q: `${spanish ? 'Función' : 'Function'} · ${q.q}` }));
+    // Expresión clave → significado (o al revés), con distractores de la misma unidad.
+    const allPhrases = (unit.lessons ?? []).flatMap((x) => x.phrases);
+    l.phrases.slice(0, 2).forEach((ph, pi) => {
+      const others = seededShuffle(
+        allPhrases.filter((o) => o.en !== ph.en),
+        `${unit.id}-ph-${li}-${pi}`
+      );
+      bank.push(
+        mc(
+          spanish ? `¿Qué significa "${ph.en}"?` : `Which phrase means "${ph.es}"?`,
+          spanish ? ph.es : ph.en,
+          others.map((o) => (spanish ? o.es : o.en)).filter((x, j, arr) => arr.indexOf(x) === j),
+          `${unit.id}-phq-${li}-${pi}`,
+          ph.note
+        )
+      );
+    });
+  });
+
   unit.grammar.practice.forEach((g, i) => {
     const lead = g.q.includes('___') ? (spanish ? 'Completa: ' : 'Complete: ') : '';
     bank.push(mc(`${spanish ? 'Gramática' : 'Grammar'} · ${lead}${g.q}`, g.a, g.opts, `${unit.id}-gr-${i}`, g.why));
@@ -214,15 +235,47 @@ export function isStepUnlocked(step: UnitStep, progress: UnitProgress | undefine
   const done = progress?.done ?? [];
   if (step === 'vocab') return true;
   if (step === 'quiz') return REQUIRED_BEFORE_QUIZ.every((s) => done.includes(s));
-  // Cada paso se abre al terminar el anterior (speaking y writing tras el listening).
-  const order: UnitStep[] = ['vocab', 'grammar', 'reading', 'listening', 'speaking', 'writing'];
+  // Cada paso se abre al terminar el anterior (writing también tras el listening).
+  const order: UnitStep[] = ['vocab', 'grammar', 'functions', 'reading', 'listening', 'speaking', 'writing'];
   const prev = order[order.indexOf(step) - 1];
   return !prev || done.includes(prev) || (step === 'writing' && done.includes('listening'));
 }
 
-/** La isla n se abre cuando la anterior del mismo nivel tiene al menos 1 estrella. */
-export function isUnitUnlocked(units: Unit[], unitId: string, all: Record<string, UnitProgress | undefined>): boolean {
+/** Clave de fecha local (AAAA-MM-DD) de un instante. */
+function dayKeyOf(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+export type UnitLockReason = 'open' | 'previous_not_done' | 'tomorrow';
+
+/**
+ * Una isla por día: la isla n se abre cuando la anterior del mismo nivel está conquistada
+ * (≥ 1 estrella) Y se conquistó un día anterior a hoy. Así el estudiante no hace 20 temas
+ * de golpe: cada tema nuevo llega al día siguiente.
+ */
+export function unitLockState(
+  units: Unit[],
+  unitId: string,
+  all: Record<string, UnitProgress | undefined>,
+  todayKey: string = dayKeyOf(Date.now())
+): UnitLockReason {
   const idx = units.findIndex((u) => u.id === unitId);
-  if (idx <= 0) return true;
-  return unitStars(all[units[idx - 1]!.id]) > 0;
+  if (idx <= 0) return 'open';
+  // Si ya se empezó (o terminó) esta isla, sigue abierta aunque se haya cambiado la regla.
+  if ((all[unitId]?.done.length ?? 0) > 0) return 'open';
+  const prev = all[units[idx - 1]!.id];
+  if (unitStars(prev) === 0) return 'previous_not_done';
+  if (prev?.completedAt && dayKeyOf(prev.completedAt) >= todayKey) return 'tomorrow';
+  return 'open';
+}
+
+export function isUnitUnlocked(
+  units: Unit[],
+  unitId: string,
+  all: Record<string, UnitProgress | undefined>,
+  todayKey?: string
+): boolean {
+  return unitLockState(units, unitId, all, todayKey) === 'open';
 }

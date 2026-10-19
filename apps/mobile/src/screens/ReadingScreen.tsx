@@ -31,7 +31,7 @@ function splitByGlossary(paragraph: string, terms: string[]): Piece[] {
   return pieces;
 }
 
-export function ReadingScreen({ passageId }: { passageId?: string }) {
+export function ReadingScreen({ passageId, embedded = false }: { passageId?: string; embedded?: boolean }) {
   const { goBack, completeActivity, openScreen } = useGame();
   const { locale } = useAppState();
   const [passage, setPassage] = useState<ReadingPassage>(
@@ -60,7 +60,9 @@ export function ReadingScreen({ passageId }: { passageId?: string }) {
 
   return (
     <View style={ui.screen}>
-      <ScreenHeader title={passage.title} subtitle={`Reading · ${passage.level} · ${wordCount} palabras`} onBack={goBack} icon="reader" gradient="reading" />
+      {embedded ? null : (
+        <ScreenHeader title={passage.title} subtitle={`Reading · ${passage.level} · ${wordCount} palabras`} onBack={goBack} icon="reader" gradient="reading" />
+      )}
 
       <Card>
         <Eyebrow color={COLORS.emerald} icon="reader">Lectura</Eyebrow>
@@ -148,7 +150,7 @@ export function ReadingScreen({ passageId }: { passageId?: string }) {
         </Card>
       ) : null}
 
-      {finished ? (
+      {finished && !embedded ? (
         <>
           <Card tone="amber">
             <Eyebrow color={COLORS.amber} icon="create">Ahora tu opinión</Eyebrow>
