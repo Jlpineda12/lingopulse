@@ -87,7 +87,7 @@ function wordForms(word: string): string[] {
     forms.add(`${w.slice(0, -1)}ied`);
   }
   if (/e$/.test(w)) forms.add(`${w.slice(0, -1)}ing`);
-  if (/[^aeiou][aeiou][bdgklmnprt]$/.test(w)) {
+  if (/[aeiou][bdgklmnprt]$/.test(w)) {
     forms.add(`${w}${w.slice(-1)}ed`);
     forms.add(`${w}${w.slice(-1)}ing`);
   }
