@@ -3,6 +3,7 @@ import { PanResponder, Platform, View } from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import * as THREE from 'three';
 import type { PetConfig, PetMood, PetStage } from '../game/pet';
+import type { PetSceneAction, SceneNpc, UnitSceneTheme } from '../game/unitScenes';
 import { createPetScene, type PetSceneHandle } from '../pet3d/petScene';
 import type { HouseSceneOptions } from '../pet3d/petHouse';
 import { haptic } from './motion';
@@ -46,6 +47,8 @@ interface Pet3DProps {
   growth?: number;
   /** 'face' = primer plano de la cara (editor de rasgos). */
   focus?: 'face' | 'body';
+  /** Isla temática (decorado + invitado + acción). */
+  scenario?: { theme: UnitSceneTheme; action: PetSceneAction; npc: SceneNpc };
 }
 
 // Three.js llama a estas funciones de expo-gl que no implementa; silenciamos el ruido.
@@ -76,6 +79,7 @@ export function Pet3D({
   stage = 'adult',
   growth = 0,
   focus = 'body',
+  scenario,
 }: Pet3DProps) {
   const height = Math.round(size * aspectRatio);
   const handleRef = useRef<PetSceneHandle | null>(null);
@@ -86,7 +90,7 @@ export function Pet3D({
   // El huevo solo se reconstruye cuando cambia una grieta (cuartos de progreso), no con cada punto de XP.
   const growthStep = Math.floor(growth * 8);
   const configKey =
-    JSON.stringify(config) + (house ? JSON.stringify(house) : '') + `|${stage}|${growthStep}|${focus}`;
+    JSON.stringify(config) + (house ? JSON.stringify(house) : '') + `|${stage}|${growthStep}|${focus}|${scenario ? `${scenario.theme}:${scenario.action}:${scenario.npc}` : ''}`;
   const mountRef = useRef<View | null>(null);
 
   useEffect(() => {
@@ -167,7 +171,7 @@ export function Pet3D({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
 
-    const h = createPetScene(config, size / height, { house, stage, growth: growthStep / 8, focus });
+    const h = createPetScene(config, size / height, { house, stage, growth: growthStep / 8, focus, scenario });
     attach(h);
 
     let dragging = false;
@@ -283,7 +287,7 @@ export function Pet3D({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
 
-    const h = createPetScene(config, w / hgt, { house, stage, growth: growthStep / 8, focus });
+    const h = createPetScene(config, w / hgt, { house, stage, growth: growthStep / 8, focus, scenario });
     attach(h);
 
     let raf = 0;

@@ -13,10 +13,11 @@ export function createToonRamp(): THREE.DataTexture {
   const n = 16;
   const data = new Uint8Array(n * 4);
   for (let i = 0; i < n; i++) {
-    const k = Math.pow(i / (n - 1), 0.85);
-    data[i * 4] = Math.round(170 + (255 - 170) * k);
-    data[i * 4 + 1] = Math.round(160 + (255 - 160) * k);
-    data[i * 4 + 2] = Math.round(190 + (255 - 190) * k);
+    // más recorrido de luz a sombra = más volumen (acabado de juguete mate)
+    const k = Math.pow(i / (n - 1), 0.9);
+    data[i * 4] = Math.round(146 + (255 - 146) * k);
+    data[i * 4 + 1] = Math.round(136 + (255 - 136) * k);
+    data[i * 4 + 2] = Math.round(172 + (255 - 172) * k);
     data[i * 4 + 3] = 255;
   }
   const tex = new THREE.DataTexture(data, n, 1, THREE.RGBAFormat);
@@ -27,8 +28,11 @@ export function createToonRamp(): THREE.DataTexture {
   return tex;
 }
 
+/** Grosor relativo del contorno: fino, para un acabado de figura más limpio. */
+export const OUTLINE_WEIGHT = 0.42;
+
 export const OUTLINE_MAT = new THREE.MeshBasicMaterial({
-  color: 0x1e2436,
+  color: 0x2a2540,
   side: THREE.BackSide,
 });
 
@@ -56,11 +60,8 @@ export function ellipsoid(
   m.scale.set(sx, sy, sz);
   if (withOutline) {
     const out = new THREE.Mesh(geom, OUTLINE_MAT);
-    out.scale.set(
-      1 + outlineThickness / sx,
-      1 + outlineThickness / sy,
-      1 + outlineThickness / sz
-    );
+    const ot = outlineThickness * OUTLINE_WEIGHT;
+    out.scale.set(1 + ot / sx, 1 + ot / sy, 1 + ot / sz);
     m.add(out);
   }
   return m;
@@ -70,7 +71,7 @@ export function ellipsoid(
 /** Agrega contorno de tinta (malla invertida un poco más grande) a cualquier malla. */
 export function outlined<T extends THREE.Mesh>(mesh: T, thickness = 1.06): T {
   const out = new THREE.Mesh(mesh.geometry, OUTLINE_MAT);
-  out.scale.setScalar(thickness);
+  out.scale.setScalar(1 + (thickness - 1) * OUTLINE_WEIGHT);
   mesh.add(out);
   return mesh;
 }
@@ -81,7 +82,8 @@ export function box(w: number, h: number, d: number, mat: THREE.Material, outlin
   const m = new THREE.Mesh(geo, mat);
   if (outline > 0) {
     const out = new THREE.Mesh(geo, OUTLINE_MAT);
-    out.scale.set(1 + outline / w, 1 + outline / h, 1 + outline / d);
+    const ow = outline * OUTLINE_WEIGHT;
+    out.scale.set(1 + ow / w, 1 + ow / h, 1 + ow / d);
     m.add(out);
   }
   return m;
@@ -100,7 +102,8 @@ export function cylinder(
   const m = new THREE.Mesh(geo, mat);
   if (outline > 0) {
     const out = new THREE.Mesh(geo, OUTLINE_MAT);
-    out.scale.set(outline, 1 + (outline - 1) * 0.6, outline);
+    const o = 1 + (outline - 1) * OUTLINE_WEIGHT;
+    out.scale.set(o, 1 + (o - 1) * 0.6, o);
     m.add(out);
   }
   return m;

@@ -23,6 +23,7 @@ import {
 } from './CustomTopicIcons';
 import { Glyph } from './Glyph';
 import { Pet3D } from './Pet3D';
+import type { PetSceneAction, SceneNpc, UnitSceneTheme } from '../game/unitScenes';
 import { PressableScale, useTiltOffset } from './motion';
 import { SHADOW, THEME } from '../theme/colors';
 import type { IconName } from './ui';
@@ -925,8 +926,11 @@ export function FloatingIslandQuestNode({
   active = false,
   showCompanion = false,
   illustrationKind,
+  scene,
   onPress,
 }: {
+  /** Isla temática en 3D: la mascota actúa el tema de la unidad (solo en la isla activa). */
+  scene?: { theme: UnitSceneTheme; action: PetSceneAction; npc: SceneNpc; bubbleEn: string };
   index: number;
   biomeKey: IslandBiomeKey;
   stepLabel?: string;
@@ -950,7 +954,7 @@ export function FloatingIslandQuestNode({
   const cleanTitle = title.replace(/^[^\w¡¿ÁÉÍÓÚáéíóúÑñ"'“”]+\s*/, '').trim() || title;
   const kind = illustrationKind ?? resolveTopicIllustration(cleanTitle, biomeKey);
   const upcoming = !done && !active;
-  const companionHere = showCompanion && active;
+  const companionHere = showCompanion && active && !scene;
 
   return (
     <Animated.View
@@ -972,15 +976,36 @@ export function FloatingIslandQuestNode({
             <View style={[styles.startTagTip, { borderTopColor: b.accent }]} />
           </Animated.View>
         ) : null}
-        <FloatingIslandArt
-          biomeKey={biomeKey}
-          illustrationKind={kind}
-          size={active ? 184 : 166}
-          done={done}
-          active={active}
-          upcoming={upcoming}
-          floatPhase={index}
-        />
+        {active && scene ? (
+          <View style={styles.liveScene}>
+            <View style={styles.liveBubble}>
+              <Text style={styles.liveBubbleText} numberOfLines={1}>
+                {scene.bubbleEn}
+              </Text>
+            </View>
+            <Pet3D
+              config={pet}
+              mood={scene.action === 'eat' ? 'eating' : scene.action === 'hug' ? 'love' : 'happy'}
+              stage={petStage.stage}
+              growth={petStage.progress}
+              size={230}
+              aspectRatio={0.78}
+              scenario={{ theme: scene.theme, action: scene.action, npc: scene.npc }}
+              onTap={petThePet}
+              backgroundColor="transparent"
+            />
+          </View>
+        ) : (
+          <FloatingIslandArt
+            biomeKey={biomeKey}
+            illustrationKind={kind}
+            size={active ? 184 : 166}
+            done={done}
+            active={active}
+            upcoming={upcoming}
+            floatPhase={index}
+          />
+        )}
         <View
           style={[
             styles.plaque,
@@ -1214,6 +1239,19 @@ export function WorldBiomeHeader({
 }
 
 const styles = StyleSheet.create({
+  liveScene: { alignItems: 'center', justifyContent: 'center' },
+  liveBubble: {
+    position: 'absolute',
+    top: 4,
+    zIndex: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 2,
+    borderColor: '#1E2436',
+  },
+  liveBubbleText: { fontSize: 12, fontWeight: '800', color: '#1E2436' },
   activeRing: { position: 'absolute', borderRadius: 999, borderWidth: 3, borderStyle: 'dashed' },
   signWrap: { position: 'absolute', alignItems: 'center' },
   signBoard: {

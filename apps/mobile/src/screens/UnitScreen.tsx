@@ -26,6 +26,8 @@ import { PressableScale, Reveal } from '../components/motion';
 import { RecorderPanel, type RecorderOutput } from '../components/RecorderPanel';
 import { Badge, Body, Button, Card, Eyebrow, Muted, ProgressBar, ScreenHeader, Title, ui } from '../components/ui';
 import { playSfx } from '../services/sfx';
+import { Pet3D } from '../components/Pet3D';
+import { SCENE_META, unitSceneTheme } from '../game/unitScenes';
 import { speakEnglishPhrase, speakSequence, stopSpeaking } from '../services/speech';
 import { THEME, TYPE } from '../theme/colors';
 import { ListeningScreen } from './ListeningScreen';
@@ -523,7 +525,7 @@ function QuizStep({ unit }: { unit: Unit }) {
 /* ------------------------------ Pantalla ------------------------------ */
 
 export function UnitScreen({ unitId }: { unitId: string }) {
-  const { progress, goBack, markUnitStep } = useGame();
+  const { progress, goBack, markUnitStep, pet, petStage, petThePet } = useGame();
   const unit = getUnit(unitId);
   const up = progress.units?.[unitId];
   const done = up?.done ?? [];
@@ -538,6 +540,8 @@ export function UnitScreen({ unitId }: { unitId: string }) {
     );
   }
 
+  const sceneTheme = unitSceneTheme(unit.id);
+  const sceneMeta = SCENE_META[sceneTheme];
   const stars = unitStars(up);
   const progressRatio = done.filter((s) => s !== 'quiz').length / (UNIT_STEPS.length - 1);
   const complete = (s: UnitStep, nextStep: UnitStep) => {
@@ -555,6 +559,24 @@ export function UnitScreen({ unitId }: { unitId: string }) {
         icon="map"
         gradient="lesson"
       />
+
+      {/* La isla temática en 3D con la mascota actuando el tema */}
+      <View style={styles.islandStage}>
+        <Pet3D
+          config={pet}
+          mood={sceneMeta.action === 'eat' ? 'eating' : sceneMeta.action === 'hug' ? 'love' : 'happy'}
+          stage={petStage.stage}
+          growth={petStage.progress}
+          size={300}
+          aspectRatio={0.62}
+          scenario={{ theme: sceneTheme, action: sceneMeta.action, npc: sceneMeta.npc }}
+          onTap={petThePet}
+          backgroundColor="#DDF3FF"
+        />
+        <View style={styles.islandBubble}>
+          <Text style={styles.islandBubbleText}>{sceneMeta.bubbleEn}</Text>
+        </View>
+      </View>
 
       <Card style={{ gap: 10 }}>
         <View style={ui.rowBetween}>
@@ -645,6 +667,24 @@ const styles = StyleSheet.create({
   formRow: { backgroundColor: '#F5F2FF', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
   formText: { fontSize: 15, fontWeight: '700', color: '#4B32C3' },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  islandStage: {
+    alignItems: 'center',
+    backgroundColor: '#DDF3FF',
+    borderRadius: 26,
+    overflow: 'hidden',
+  },
+  islandBubble: {
+    position: 'absolute',
+    top: 12,
+    left: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 2,
+    borderColor: '#1E2436',
+  },
+  islandBubbleText: { fontSize: 13, fontWeight: '800', color: '#1E2436' },
   warmUp: { backgroundColor: '#FFF8EC', borderRadius: 12, padding: 12, gap: 4 },
   warmUpLabel: { fontSize: 12, fontWeight: '800', color: THEME.orange, textTransform: 'uppercase', letterSpacing: 0.6 },
   rail: { flexDirection: 'row', gap: 8, paddingVertical: 2 },

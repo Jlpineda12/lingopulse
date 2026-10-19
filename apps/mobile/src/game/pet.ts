@@ -107,7 +107,9 @@ export type AccessoryId =
   | 'beanie'
   | 'tophat'
   | 'grad'
-  | 'cowboy';
+  | 'cowboy'
+  | 'jester'
+  | 'chefhat';
 
 export type OutfitId =
   | 'none'
@@ -123,6 +125,10 @@ export type OutfitId =
   | 'jersey'
   | 'labcoat'
   | 'raincoat'
+  | 'tank'
+  | 'jester'
+  | 'chef'
+  | 'hero'
   | 'vest'
   | 'sailor'
   | 'coat'
@@ -133,6 +139,10 @@ export type OutfitId =
 export type GlassesId = 'none' | 'round' | 'square' | 'sun' | 'star' | 'heart' | 'goggles';
 
 export type NoseStyle = 'none' | 'button' | 'round' | 'pointy' | 'wide' | 'snub';
+
+export type EarStyle = 'normal' | 'small' | 'big' | 'round' | 'pointy' | 'none';
+
+export type PantsStyle = 'jeans' | 'shorts' | 'skirt';
 
 export type FaceShape = 'round' | 'oval' | 'square' | 'long' | 'heart' | 'wide';
 export type FacialHair = 'none' | 'stubble' | 'mustache' | 'curly' | 'goatee' | 'beard';
@@ -213,6 +223,10 @@ export interface PetConfig {
   /** Color del pantalón / parte baja (humanos). */
   pantsColor?: string;
   faceShape?: FaceShape;
+  /** Pantalón, short o falda (personas). */
+  pantsStyle?: PantsStyle;
+  /** Forma de las orejas (personas). */
+  earStyle?: EarStyle;
   facialHair?: FacialHair;
   /** Lunar en la mejilla. */
   mole?: boolean;
@@ -415,6 +429,21 @@ export const FACE_SHAPES: Array<{ id: FaceShape; label: string }> = [
   { id: 'long', label: 'Alargada' },
   { id: 'heart', label: 'Corazón' },
   { id: 'wide', label: 'Ancha' },
+];
+
+export const EAR_STYLES: Array<{ id: EarStyle; label: string }> = [
+  { id: 'normal', label: 'Normales' },
+  { id: 'small', label: 'Pequeñas' },
+  { id: 'big', label: 'Grandes' },
+  { id: 'round', label: 'Redondas' },
+  { id: 'pointy', label: 'De elfo' },
+  { id: 'none', label: 'Ocultas' },
+];
+
+export const PANTS_STYLES: Array<{ id: PantsStyle; label: string }> = [
+  { id: 'jeans', label: 'Pantalón' },
+  { id: 'shorts', label: 'Shorts' },
+  { id: 'skirt', label: 'Falda' },
 ];
 
 export const FACIAL_HAIR: Array<{ id: FacialHair; label: string }> = [
@@ -762,6 +791,8 @@ export const ACCESSORIES: Array<{
   { id: 'grad', label: 'Birrete', glyph: 'crown', unlockLevel: 1 },
   { id: 'tophat', label: 'Sombrero de Copa', glyph: 'wizard', unlockLevel: 2 },
   { id: 'cowboy', label: 'Sombrero Vaquero', glyph: 'strawhat', unlockLevel: 2 },
+  { id: 'jester', label: 'Gorro de Bufón', glyph: 'wizard', unlockLevel: 1 },
+  { id: 'chefhat', label: 'Gorro de Chef', glyph: 'cap', unlockLevel: 1 },
 ];
 
 export interface FoodItem {
@@ -1154,6 +1185,10 @@ export const OUTFITS: Array<{
   { id: 'jersey', label: 'Camiseta deportiva', glyph: 'outfit-hoodie', cost: 0, color: '#E11D48' },
   { id: 'labcoat', label: 'Bata de laboratorio', glyph: 'outfit-coat', cost: 0, color: '#F8FAFC' },
   { id: 'raincoat', label: 'Impermeable', glyph: 'outfit-hoodie', cost: 0, color: '#FACC15' },
+  { id: 'tank', label: 'Tirantes y collar', glyph: 'outfit-vest', cost: 0, color: '#E11D48' },
+  { id: 'chef', label: 'Chef', glyph: 'outfit-coat', cost: 0, color: '#FFFFFF' },
+  { id: 'jester', label: 'Bufón', glyph: 'outfit-vest', cost: 0, color: '#7B3FE4' },
+  { id: 'hero', label: 'Superhéroe', glyph: 'outfit-hoodie', cost: 0, color: '#2563EB' },
   { id: 'vest', label: 'Chaleco Pirata', glyph: 'outfit-vest', cost: 30, color: '#E63946', collection: 'pirate' },
   { id: 'sailor', label: 'Marinero', glyph: 'outfit-sailor', cost: 25, color: '#2563EB', collection: 'pirate' },
   { id: 'coat', label: 'Abrigo de Capitán', glyph: 'outfit-coat', cost: 60, color: '#2B3B5C', collection: 'pirate' },

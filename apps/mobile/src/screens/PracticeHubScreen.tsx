@@ -21,6 +21,7 @@ import {
   type QuickRoleplayMission,
 } from '@lingopulse/shared';
 import { useAppState } from '../context/AppStateContext';
+import { SCENE_META, unitSceneTheme } from '../game/unitScenes';
 import { useGame, type ActivityKind, type Screen } from '../context/GameContext';
 import {
   BIOME_PALETTES,
@@ -249,6 +250,12 @@ export function PracticeHubScreen() {
                   done={stars > 0}
                   active={idx === currentIdx}
                   showCompanion={idx === currentIdx}
+                  illustrationKind={SCENE_META[unitSceneTheme(u.id)].illustration}
+                  scene={
+                    idx === currentIdx
+                      ? { theme: unitSceneTheme(u.id), ...SCENE_META[unitSceneTheme(u.id)] }
+                      : undefined
+                  }
                   onPress={() => {
                     if (!unlocked) {
                       setLockedHint(
