@@ -58,20 +58,67 @@ function mc(q: string, correct: string, wrong: string[], seed: string, why?: str
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/**
- * Frase de ejemplo con el término en hueco. Acepta formas flexionadas
- * ("put off" → "put it off" no, pero "booked" para "book" sí).
- */
-export function blankTerm(example: string, term: string): string | null {
-  const exact = new RegExp(`\\b${escapeRe(term)}\\b`, 'i');
-  if (exact.test(example)) return example.replace(exact, '___');
-  const words = term.split(/\s+/);
-  if (words.length === 1 && term.length > 3) {
-    const stem = term.replace(/(e|y)$/i, '');
-    const re = new RegExp(`\\b${escapeRe(stem)}\\w{0,4}\\b`, 'i');
-    if (re.test(example)) return example.replace(re, '___');
+/** Formas irregulares frecuentes (pasado y participio) para encontrar el término conjugado. */
+const IRREGULAR: Record<string, string[]> = {
+  be: ['was', 'were', 'been', 'is', 'are', 'am'], become: ['became'], begin: ['began', 'begun'], break: ['broke', 'broken'],
+  bring: ['brought'], build: ['built'], buy: ['bought'], catch: ['caught'], choose: ['chose', 'chosen'], come: ['came'],
+  cost: ['cost'], cut: ['cut'], deal: ['dealt'], do: ['did', 'done', 'does'], draw: ['drew', 'drawn'], drink: ['drank', 'drunk'],
+  drive: ['drove', 'driven'], eat: ['ate', 'eaten'], fall: ['fell', 'fallen'], feel: ['felt'], fight: ['fought'], find: ['found'],
+  fly: ['flew', 'flown'], forget: ['forgot', 'forgotten'], get: ['got', 'gotten'], give: ['gave', 'given'], go: ['went', 'gone'],
+  grow: ['grew', 'grown'], have: ['had', 'has'], hear: ['heard'], hide: ['hid', 'hidden'], hold: ['held'], hurt: ['hurt'],
+  keep: ['kept'], know: ['knew', 'known'], lead: ['led'], leave: ['left'], lend: ['lent'], let: ['let'], lie: ['lay', 'lain'],
+  lose: ['lost'], make: ['made'], mean: ['meant'], meet: ['met'], pay: ['paid'], put: ['put'], quit: ['quit'], read: ['read'],
+  ride: ['rode', 'ridden'], ring: ['rang', 'rung'], rise: ['rose', 'risen'], run: ['ran'], say: ['said'], see: ['saw', 'seen'],
+  seek: ['sought'], sell: ['sold'], send: ['sent'], set: ['set'], shake: ['shook', 'shaken'], shut: ['shut'], sing: ['sang', 'sung'],
+  sit: ['sat'], sleep: ['slept'], speak: ['spoke', 'spoken'], spend: ['spent'], stand: ['stood'], steal: ['stole', 'stolen'],
+  stick: ['stuck'], strike: ['struck'], swim: ['swam', 'swum'], take: ['took', 'taken'], teach: ['taught'], tear: ['tore', 'torn'],
+  tell: ['told'], think: ['thought'], throw: ['threw', 'thrown'], understand: ['understood'], wake: ['woke', 'woken'],
+  wear: ['wore', 'worn'], win: ['won'], write: ['wrote', 'written'], undertake: ['undertook', 'undertaken'],
+  overcome: ['overcame'], withdraw: ['withdrew', 'withdrawn'], forgive: ['forgave', 'forgiven'], mislead: ['misled'],
+  bear: ['bore', 'borne'], weave: ['wove', 'woven'], shed: ['shed'], spread: ['spread'], upset: ['upset'], bet: ['bet'],
+};
+
+/** Variantes conjugadas de una palabra (works, worked, working, studied, stopped, irregulares…). */
+function wordForms(word: string): string[] {
+  const w = word.toLowerCase();
+  const forms = new Set<string>([w, `${w}s`, `${w}es`, `${w}ed`, `${w}d`, `${w}ing`]);
+  if (/[^aeiou]y$/.test(w)) {
+    forms.add(`${w.slice(0, -1)}ies`);
+    forms.add(`${w.slice(0, -1)}ied`);
   }
-  return null;
+  if (/e$/.test(w)) forms.add(`${w.slice(0, -1)}ing`);
+  if (/[^aeiou][aeiou][bdgklmnprt]$/.test(w)) {
+    forms.add(`${w}${w.slice(-1)}ed`);
+    forms.add(`${w}${w.slice(-1)}ing`);
+  }
+  for (const f of IRREGULAR[w] ?? []) forms.add(f);
+  return [...forms];
+}
+
+/**
+ * Busca el término dentro del ejemplo, aceptando la primera palabra conjugada
+ * ("take photos" → "took photos", "apply for" → "applied for") y plurales al final.
+ * Devuelve el texto tal como aparece en el ejemplo.
+ */
+export function findTerm(example: string, term: string): string | null {
+  const exact = new RegExp(`\\b${escapeRe(term)}\\b`, 'i');
+  const hit = example.match(exact);
+  if (hit) return hit[0];
+  const words = term.trim().split(/\s+/);
+  const first = words[0]!.replace(/[^a-zA-Z'-]/g, '');
+  if (!first) return null;
+  const rest = words.slice(1).map((w) => escapeRe(w));
+  const head = `(?:${wordForms(first).map(escapeRe).join('|')})`;
+  // La última palabra puede ir en plural / conjugada si el término es de una sola palabra.
+  const pattern = rest.length ? `${head}\\s+${rest.join('\\s+')}(?:s|es)?` : head;
+  const m = example.match(new RegExp(`\\b${pattern}\\b`, 'i'));
+  return m ? m[0] : null;
+}
+
+/** Frase de ejemplo con el término en hueco ("___"), o null si el ejemplo no lo contiene. */
+export function blankTerm(example: string, term: string): string | null {
+  const found = findTerm(example, term);
+  return found ? example.replace(found, '___') : null;
 }
 
 const SPANISH_SUPPORT: PracticeLevel[] = ['A1', 'A2'];
@@ -97,13 +144,15 @@ export function unitQuestionBank(unit: Unit): UnitQuestion[] {
     } else {
       bank.push(mc(`Which word matches this definition? "${v.def}"`, v.term, pick((o) => o.term), `${unit.id}-d-${i}`, v.ex));
     }
-    // 2) Hueco en contexto
-    const gap = blankTerm(v.ex, v.term);
-    if (gap) {
+    // 2) Hueco en contexto: la respuesta es la forma que aparece en la frase (took photos, applied for…)
+    const used = findTerm(v.ex, v.term);
+    if (used) {
+      const gap = v.ex.replace(used, '___');
+      const answer = used === used.toLowerCase() || /^[A-Z]/.test(v.term) ? used : used.toLowerCase();
       bank.push(
         mc(
           spanish ? `Completa: ${gap}` : `Complete: ${gap}`,
-          v.term,
+          answer,
           pick((o) => o.term),
           `${unit.id}-g-${i}`,
           spanish ? `${v.term} = ${v.es}` : v.def
