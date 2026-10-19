@@ -12,6 +12,9 @@ import {
   READING_PASSAGES,
   scorePlacementTest,
   SPEAKING_TOPICS,
+  isUnitUnlocked,
+  unitsForLevel,
+  unitStars,
   WRITING_PROMPTS,
   type PlacementResult,
   type PracticeLevel,
@@ -46,6 +49,7 @@ import { GRADIENTS, SHADOW, THEME, TYPE } from '../theme/colors';
 const LEVEL_FILTERS: readonly PracticeLevel[] = CEFR_LEVELS;
 
 type HubCategory =
+  | 'topics'
   | 'speaking'
   | 'listening'
   | 'reading'
@@ -59,6 +63,7 @@ const HUB_WORLDS: Array<{
   biome: IslandBiomeKey;
   mcIcon: keyof typeof MaterialCommunityIcons.glyphMap;
 }> = [
+  { id: 'topics', label: 'Islas Tema', biome: 'topics', mcIcon: 'island' },
   { id: 'speaking', label: 'Isla Voz', biome: 'speaking', mcIcon: 'microphone-variant' },
   { id: 'listening', label: 'Isla Oído', biome: 'listening', mcIcon: 'headphones-settings' },
   { id: 'reading', label: 'Isla Lectura', biome: 'reading', mcIcon: 'book-open-page-variant' },
@@ -80,7 +85,8 @@ interface IslandItem {
 export function PracticeHubScreen() {
   const { locale } = useAppState();
   const { progress, setLevel, openScreen, completeActivity } = useGame();
-  const [activeTab, setActiveTab] = useState<HubCategory>('speaking');
+  const [activeTab, setActiveTab] = useState<HubCategory>('topics');
+  const [lockedHint, setLockedHint] = useState<string | null>(null);
   const [levelPickerOpen, setLevelPickerOpen] = useState(false);
 
   // Estado para Misiones de Roleplay Rápidas
@@ -192,6 +198,67 @@ export function PracticeHubScreen() {
                 {!isLast ? (
                   <SkyBridgeConnector fromLeft={idx % 2 === 0} />
                 ) : null}
+              </Reveal>
+            );
+          })}
+        </IslandSkyBackdrop>
+      </View>
+    );
+  };
+
+  /** Islas por tema: cada una es una clase (teoría → práctica → quiz) y se abren en orden. */
+  const renderTopicsArchipelago = () => {
+    const units = unitsForLevel(progress.level);
+    const all = progress.units ?? {};
+    const currentIdx = units.findIndex((u) => unitStars(all[u.id]) === 0);
+    const conquered = units.filter((u) => unitStars(all[u.id]) > 0).length;
+    const totalStars = units.reduce((a, u) => a + unitStars(all[u.id]), 0);
+    return (
+      <View style={{ gap: 14 }}>
+        <Reveal index={2}>
+          <WorldBiomeHeader
+            biomeKey="topics"
+            description={`Cada isla es una clase: primero la teoría (vocabulario y gramática), luego reading, listening, speaking y writing, y al final un quiz. ${conquered}/${units.length} islas conquistadas · ${totalStars} estrellas.`}
+            totalCount={units.length}
+          />
+        </Reveal>
+        {lockedHint ? (
+          <Card tone="amber">
+            <Text style={TYPE.callout}>{lockedHint}</Text>
+          </Card>
+        ) : null}
+        {units.length === 0 ? (
+          <Card>
+            <Text style={TYPE.callout}>Pronto habrá islas para este nivel.</Text>
+          </Card>
+        ) : null}
+        <IslandSkyBackdrop>
+          {units.map((u, idx) => {
+            const stars = unitStars(all[u.id]);
+            const unlocked = isUnitUnlocked(units, u.id, all);
+            const isLast = idx === units.length - 1;
+            return (
+              <Reveal key={u.id} index={3 + Math.min(idx, 8)}>
+                <FloatingIslandQuestNode
+                  index={idx}
+                  biomeKey="topics"
+                  stepLabel={`ISLA ${u.n} · ${stars ? '★'.repeat(stars) + '☆'.repeat(3 - stars) : unlocked ? u.titleEs : '🔒'}`}
+                  title={`${u.emoji} ${u.title}`}
+                  level={u.level}
+                  done={stars > 0}
+                  active={idx === currentIdx}
+                  showCompanion={idx === currentIdx}
+                  onPress={() => {
+                    if (!unlocked) {
+                      setLockedHint(`🔒 "${u.title}" se abre cuando conquistes la isla ${u.n - 1} (aprueba su quiz final).`);
+                      playSfx('wrong');
+                      return;
+                    }
+                    setLockedHint(null);
+                    openScreen({ name: 'unit', unitId: u.id });
+                  }}
+                />
+                {!isLast ? <SkyBridgeConnector fromLeft={idx % 2 === 0} lit={stars > 0} /> : null}
               </Reveal>
             );
           })}
@@ -626,6 +693,8 @@ export function PracticeHubScreen() {
         activeTab === 'reading' ||
         activeTab === 'writing') &&
         renderSkillArchipelago(activeTab)}
+
+      {activeTab === 'topics' && renderTopicsArchipelago()}
 
       {activeTab === 'roleplay' && renderRoleplayArchipelago()}
 

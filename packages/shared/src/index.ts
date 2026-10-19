@@ -6,3 +6,4 @@ export * from './domain/metrics.js';
 export * from './domain/fsrs.js';
 export * from './curriculum/b1-module1.js';
 export * from './practice/index.js';
+export * from './units/index.js';

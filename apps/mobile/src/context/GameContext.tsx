@@ -12,10 +12,14 @@ import {
   flameTier,
   isoWeekKey,
   localDateKey,
+  QUIZ_PASS,
+  unitStars,
   visibleStreak,
   type FlameTier,
   type PracticeLevel,
   type StreakMilestone,
+  type UnitProgress,
+  type UnitStep,
 } from '@lingopulse/shared';
 import { currentEvent, EMPTY_EVENT_PROGRESS, type EventProgress } from '../game/events';
 import { buildLeague, LEAGUE_TIERS, previousWeekKey, weekElapsed, zoneFor, type LeagueEntry } from '../game/league';
@@ -90,6 +94,8 @@ export interface Progress {
   leagueWeek?: string;
   leagueResult?: { week: string; rank: number; zone: 'promote' | 'stay' | 'demote'; fromTier: number; toTier: number } | null;
   reminders?: { enabled: boolean; hour: number };
+  /** Progreso de las islas por tema (pasos hechos, mejor quiz, estrellas). */
+  units?: Record<string, UnitProgress>;
 }
 
 export interface PlayerAccount {
@@ -144,7 +150,32 @@ export type Screen =
   | { name: 'lesson' }
   | { name: 'minigame'; game?: 'word-rush' | 'sharp-ear' | 'sentence-builder' | 'error-hunt' | 'event-rush' }
   | { name: 'event' }
-  | { name: 'league' };
+  | { name: 'league' }
+  | { name: 'unit'; unitId: string };
+
+/** Resultado del quiz final de una isla. */
+export interface UnitQuizResult {
+  passed: boolean;
+  stars: number;
+  /** Estrellas nuevas respecto al mejor intento anterior. */
+  newStars: number;
+  /** Primera vez que se conquista la isla. */
+  conquered: boolean;
+  bonusCoins: number;
+}
+
+/** "unit:a1-03:reading" → { unitId: 'a1-03', step: 'reading' } */
+function parseUnitRef(refId?: string): { unitId: string; step: UnitStep } | null {
+  const m = refId?.match(/^unit:([^:]+):(speaking|listening|reading|writing)$/);
+  return m ? { unitId: m[1]!, step: m[2] as UnitStep } : null;
+}
+
+function withUnitStep(p: Progress, unitId: string, step: UnitStep): Progress {
+  const current = p.units?.[unitId] ?? { done: [] };
+  if (current.done.includes(step)) return p;
+  const updated: UnitProgress = { ...current, done: [...current.done, step] };
+  return { ...p, units: { ...(p.units ?? {}), [unitId]: { ...updated, stars: unitStars(updated) } } };
+}
 
 export interface StreakView {
   streak: number;
@@ -196,7 +227,12 @@ interface GameContextValue {
   goBack: () => void;
   lastReward: Reward | null;
   dismissReward: () => void;
-  completeActivity: (entry: { kind: ActivityKind; title: string; score?: number; speakingSec?: number }) => Reward;
+  /** `refId` = id del ejercicio; si es de una isla ("unit:a1-03:reading") marca ese paso. */
+  completeActivity: (entry: { kind: ActivityKind; title: string; score?: number; speakingSec?: number; refId?: string }) => Reward;
+  /** Marca un paso de teoría de una isla (vocabulario o gramática). */
+  markUnitStep: (unitId: string, step: UnitStep) => void;
+  /** Registra el quiz final de una isla: XP, monedas y estrellas. */
+  finishUnitQuiz: (unitId: string, title: string, score: number) => UnitQuizResult;
   awardDailyQuiz: (itemId: string, correct: boolean) => boolean;
   toggleSavedWord: (itemId: string) => void;
   updatePet: (patch: Partial<PetConfig>) => void;
@@ -626,8 +662,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   );
 
   const completeActivity: GameContextValue['completeActivity'] = useCallback(
-    ({ kind, title, score, speakingSec }) => {
-      const p = progressRef.current;
+    ({ kind, title, score, speakingSec, refId }) => {
+      const unitRef = parseUnitRef(refId);
+      const p = unitRef ? withUnitStep(progressRef.current, unitRef.unitId, unitRef.step) : progressRef.current;
       const key = localDateKey();
       const today = p.activityLog[key] ?? [];
       const xp = baseXp(kind, score);
@@ -753,6 +790,40 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       lastReward,
       dismissReward: () => setLastReward(null),
       completeActivity,
+      markUnitStep: (unitId, step) => {
+        const next = withUnitStep(progressRef.current, unitId, step);
+        progressRef.current = next;
+        setProgress(next);
+      },
+      finishUnitQuiz: (unitId, title, score) => {
+        const before = progressRef.current.units?.[unitId] ?? { done: [] };
+        const prevStars = unitStars(before);
+        const passed = score >= QUIZ_PASS;
+        // El quiz cuenta como actividad (XP, racha y meta diaria) aunque no se apruebe.
+        completeActivity({ kind: 'lesson', title, score });
+        const p = progressRef.current;
+        const withQuiz = passed ? withUnitStep(p, unitId, 'quiz') : p;
+        const cur = withQuiz.units?.[unitId] ?? { done: [] };
+        const updated: UnitProgress = {
+          ...cur,
+          bestQuiz: Math.max(cur.bestQuiz ?? 0, score),
+          completedAt: passed ? cur.completedAt ?? Date.now() : cur.completedAt,
+        };
+        const stars = unitStars(updated);
+        const newStars = Math.max(0, stars - prevStars);
+        const conquered = passed && prevStars === 0;
+        const bonusCoins = (conquered ? 30 : 0) + newStars * 10;
+        const next: Progress = {
+          ...withQuiz,
+          coins: withQuiz.coins + bonusCoins,
+          stars: (withQuiz.stars ?? 0) + newStars,
+          units: { ...(withQuiz.units ?? {}), [unitId]: { ...updated, stars } },
+        };
+        progressRef.current = next;
+        setProgress(next);
+        if (passed) triggerPetEmotion('celebrate', 5200);
+        return { passed, stars, newStars, conquered, bonusCoins };
+      },
       awardDailyQuiz,
       toggleSavedWord: (id) =>
         setProgress((p) => ({

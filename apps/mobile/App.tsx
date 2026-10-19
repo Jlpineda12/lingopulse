@@ -29,6 +29,7 @@ import { LessonScreen } from './src/screens/LessonScreen';
 import { MinigameScreen } from './src/screens/MinigameScreen';
 import { EventScreen } from './src/screens/EventScreen';
 import { LeagueScreen } from './src/screens/LeagueScreen';
+import { UnitScreen } from './src/screens/UnitScreen';
 import { THEME } from './src/theme/colors';
 import { setUiLanguage } from './src/i18n';
 import { uiLanguageFor } from '@lingopulse/shared';
@@ -60,6 +61,8 @@ function CurrentScreen() {
       return <EventScreen />;
     case 'league':
       return <LeagueScreen />;
+    case 'unit':
+      return <UnitScreen unitId={screen.unitId} />;
     default:
       if (tab === 'daily') return <DailyScreen />;
       if (tab === 'practice') return <PracticeHubScreen />;

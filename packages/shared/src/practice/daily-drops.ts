@@ -1,5 +1,6 @@
 import type { DailyCategory, DailyItem, PracticeLevel } from './types.js';
 import { EXPERIENCE_DAILY_ITEMS } from './experience-bank.js';
+import { UNIT_DAILY_ITEMS } from '../units/index.js';
 import { uiLanguageFor } from './language.js';
 
 export const DAILY_CATEGORY_META: Record<
@@ -1676,3 +1677,4 @@ export function findDailyItem(id: string): DailyItem | undefined {
 
 // Contenido del Banco de Aprendizaje Experiencial (BancodeVocabulario.txt), ver experience-bank.ts.
 DAILY_ITEMS.push(...EXPERIENCE_DAILY_ITEMS.filter((item) => !DAILY_ITEMS.some((d) => d.term.toLowerCase() === item.term.toLowerCase())));
+DAILY_ITEMS.push(...UNIT_DAILY_ITEMS.filter((item) => !DAILY_ITEMS.some((d) => d.term.toLowerCase() === item.term.toLowerCase())));

@@ -138,6 +138,7 @@ export function ReadingScreen({ passageId }: { passageId?: string }) {
                 completeActivity({
                   kind: 'reading',
                   title: passage.title,
+                  refId: passage.id,
                   score: Math.round((correct / passage.questions.length) * 100),
                 });
                 setFinished(true);
@@ -166,7 +167,7 @@ export function ReadingScreen({ passageId }: { passageId?: string }) {
           <Card>
             <Muted>Otras lecturas:</Muted>
             <View style={ui.rowWrap}>
-              {READING_PASSAGES.filter((p) => p.id !== passage.id).map((p) => (
+              {READING_PASSAGES.filter((p) => p.id !== passage.id && p.level === passage.level).slice(0, 8).map((p) => (
                 <Chip key={p.id} label={p.title} icon="reader" onPress={() => switchPassage(p)} />
               ))}
             </View>

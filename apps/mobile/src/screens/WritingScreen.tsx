@@ -61,7 +61,7 @@ export function WritingScreen({
     });
     setFeedback(fb);
     setLoading(false);
-    if (attempt === 0) completeActivity({ kind: 'writing', title: prompt.title, score: fb.overallScore });
+    if (attempt === 0) completeActivity({ kind: 'writing', title: prompt.title, score: fb.overallScore, refId: prompt.id });
     setAttempt((a) => a + 1);
   };
 
@@ -141,7 +141,8 @@ export function WritingScreen({
               label="Otra consigna"
               icon="shuffle"
               onPress={() => {
-                const pool = WRITING_PROMPTS.filter((p) => p.id !== prompt.id);
+                const sameLevel = WRITING_PROMPTS.filter((p) => p.id !== prompt.id && p.level === prompt.level);
+                const pool = sameLevel.length ? sameLevel : WRITING_PROMPTS.filter((p) => p.id !== prompt.id);
                 setPrompt(pool[Math.floor(Math.random() * pool.length)]!);
                 setText('');
                 setFeedback(null);

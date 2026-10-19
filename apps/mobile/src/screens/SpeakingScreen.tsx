@@ -104,6 +104,7 @@ function TopicPractice({ initialTopicId }: { initialTopicId?: string }) {
     completeActivity({
       kind: 'speaking',
       title: topic.title,
+      refId: topic.id,
       score: fb.overallScore,
       speakingSec: recording.typed ? 0 : recording.metrics.voicedMs / 1000,
     });
@@ -292,7 +293,7 @@ function ReadAloudPractice() {
   const { todayKey, completeActivity, progress } = useGame();
   const sentences = useMemo(() => {
     const drop = getDailyDrop(todayKey, progress.level);
-    return [...drop.items.map((i) => i.examples[0]!).filter(Boolean), ...LISTENING_TRACKS.flatMap((t) => t.dictation)];
+    return [...drop.items.map((i) => i.examples[0]!).filter(Boolean), ...LISTENING_TRACKS.filter((t) => t.level === progress.level).flatMap((t) => t.dictation)];
   }, [todayKey, progress.level]);
   const [idx, setIdx] = useState(0);
   const [result, setResult] = useState<AlignmentResult | null>(null);

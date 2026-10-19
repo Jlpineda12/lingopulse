@@ -7,6 +7,7 @@ import type {
 } from './types.js';
 import { dayNumberFromKey, localDateKey } from './daily-drops.js';
 import { EXPERIENCE_LISTENING_TRACKS, EXPERIENCE_SPEAKING_TOPICS, EXPERIENCE_WRITING_PROMPTS } from './experience-bank.js';
+import { UNIT_LISTENING_TRACKS, UNIT_READING_PASSAGES, UNIT_SPEAKING_TOPICS, UNIT_WRITING_PROMPTS } from '../units/index.js';
 
 /* ------------------------------------------------------------------ */
 /* SPEAKING                                                            */
@@ -1307,3 +1308,9 @@ export function getDailyPractice(dateKey: string = localDateKey(), level?: Pract
 SPEAKING_TOPICS.push(...EXPERIENCE_SPEAKING_TOPICS);
 LISTENING_TRACKS.push(...EXPERIENCE_LISTENING_TRACKS);
 WRITING_PROMPTS.push(...EXPERIENCE_WRITING_PROMPTS);
+
+// Ejercicios de las islas por tema (units/): también aparecen en la práctica libre de cada habilidad.
+SPEAKING_TOPICS.push(...UNIT_SPEAKING_TOPICS);
+LISTENING_TRACKS.push(...UNIT_LISTENING_TRACKS);
+READING_PASSAGES.push(...UNIT_READING_PASSAGES);
+WRITING_PROMPTS.push(...UNIT_WRITING_PROMPTS);

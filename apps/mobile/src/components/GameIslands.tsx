@@ -42,7 +42,8 @@ export type IslandBiomeKey =
   | 'daily'
   | 'lesson'
   | 'roleplay'
-  | 'placement';
+  | 'placement'
+  | 'topics';
 
 type Decor = 'palms' | 'pines' | 'crystals' | 'coral' | 'cactus';
 type LandmarkKind = 'conch' | 'bell' | 'tree' | 'quill' | 'arch' | 'colosseum' | 'lighthouse' | 'temple';
@@ -120,6 +121,12 @@ export const BIOME_PALETTES: Record<IslandBiomeKey, BiomePalette> = {
     topColors: ['#B4E8FF', '#7AA2FF'], cliffLight: '#A9B6C9', cliffMid: '#7C8AA2', cliffShadow: '#525F78',
     accent: '#4F46E5', mcIcon: 'drama-masks', ionIcon: 'chatbubbles', decor: 'palms', waterfall: false, grass: '#7DDB9B',
     sand: '#FFE6A8', landmark: 'lighthouse',
+  },
+  topics: {
+    worldNameEs: 'Archipiélago de Temas · Clases', worldTagEs: 'TEORÍA + QUIZ',
+    topColors: ['#A6F0E4', '#3FC9C0'], cliffLight: '#C9B79A', cliffMid: '#9C8A6E', cliffShadow: '#6C5D48',
+    accent: '#0EA5A0', mcIcon: 'island', ionIcon: 'map', decor: 'palms', waterfall: true, grass: '#6FDC9A',
+    sand: '#FFE9B8', landmark: 'lighthouse',
   },
   placement: {
     worldNameEs: 'Isla del Cielo · Nivel CEFR', worldTagEs: 'RANGO OFICIAL',
