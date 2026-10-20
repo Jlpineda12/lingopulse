@@ -113,6 +113,10 @@ export function Pet3D({
     handleRef.current = h;
   };
 
+  /** Las pupilas siguen el dedo: coordenadas relativas a la cabeza (≈ 35 % de la altura). */
+  const lookAtTouch = (x: number, y: number) =>
+    handleRef.current?.lookAt((x - size / 2) / (size / 2), -(y - height * 0.35) / (height / 2));
+
   // Gestos (nativo): arrastrar gira, tocar alegra
   const pan = useMemo(
     () =>
@@ -120,9 +124,11 @@ export function Pet3D({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 4,
         onPanResponderTerminationRequest: () => true,
-        onPanResponderMove: (_e, g) => {
+        onPanResponderGrant: (e) => lookAtTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
+        onPanResponderMove: (e, g) => {
           const h = handleRef.current as (PetSceneHandle & { _last?: { x: number; y: number } }) | null;
           if (!h) return;
+          lookAtTouch(e.nativeEvent.locationX, e.nativeEvent.locationY);
           const last = h._last ?? { x: 0, y: 0 };
           h.drag(g.dx - last.x, g.dy - last.y);
           h._last = { x: g.dx, y: g.dy };
@@ -173,6 +179,8 @@ export function Pet3D({
 
     const h = createPetScene(config, size / height, { house, stage, growth: growthStep / 8, focus, scenario });
     attach(h);
+    renderer.shadowMap.enabled = h.shadows;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     let dragging = false;
     let lastX = 0;
@@ -186,6 +194,11 @@ export function Pet3D({
       canvas.style.cursor = 'grabbing';
     };
     const move = (e: PointerEvent) => {
+      // Las pupilas siguen al cursor cuando pasa cerca de la mascota
+      const rect = canvas.getBoundingClientRect();
+      const lx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+      const ly = -(e.clientY - (rect.top + rect.height * 0.35)) / (rect.height / 2);
+      if (Math.abs(lx) < 2.2 && Math.abs(ly) < 2.2) h.lookAt(lx, ly);
       if (!dragging) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
@@ -289,6 +302,8 @@ export function Pet3D({
 
     const h = createPetScene(config, w / hgt, { house, stage, growth: growthStep / 8, focus, scenario });
     attach(h);
+    renderer.shadowMap.enabled = h.shadows;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     let raf = 0;
     let last = Date.now();

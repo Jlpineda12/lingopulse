@@ -348,10 +348,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       } else {
         mistakesRef.current += 1;
         const isTemperamental = petRef.current.personality === 'sassy';
-        if (mistakesRef.current >= 2 || isTemperamental) {
-          triggerPetEmotion('rage', 5600);
+        // Primeros fallos: "¡ups!" (se encoge, ladea la cabeza y suda); si se acumulan, se enfada.
+        if (mistakesRef.current >= (isTemperamental ? 2 : 3)) {
+          triggerPetEmotion(mistakesRef.current >= 4 ? 'rage' : 'angry', 4500);
         } else {
-          triggerPetEmotion('angry', 4500);
+          triggerPetEmotion('oops', 3200);
         }
       }
     },

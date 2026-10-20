@@ -265,7 +265,8 @@ export type PetMood =
   | 'rage'
   | 'love'
   | 'eating'
-  | 'celebrate';
+  | 'celebrate'
+  | 'oops';
 
 export const DEFAULT_PET: PetConfig = {
   name: '',
@@ -863,6 +864,7 @@ export const MOOD_META: Record<
   love: { glyph: 'face-love', labelEs: '¡Feliz con tus caricias!', badgeBg: '#FCE7F3', badgeColor: '#BE185D' },
   eating: { glyph: 'face-eating', labelEs: '¡Comiendo delicioso!', badgeBg: '#FEF3C7', badgeColor: '#B45309' },
   celebrate: { glyph: 'face-celebrate', labelEs: '¡Celebrando tu acierto!', badgeBg: '#DCFCE7', badgeColor: '#15803D' },
+  oops: { glyph: 'face-sad', labelEs: '¡Ups! Casi…', badgeBg: '#E0F2FE', badgeColor: '#0369A1' },
 };
 
 export function moodMessage(

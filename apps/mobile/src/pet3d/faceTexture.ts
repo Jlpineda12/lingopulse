@@ -15,23 +15,36 @@ export const FACE_THETA_START = 0.22 * Math.PI;
 export const FACE_THETA_SPAN = 0.56 * Math.PI;
 
 /** Posición vertical (0 = frente, 1 = barbilla) de cada rasgo en la textura. */
-export const FACE_LAYOUT = { brows: 0.355, eyes: 0.455, nose: 0.585, mouth: 0.69 };
+export const FACE_LAYOUT: { brows: number; eyes: number; nose: number; mouth: number; cheeks?: number } = {
+  brows: 0.355,
+  eyes: 0.455,
+  nose: 0.585,
+  mouth: 0.69,
+};
 
-type RGB = [number, number, number];
-const hex = (c: string): RGB => {
+export type RGB = [number, number, number];
+export const hex = (c: string): RGB => {
   const n = parseInt(c.replace('#', ''), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
-const INK: RGB = [40, 30, 34];
-const WHITE: RGB = [255, 255, 255];
+export const INK: RGB = [40, 30, 34];
+export const WHITE: RGB = [255, 255, 255];
 
-class Raster {
-  readonly data = new Uint8Array(FACE_TEX_W * FACE_TEX_H * 4);
+/** Rasterizador 2D mínimo con antialias (elipses, trazos, polígonos) sobre un buffer RGBA. */
+export class Raster {
+  readonly data: Uint8Array;
+
+  constructor(
+    readonly w = FACE_TEX_W,
+    readonly h = FACE_TEX_H
+  ) {
+    this.data = new Uint8Array(w * h * 4);
+  }
 
   private blend(x: number, y: number, c: RGB, a: number) {
-    if (a <= 0 || x < 0 || y < 0 || x >= FACE_TEX_W || y >= FACE_TEX_H) return;
+    if (a <= 0 || x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     // fila invertida: la textura empieza abajo
-    const i = ((FACE_TEX_H - 1 - y) * FACE_TEX_W + x) * 4;
+    const i = ((this.h - 1 - y) * this.w + x) * 4;
     const da = this.data[i + 3]! / 255;
     const oa = a + da * (1 - a);
     if (oa <= 0) return;
@@ -44,8 +57,8 @@ class Raster {
   /** Rellena con cobertura antialias según una distancia con signo (negativa = dentro). */
   fill(bbox: [number, number, number, number], sd: (x: number, y: number) => number, c: RGB, alpha = 1, soft = 0.7) {
     const [x0, y0, x1, y1] = bbox.map(Math.round) as [number, number, number, number];
-    for (let y = Math.max(0, y0 - 2); y <= Math.min(FACE_TEX_H - 1, y1 + 2); y++) {
-      for (let x = Math.max(0, x0 - 2); x <= Math.min(FACE_TEX_W - 1, x1 + 2); x++) {
+    for (let y = Math.max(0, y0 - 2); y <= Math.min(this.h - 1, y1 + 2); y++) {
+      for (let x = Math.max(0, x0 - 2); x <= Math.min(this.w - 1, x1 + 2); x++) {
         const d = sd(x + 0.5, y + 0.5);
         const cov = Math.max(0, Math.min(1, 0.5 - d / soft));
         if (cov > 0) this.blend(x, y, c, cov * alpha);
@@ -126,13 +139,13 @@ class Raster {
   }
 }
 
-const arc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n = 14): Array<[number, number]> =>
+export const arc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n = 14): Array<[number, number]> =>
   Array.from({ length: n + 1 }, (_, i) => {
     const a = a0 + ((a1 - a0) * i) / n;
     return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry] as [number, number];
   });
 
-const rotPts = (pts: Array<[number, number]>, cx: number, cy: number, r: number) =>
+export const rotPts = (pts: Array<[number, number]>, cx: number, cy: number, r: number) =>
   pts.map(([x, y]) => {
     const dx = x - cx;
     const dy = y - cy;
@@ -142,11 +155,38 @@ const rotPts = (pts: Array<[number, number]>, cx: number, cy: number, r: number)
 export type FaceEyes = 'open' | 'closed' | 'happy';
 export type FaceMouth = 'normal' | 'open';
 
-const tstep = (v?: number) => Math.max(-3, Math.min(3, Math.round(v ?? 0)));
+export const tstep = (v?: number) => Math.max(-3, Math.min(3, Math.round(v ?? 0)));
 
 /** Dibuja la cara completa en una textura. */
-export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mouthState: FaceMouth = 'normal'): THREE.DataTexture {
+export interface FaceDrawOptions {
+  /** Partes a dibujar (por defecto todas). Con calcomanías animadas se omiten ojos, cejas y boca. */
+  parts?: { eyes?: boolean; brows?: boolean; mouth?: boolean };
+  /** Filas (0–1) de cada rasgo; por defecto las de las personas. */
+  layout?: { brows: number; eyes: number; nose: number; mouth: number; cheeks?: number };
+  /** Dibujar la nariz (solo personas y siluetas sin hocico). */
+  nose?: boolean;
+}
+
+/** Convierte un raster en textura lista para Three.js. */
+export function rasterTexture(R: Raster): THREE.DataTexture {
+  const tex = new THREE.DataTexture(R.data, R.w, R.h, THREE.RGBAFormat);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+export function drawMiiFace(
+  config: PetConfig,
+  eyesState: FaceEyes = 'open',
+  mouthState: FaceMouth = 'normal',
+  opts: FaceDrawOptions = {}
+): THREE.DataTexture {
   const R = new Raster();
+  const L = opts.layout ?? FACE_LAYOUT;
+  const show = { eyes: true, brows: true, mouth: true, ...(opts.parts ?? {}) };
   const t = config.tuning ?? {};
   const W = FACE_TEX_W;
   const H = FACE_TEX_H;
@@ -159,7 +199,7 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
   const lip = hex(config.lipColor ?? '#D9606E');
 
   // ---------------- Mejillas / maquillaje (debajo de todo) ----------------
-  const cheekY = H * 0.56;
+  const cheekY = H * (L.cheeks ?? 0.56);
   const cheekX = 112;
   const blush = config.blushStyle ?? 'none';
   if (blush === 'pink' || blush === 'peach') {
@@ -202,7 +242,7 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
   const eyeSY = 1 + tstep(t.eyeStretch) * 0.1;
   const eyeSX = 1 - tstep(t.eyeStretch) * 0.04;
   const eyeRot = tstep(t.eyeRotation) * 0.09;
-  const eyeY = H * FACE_LAYOUT.eyes - tstep(t.eyeHeight) * 10;
+  const eyeY = H * L.eyes - tstep(t.eyeHeight) * 10;
   const eyeDX = 74 + tstep(t.eyeSpacing) * 7;
   const style = config.eyeStyle;
 
@@ -285,16 +325,18 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
       R.stroke(rotPts([lidPts[lidPts.length - 1]!, lidPts[lidPts.length - 2]!], ex, eyeY, erot), 5, INK);
     }
   };
-  drawEye(-1);
-  drawEye(1);
+  if (show.eyes) {
+    drawEye(-1);
+    drawEye(1);
+  }
 
   // ---------------- Cejas ----------------
   const brow = config.browStyle ?? 'soft';
-  if (brow !== 'none') {
+  if (brow !== 'none' && show.brows) {
     const bK = 1 + tstep(t.browSize) * 0.12;
     const bSX = 1 + tstep(t.browStretch) * 0.13;
     const bRot = tstep(t.browRotation) * 0.09;
-    const bY = H * FACE_LAYOUT.brows - tstep(t.eyeHeight) * 10 - tstep(t.browHeight) * 9;
+    const bY = H * L.brows - tstep(t.eyeHeight) * 10 - tstep(t.browHeight) * 9;
     const bDX = 72 + tstep(t.eyeSpacing) * 7 + tstep(t.browSpacing) * 7;
     const w = (brow === 'bold' || brow === 'unibrow' ? 14 : brow === 'short' ? 7 : 10) * bK;
     const half = (brow === 'short' ? 19 : 30) * bSX;
@@ -316,9 +358,9 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
 
   // ---------------- Nariz (trazo) ----------------
   const nose = config.noseStyle ?? 'button';
-  if (nose !== 'none') {
+  if (nose !== 'none' && opts.nose !== false) {
     const nK = 1.3 * (1 + tstep(t.noseSize) * 0.12);
-    const nY = H * FACE_LAYOUT.nose - tstep(t.noseHeight) * 9;
+    const nY = H * L.nose - tstep(t.noseHeight) * 9;
     const S = (p: Array<[number, number]>) => p.map(([x, y]) => [cx + x * nK, nY + y * nK] as [number, number]);
     if (nose === 'button') R.stroke(arc(cx, nY, 9 * nK, 7 * nK, -0.2, Math.PI + 0.2, 10), 5.5, INK);
     else if (nose === 'round') R.stroke(arc(cx, nY - 2, 13 * nK, 10 * nK, 0.1, Math.PI - 0.1, 12), 5.5, INK);
@@ -333,11 +375,13 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
   // ---------------- Boca ----------------
   const mK = 1 + tstep(t.mouthSize) * 0.1;
   const mSX = 1 + tstep(t.mouthStretch) * 0.12;
-  const mY = H * FACE_LAYOUT.mouth - tstep(t.mouthHeight) * 9;
+  const mY = H * L.mouth - tstep(t.mouthHeight) * 9;
   const mw = 36 * mK * mSX;
   const mouth = config.mouthStyle ?? 'smile';
   const open = mouthState === 'open' || mouth === 'laugh';
-  if (open) {
+  if (!show.mouth) {
+    // boca animada aparte (calcomanía)
+  } else if (open) {
     const pts: Array<[number, number]> = [[cx - mw, mY - 3], ...arc(cx, mY - 3, mw, 22 * mK, 0, Math.PI, 14).reverse(), [cx + mw, mY - 3]];
     R.polygon(pts, [80, 24, 36]);
     R.polygon([[cx - mw * 0.85, mY - 3], [cx + mw * 0.85, mY - 3], [cx + mw * 0.75, mY + 3], [cx - mw * 0.75, mY + 3]], WHITE);
@@ -387,11 +431,5 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
     else R.stroke(pts, st.w, hex(st.c));
   });
 
-  const tex = new THREE.DataTexture(R.data, W, H, THREE.RGBAFormat);
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+  return rasterTexture(R);
 }

@@ -3,9 +3,12 @@ import type { PetConfig, PetMood, PetStage } from '../game/pet';
 import { box, createSkinRamp, createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon as toonMaterial } from './toonKit';
 import type { PetSceneAction, SceneNpc, UnitSceneTheme } from '../game/unitScenes';
 import { buildNpc, buildUnitSceneProps } from './unitSceneProps';
+import { buildHumanHair } from './humanHair';
+import { buildFaceDecals, type FaceLayout, type MouthPose } from './faceDecals';
 import {
   drawMiiFace,
   FACE_LAYOUT,
+  FACE_TEX_W,
   FACE_PHI_SPAN,
   FACE_THETA_SPAN,
   FACE_THETA_START,
@@ -30,11 +33,15 @@ import { buildHouseDiorama, buildIslandFurniture, type HouseDiorama, type HouseS
 export interface PetSceneHandle {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
+  /** true si la escena usa sombras proyectadas (el renderer debe activar shadowMap). */
+  shadows: boolean;
   update: (dt: number, t: number) => void;
   setMood: (mood: PetMood) => void;
   setSpeaking: (speaking: boolean) => void;
   setEnergy: (energy01: number) => void;
   joy: () => void;
+  /** Mira hacia el dedo/cursor del jugador (coordenadas -1..1, +y arriba). */
+  lookAt: (x: number, y: number) => void;
   drag: (dx: number, dy: number) => void;
   release: () => void;
   dispose: () => void;
@@ -303,8 +310,14 @@ export function createPetScene(
 ): PetSceneHandle {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, aspect, 0.1, 100);
-  camera.position.set(0, 0.45, 7.55);
-  camera.lookAt(0, 0.1, 0);
+  if (config.species === 'human') {
+    // Las personas son más altas que los chibis: cámara un poco más cerca y alta.
+    camera.position.set(0, 0.55, 6.8);
+    camera.lookAt(0, 0.2, 0);
+  } else {
+    camera.position.set(0, 0.45, 7.55);
+    camera.lookAt(0, 0.1, 0);
+  }
 
   const toonRamp = createToonRamp();
 
@@ -315,6 +328,21 @@ export function createPetScene(
   scene.add(new THREE.HemisphereLight(0xfff7ee, 0xc9d6ff, personLight ? 0.38 : 0.55));
   const key = new THREE.DirectionalLight(0xfff6e5, personLight ? 2.1 : 1.85);
   key.position.set(3.2, 4.8, 5.0);
+  if (personLight) {
+    // Sombra suave: la cabeza sombrea los hombros y el torso, y se lee mejor la silueta.
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    const sc = key.shadow.camera;
+    sc.left = -1.4;
+    sc.right = 1.4;
+    sc.top = 1.9;
+    sc.bottom = -1.4;
+    sc.near = 2;
+    sc.far = 14;
+    key.shadow.bias = -0.0015;
+    key.shadow.normalBias = 0.025;
+    key.shadow.radius = 5;
+  }
   scene.add(key);
   const rim = new THREE.DirectionalLight(0xa8d0ff, 0.9);
   rim.position.set(-3.5, 2.2, -2.8);
@@ -440,14 +468,20 @@ export function createPetScene(
    * Proporciones de persona: la cara se modela a escala "chibi" (centro en y = 0.42) y luego
    * toda la cabeza se reduce y se sube sobre un cuerpo más largo, como un Mii.
    */
-  const HUMAN_HEAD_K = 0.62;
-  const HUMAN_HEAD_Y = 0.94;
+  const HUMAN_HEAD_K = 0.8;
+  const HUMAN_HEAD_Y = 0.9;
+  /** Profundidad relativa del torso de persona (algo aplanado, como un muñeco). */
+  const HUMAN_TORSO_Z = 0.78;
+  let humanTorsoProfile: THREE.Vector2[] | null = null;
+  let humanArms: THREE.Group[] | null = null;
+  let humanHeadRig: THREE.Group | null = null;
+  /** Cuánto sobresale el pelo de persona por encima de la coronilla (para encajar gorros). */
+  let humanHairTop = 0;
   const rigY = isHuman ? 0.42 : 0;
   const humanHeadParts: THREE.Object3D[] = [];
   /** Parches de barriga: se ocultan cuando la ropa cubre el torso. */
   const bellyParts: THREE.Object3D[] = [];
   const humanSleeves: THREE.Mesh[] = [];
-  let humanArms: THREE.Group[] | null = null;
   let faceMat: THREE.MeshToonMaterial | null = null;
   const faceCache = new Map<string, THREE.DataTexture>();
   const faceTex = (e: FaceEyes, m: FaceMouth) => {
@@ -557,112 +591,83 @@ export function createPetScene(
           inner.position.set(side * 0.25, 0, 0.35);
           ear.add(inner);
         }
+        ear.userData.ear = true;
         humanHeadParts.push(ear);
       });
     }
-    // Cara dibujada (estilo Mii): textura que envuelve el frente de la cabeza.
-    const faceGeo = new THREE.SphereGeometry(
-      1,
-      40,
-      24,
-      Math.PI / 2 - FACE_PHI_SPAN / 2,
-      FACE_PHI_SPAN,
-      FACE_THETA_START,
-      FACE_THETA_SPAN
-    );
-    faceMat = new THREE.MeshToonMaterial({
-      gradientMap: skinRamp ?? toonRamp,
-      transparent: true,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-    });
-    faceMat.map = faceTex('open', 'normal');
-    const faceDecal = new THREE.Mesh(faceGeo, faceMat);
-    faceDecal.scale.set(humanHead.w * 1.004, humanHead.h * 1.004, humanHead.d * 1.004);
-    faceDecal.position.y = 0.42;
-    faceDecal.renderOrder = 2;
-    humanHeadParts.push(faceDecal);
     body.add(...humanHeadParts);
-    // Cuerpo de Mii: cuello fino y corto, torso recto y estrecho (hombros más angostos
-    // que la cabeza), brazos largos y delgados con la mano a la altura de la cadera, piernas largas.
-    const neck = cylinder(0.075, 0.08, 0.14, bodyMat, 16, 0);
-    neck.position.set(0, 0.46, 0);
-    const torsoProfile = [
-      [0.0, 0.47], [0.1, 0.465], [0.19, 0.44], [0.245, 0.4], [0.265, 0.33],
-      [0.262, 0.18], [0.248, 0.02], [0.236, -0.12], [0.238, -0.2], [0.2, -0.25], [0.0, -0.26],
+    // Cuerpo de figura de vinilo: cabeza grande (≈45 % de la altura) apoyada en los hombros,
+    // torso de barril con hombros redondeados, brazos cortos con mano redonda a la altura de
+    // la cadera, piernas cortas y gruesas y zapatos redondeados.
+    humanTorsoProfile = [
+      [0.0, 0.4], [0.12, 0.395], [0.24, 0.372], [0.31, 0.335], [0.34, 0.27], [0.345, 0.14],
+      [0.336, -0.04], [0.338, -0.22], [0.348, -0.36], [0.33, -0.43], [0.0, -0.45],
     ]
       .reverse() // de abajo hacia arriba: normales hacia afuera
       .map(([r, y]) => new THREE.Vector2(r!, y!));
-    const torsoGeo = new THREE.LatheGeometry(torsoProfile, 28);
+    const torsoGeo = new THREE.LatheGeometry(humanTorsoProfile, 32);
     const shirt = new THREE.Mesh(torsoGeo, shirtMat);
-    shirt.scale.z = 0.74;
+    shirt.scale.z = HUMAN_TORSO_Z;
     const shirtOut = new THREE.Mesh(torsoGeo, OUTLINE_MAT);
     shirtOut.scale.setScalar(1.025);
     shirt.add(shirtOut);
-    const hips = ellipsoid(0.235, 0.1, 0.18, pantsMat, 22, true, 0.03);
-    hips.position.set(0, -0.24, 0);
-    body.add(neck, shirt, hips);
+    const hips = ellipsoid(0.33, 0.1, 0.25, pantsMat, 22, true, 0.03);
+    hips.position.set(0, -0.44, 0);
+    body.add(shirt, hips);
     const pantsStyle = config.pantsStyle ?? 'jeans';
     const cuffMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').offsetHSL(0, -0.05, 0.12), toonRamp);
     [-1, 1].forEach((side) => {
-      const lx = side * 0.11;
+      const lx = side * 0.155;
       if (pantsStyle === 'jeans') {
-        const leg = cylinder(0.088, 0.082, 0.62, pantsMat, 14);
-        leg.position.set(lx, -0.55, 0.0);
-        const cuff = cylinder(0.092, 0.092, 0.05, cuffMat, 14);
-        cuff.position.set(lx, -0.83, 0.0);
+        const leg = cylinder(0.135, 0.125, 0.38, pantsMat, 16);
+        leg.position.set(lx, -0.64, 0.0);
+        const cuff = cylinder(0.138, 0.138, 0.05, cuffMat, 16);
+        cuff.position.set(lx, -0.81, 0.0);
         body.add(leg, cuff);
       } else {
         // Shorts o falda: pierna de piel con calcetín
-        const legSkin = cylinder(0.062, 0.058, 0.6, bodyMat, 12);
-        legSkin.position.set(lx, -0.56, 0.0);
-        const sock = cylinder(0.066, 0.066, 0.08, toon(0xffffff, toonRamp), 12);
-        sock.position.set(lx, -0.82, 0.0);
+        const legSkin = cylinder(0.1, 0.095, 0.36, bodyMat, 14);
+        legSkin.position.set(lx, -0.65, 0.0);
+        const sock = cylinder(0.104, 0.104, 0.08, toon(0xffffff, toonRamp), 14);
+        sock.position.set(lx, -0.8, 0.0);
         body.add(legSkin, sock);
         if (pantsStyle === 'shorts') {
-          const short = cylinder(0.1, 0.095, 0.2, pantsMat, 14);
-          short.position.set(lx, -0.34, 0.0);
+          const short = cylinder(0.145, 0.14, 0.16, pantsMat, 16);
+          short.position.set(lx, -0.54, 0.0);
           body.add(short);
         }
       }
     });
     if (pantsStyle === 'skirt') {
-      const skirtGeo = new THREE.CylinderGeometry(0.24, 0.34, 0.32, 28, 1, true);
+      const skirtGeo = new THREE.CylinderGeometry(0.34, 0.44, 0.24, 28, 1, true);
       const skirtMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B'), toonRamp);
       (skirtMat as THREE.Material).side = THREE.DoubleSide;
       const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-      skirt.position.y = -0.36;
-      skirt.scale.z = 0.8;
+      skirt.position.y = -0.52;
+      skirt.scale.z = 0.82;
       const skirtOut = new THREE.Mesh(skirtGeo, OUTLINE_MAT);
       skirtOut.scale.set(1.02, 1, 1.02);
       skirt.add(skirtOut);
       body.add(skirt);
     }
-    // Brazos con pivote en el hombro: manga, antebrazo (o manga larga) y mano redonda.
+    // Brazos cortos con pivote en el hombro: manga, antebrazo y mano redonda.
     humanArms = [-1, 1].map((side) => {
       const pivot = new THREE.Group();
-      pivot.position.set(side * 0.27, 0.36, 0.0);
-      const sleeve = cylinder(0.078, 0.072, 0.28, toon(accent, toonRamp), 14);
-      sleeve.position.y = -0.12;
-      const cap = ellipsoid(0.082, 0.07, 0.082, sleeve.material as THREE.Material, 14, false);
-      cap.position.y = 0.02;
-      sleeve.add(cap);
-      cap.position.y = 0.14;
+      pivot.position.set(side * 0.3, 0.25, 0.0);
+      const sleeveMat = toon(accent, toonRamp);
+      const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.12, 6, 16), sleeveMat);
+      sleeve.position.y = -0.09;
       humanSleeves.push(sleeve);
-      const forearm = cylinder(0.055, 0.05, 0.3, bodyMat, 14, 1.12);
-      forearm.position.y = -0.4;
-      const cuffSleeve = cylinder(0.068, 0.063, 0.3, sleeve.material as THREE.Material, 14);
-      cuffSleeve.position.y = -0.4;
-      cuffSleeve.userData.longSleeve = true;
-      cuffSleeve.visible = false;
-      humanSleeves.push(cuffSleeve);
-      const hand = ellipsoid(0.062, 0.068, 0.058, bodyMat, 16, true, 0.018);
-      hand.position.y = -0.6;
-      // Brazo de piel debajo de la manga (se ve con camisetas de tirantes)
-      const upper = cylinder(0.056, 0.055, 0.3, bodyMat, 12, 0);
-      upper.position.y = -0.12;
-      pivot.add(upper, forearm, sleeve, cuffSleeve, hand);
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.078, 0.26, 6, 14), bodyMat);
+      arm.position.y = -0.24;
+      const longSleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.24, 6, 14), sleeveMat);
+      longSleeve.position.y = -0.22;
+      longSleeve.userData.longSleeve = true;
+      longSleeve.visible = false;
+      humanSleeves.push(longSleeve);
+      const hand = ellipsoid(0.1, 0.105, 0.095, bodyMat, 18, true, 0.02);
+      hand.position.y = -0.44;
+      pivot.add(arm, longSleeve, sleeve, hand);
       body.add(pivot);
       return pivot;
     });
@@ -922,7 +927,16 @@ export function createPetScene(
     hairGroup.position.set(0, hairCrownY, 0.04);
     hairGroup.scale.setScalar(hairScale);
 
-    if (hairStyle === 'spiky') {
+    if (isHuman) {
+      // Pelo esculpido: una cáscara que abraza la cabeza (como el pelo de una figura de vinilo),
+      // con línea de nacimiento, flequillo y volumen propios de cada peinado.
+      hairGroup.position.set(0, 0.42, 0);
+      hairGroup.scale.setScalar(1);
+      const built = buildHumanHair(hairGroup, hairStyle, humanHead, hairMat, feetMat, goldMat, config.hairHighlight);
+      humanHairTop = built.top;
+      // Las melenas tapan las orejas
+      if (built.coversEars) humanHeadParts.forEach((o) => o.userData.ear && (o.visible = false));
+    } else if (hairStyle === 'spiky') {
       const spikes = [
         { rx: 0.15, rz: 0, sx: 0.15, sy: 0.38, x: 0, z: 0.04 },
         { rx: 0.24, rz: 0.44, sx: 0.13, sy: 0.34, x: -0.14, z: 0.06 },
@@ -1140,7 +1154,7 @@ export function createPetScene(
       });
     }
 
-    if (isSlim && config.hairHighlight && hairStyle !== 'buzz') {
+    if (isSlim && !isHuman && config.hairHighlight && hairStyle !== 'buzz') {
       // Mechas de color sobre el pelo (como las de Tomodachi Life)
       const hlMat = toon(new THREE.Color(config.hairHighlight), toonRamp);
       // Franjas que siguen la curva del casquete de pelo (no sobresalen)
@@ -1152,16 +1166,6 @@ export function createPetScene(
         strip.scale.set(0.735, 0.345, 0.695);
         strip.position.set(0, -0.03, -0.04);
         hairGroup.add(strip);
-      });
-    }
-    if (isHuman && hairStyle !== 'buzz') {
-      // Brillo del pelo (reflejo de vinilo, como el de los Mii)
-      const shineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false });
-      [-0.18, 0.02].forEach((x, i) => {
-        const shine = ellipsoid(0.16 - i * 0.04, 0.022, 0.05, shineMat, 12, false);
-        shine.position.set(x, 0.07 - i * 0.03, 0.63);
-        shine.rotation.set(-0.5, 0, 0.15);
-        hairGroup.add(shine);
       });
     }
     body.add(hairGroup);
@@ -1364,16 +1368,6 @@ export function createPetScene(
   browR.scale.set(browK * browSX, browK, browK);
   body.add(browL, browR);
 
-  if (browStyle === 'unibrow') {
-    const bridge = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.032, 0.16, 8, 12),
-      eyeMat
-    );
-    bridge.rotation.z = Math.PI / 2;
-    bridge.position.set(0, browBaseY - 0.01, faceZ - 0.01);
-    body.add(bridge);
-  }
-
   const baseBrowAngle =
     browStyle === 'hero' || config.eyeStyle === 'fierce'
       ? -0.26
@@ -1386,104 +1380,10 @@ export function createPetScene(
   // --- 10 MODELOS DE MEJILLAS Y RASGOS FACIALES 3D ---
   const blushStyle = config.blushStyle ?? 'pink';
   const cheekX = isSlim ? 0.36 : 0.45;
-  if (blushStyle !== 'none' && !isHuman) {
-    if (blushStyle === 'bandaid') {
-      const bandGroup = new THREE.Group();
-      bandGroup.position.set(0.28, headY + 0.06, faceZ - 0.03);
-      bandGroup.rotation.y = 0.34;
-      bandGroup.rotation.z = -0.24;
-      const stripGeo = new THREE.BoxGeometry(0.22, 0.075, 0.025);
-      const strip = new THREE.Mesh(stripGeo, toon(0xfde68a, toonRamp));
-      const pad = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.065, 0.03),
-        toon(0xfef3c7, toonRamp)
-      );
-      const out = new THREE.Mesh(stripGeo, OUTLINE_MAT);
-      out.scale.set(1.066, 1.099, 1.11);
-      bandGroup.add(strip, pad, out);
-      body.add(bandGroup);
-    } else {
-      [-1, 1].forEach((side) => {
-        if (blushStyle === 'freckles') {
-          const freckleMat = new THREE.MeshBasicMaterial({ color: 0x8d5524 });
-          [-0.04, 0, 0.04].forEach((ox, idx) => {
-            const dot = ellipsoid(0.018, 0.018, 0.012, freckleMat, 8, false);
-            dot.position.set(
-              side * cheekX + ox,
-              headY + 0.02 + (idx % 2 === 0 ? -0.015 : 0.015),
-              faceZ - 0.08
-            );
-            body.add(dot);
-          });
-        } else if (blushStyle === 'star') {
-          const starCheek = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.055, 0),
-            goldMat
-          );
-          starCheek.position.set(side * cheekX, headY + 0.02, faceZ - 0.08);
-          starCheek.scale.set(1, 1, 0.35);
-          body.add(starCheek);
-        } else if (blushStyle === 'hearts') {
-          const hc = createHeartMesh(toon(0xff4d79, toonRamp));
-          hc.scale.setScalar(0.45);
-          hc.position.set(side * cheekX, headY + 0.02, faceZ - 0.07);
-          hc.rotation.y = side * 0.4;
-          body.add(hc);
-        } else if (blushStyle === 'whiskers') {
-          [-0.04, 0.04].forEach((wy) => {
-            const w = new THREE.Mesh(
-              new THREE.CapsuleGeometry(0.01, 0.14, 6, 8),
-              whiskerMat
-            );
-            w.rotation.z = Math.PI / 2 + side * (wy * 2.2);
-            w.rotation.y = side * 0.38;
-            w.position.set(side * (cheekX + 0.04), headY + 0.02 + wy, faceZ - 0.09);
-            body.add(w);
-          });
-        } else if (blushStyle === 'stripes') {
-          [-0.025, 0.025].forEach((sy) => {
-            const stripe = new THREE.Mesh(
-              new THREE.CapsuleGeometry(0.014, 0.11, 6, 8),
-              feetMat
-            );
-            stripe.rotation.z = Math.PI / 2;
-            stripe.rotation.y = side * 0.42;
-            stripe.position.set(side * cheekX, headY + 0.02 + sy, faceZ - 0.09);
-            body.add(stripe);
-          });
-        } else if (blushStyle === 'dimples') {
-          const dimple = new THREE.Mesh(
-            new THREE.TorusGeometry(0.036, 0.011, 8, 14, Math.PI * 0.8),
-            mouthMat
-          );
-          dimple.position.set(side * (cheekX - 0.12), headY - 0.02, faceZ - 0.03);
-          dimple.rotation.z = side > 0 ? -0.4 : Math.PI + 0.4;
-          body.add(dimple);
-        } else {
-          const cheekColor = blushStyle === 'peach' ? 0xff9e6d : 0xff759f;
-          const cheekMat = new THREE.MeshBasicMaterial({
-            color: cheekColor,
-            transparent: true,
-            opacity: 0.68,
-            depthWrite: false,
-          });
-          const c = ellipsoid(0.12, 0.06, 0.02, cheekMat, 16, false);
-          c.position.set(side * cheekX, headY + 0.02, faceZ - 0.1);
-          c.rotation.y = side * 0.48;
-          body.add(c);
-        }
-      });
-    }
-  }
-
   // --- 10 MODELOS DE BOCA 3D PERSONALIZABLES ---
   const mouth = new THREE.Group();
   mouth.position.set(0, headY + (isSlim ? -0.04 : 0.02) + mouthDY, faceZ + 0.01);
   mouth.scale.set(mouthK * mouthSX, mouthK, mouthK);
-  if (isHuman) {
-    // La boca de la persona está dibujada: este grupo solo sirve de ancla para el bigote.
-    mouth.position.set(0, 0.42 + faceRowY(FACE_LAYOUT.mouth) + mouthDY, faceRowZ(FACE_LAYOUT.mouth));
-  }
   mouth.rotation.x = -0.05;
   body.add(mouth);
 
@@ -1621,42 +1521,92 @@ export function createPetScene(
           ? { w: 0.88, h: 0.78, d: 0.84, y: 0.2 }
           : { w: 1.0, h: 0.95, d: 0.96, y: 0 };
 
+  // --- CARA DE CALCOMANÍAS (todas las especies) ---
+  const elevOf = (y: number) => Math.asin(Math.max(-0.95, Math.min(0.95, (y - headInfo.y) / headInfo.h)));
+  const rowOf = (elev: number) => (Math.PI / 2 - elev - FACE_THETA_START) / FACE_THETA_SPAN;
+  const decalSize = isHuman ? 1 : isMeeseeks ? 1.12 : isCat || isDragon ? 1.25 : 1.38;
+  const faceLayout: FaceLayout = isHuman
+    ? {
+        eyeElev: Math.PI / 2 - (FACE_THETA_START + FACE_LAYOUT.eyes * FACE_THETA_SPAN),
+        eyeAz: (74 / FACE_TEX_W) * FACE_PHI_SPAN,
+        browElev: Math.PI / 2 - (FACE_THETA_START + FACE_LAYOUT.brows * FACE_THETA_SPAN),
+        mouthElev: Math.PI / 2 - (FACE_THETA_START + FACE_LAYOUT.mouth * FACE_THETA_SPAN),
+        eyeSize: 0.3,
+        browSize: 0.3,
+        mouthSize: 0.32,
+      }
+    : {
+        eyeElev: elevOf(headY + 0.2),
+        eyeAz: Math.asin(Math.min(0.9, (isSlim ? 0.2 : 0.25) / headInfo.w)),
+        browElev: elevOf(headY + (isSlim ? 0.38 : 0.45)),
+        mouthElev: elevOf(headY + (isSlim ? -0.06 : 0.0)),
+        eyeSize: 0.3 * decalSize,
+        browSize: 0.24 * decalSize,
+        mouthSize: (isMeeseeks ? 0.46 : 0.2) * decalSize,
+        // Hocicos: la boca va sobre el morro
+        mouthAnchor: isBear
+          ? { p: new THREE.Vector3(0, -0.06, 1.05), n: new THREE.Vector3(0, -0.25, 1).normalize() }
+          : config.species === 'fox'
+            ? { p: new THREE.Vector3(0, -0.14, 1.05), n: new THREE.Vector3(0, -0.2, 1).normalize() }
+            : isDragon
+              ? { p: new THREE.Vector3(0, 0.06, 0.97), n: new THREE.Vector3(0, -0.3, 1).normalize() }
+              : undefined,
+      };
+  const face = buildFaceDecals(
+    config,
+    { w: headInfo.w, h: headInfo.h, d: headInfo.d, cy: headInfo.y },
+    faceLayout,
+    {
+      humanoid: isSlim,
+      material: (map) =>
+        Object.assign(toon(0xffffff, toonRamp), {
+          map,
+          transparent: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -4,
+        }),
+    }
+  );
+  body.add(face.group);
+  // Rubor, maquillaje, nariz de trazo, lunar y pintura facial: una textura fija sobre la cara.
+  const staticFaceTex = drawMiiFace(config, 'open', 'normal', {
+    parts: { eyes: false, brows: false, mouth: false },
+    nose: isSlim,
+    layout: isHuman
+      ? FACE_LAYOUT
+      : {
+          brows: rowOf(faceLayout.browElev),
+          eyes: rowOf(faceLayout.eyeElev),
+          nose: rowOf((faceLayout.eyeElev + faceLayout.mouthElev) / 2),
+          mouth: rowOf(faceLayout.mouthElev),
+          cheeks: rowOf(elevOf(headY + 0.05)),
+        },
+  });
+  faceCache.set('static', staticFaceTex);
+  const staticFace = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 40, 24, Math.PI / 2 - FACE_PHI_SPAN / 2, FACE_PHI_SPAN, FACE_THETA_START, FACE_THETA_SPAN),
+    Object.assign(toon(0xffffff, toonRamp), {
+      map: staticFaceTex,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    })
+  );
+  staticFace.scale.set(headInfo.w * 1.004, headInfo.h * 1.004, headInfo.d * 1.004);
+  staticFace.position.y = headInfo.y;
+  staticFace.renderOrder = 2;
+  body.add(staticFace);
+  // La cara 3D antigua se mantiene solo como ancla (bigote) y queda oculta.
+  eyes.visible = false;
+  browL.visible = false;
+  browR.visible = false;
+  mouth.visible = false;
+  mouth.position.copy(face.mouthPoint);
+
   // --- NARIZ (personas, chibi y muñeco esbelto) ---
   const noseStyle = config.noseStyle ?? (isHuman ? 'button' : 'none');
-  if (noseStyle !== 'none' && isSlim && !isHuman) {
-    const noseMat = toon(baseBodyColor.clone().offsetHSL(0, 0.05, -0.08), toonRamp);
-    const nostrilMat = new THREE.MeshBasicMaterial({ color: 0x5a2e2a });
-    const nose = new THREE.Group();
-    nose.position.set(0, headY + (isSlim ? 0.08 : 0.11) + noseDY, faceZ + 0.02);
-    nose.scale.setScalar(noseK);
-    if (noseStyle === 'button') {
-      nose.add(ellipsoid(0.045, 0.04, 0.04, noseMat, 12, true, 0.012));
-    } else if (noseStyle === 'round') {
-      nose.add(ellipsoid(0.075, 0.065, 0.06, noseMat, 14, true, 0.014));
-    } else if (noseStyle === 'pointy') {
-      const geo = new THREE.ConeGeometry(0.05, 0.15, 10);
-      const cone = new THREE.Mesh(geo, noseMat);
-      cone.rotation.x = Math.PI / 2;
-      cone.position.z = 0.05;
-      const out = new THREE.Mesh(geo, OUTLINE_MAT);
-      out.scale.set(1.11, 1.044, 1.11);
-      cone.add(out);
-      nose.add(cone);
-    } else if (noseStyle === 'wide' || noseStyle === 'snub') {
-      const n = noseStyle === 'wide'
-        ? ellipsoid(0.1, 0.045, 0.045, noseMat, 14, true, 0.012)
-        : ellipsoid(0.055, 0.05, 0.055, noseMat, 12, true, 0.012);
-      if (noseStyle === 'snub') n.rotation.x = -0.5;
-      nose.add(n);
-      [-1, 1].forEach((side) => {
-        const nostril = ellipsoid(0.014, 0.01, 0.01, nostrilMat, 8, false);
-        nostril.position.set(side * (noseStyle === 'wide' ? 0.045 : 0.022), -0.025, 0.035);
-        nose.add(nostril);
-      });
-    }
-    body.add(nose);
-  }
-
   // --- BARBA Y BIGOTE (mismo color que el cabello) ---
   // Barba y bigote solo en siluetas humanas: los animales y el chibi conservan su cara.
   const facialHair = isSlim ? config.facialHair ?? 'none' : 'none';
@@ -1730,13 +1680,6 @@ export function createPetScene(
   }
 
   // --- LUNAR ---
-  if (config.mole && !isHuman) {
-    const moleMesh = ellipsoid(0.024, 0.024, 0.012, darkNoseMat, 10, false);
-    const mx = (isSlim ? 0.27 : 0.36) + tstep(tune.moleX) * 0.05;
-    moleMesh.position.set(mx, headY + tstep(tune.moleY) * 0.05, faceZ * Math.sqrt(Math.max(0.2, 1 - (mx / headInfo.w) ** 2)) + 0.01);
-    body.add(moleMesh);
-  }
-
   // --- GAFAS (independientes del gorro) ---
   const glassesId =
     config.glasses && config.glasses !== 'none'
@@ -1746,14 +1689,10 @@ export function createPetScene(
         : 'none';
   if (glassesId !== 'none') {
     const gl = new THREE.Group();
-    gl.position.set(
-      0,
-      (isHuman ? 0.42 + faceRowY(FACE_LAYOUT.eyes) : 0.2 + headY) + eyeDY + glassDY,
-      (isHuman ? faceRowZ(FACE_LAYOUT.eyes) : faceZ) + 0.04
-    );
+    gl.position.set(0, face.eyePoint.y + eyeDY + glassDY, face.eyePoint.z + 0.04);
     gl.scale.setScalar(glassK);
-    const spread = (isHuman ? 0.215 : isSlim ? 0.2 : 0.25) + eyeDX;
-    const r = (isHuman ? 0.165 : isSlim ? 0.13 : 0.15) * Math.max(1, eyeK);
+    const spread = headInfo.w * Math.sin(faceLayout.eyeAz) * Math.cos(faceLayout.eyeElev) + eyeDX;
+    const r = faceLayout.eyeSize * 0.52 * Math.max(1, eyeK);
     const frameMat = new THREE.MeshBasicMaterial({
       color: config.glassesColor
         ? new THREE.Color(config.glassesColor)
@@ -1827,7 +1766,7 @@ export function createPetScene(
   const headEndIdx = body.children.length;
 
   // --- BRAZOS Y PIES TOON ---
-  // (En personas son pivotes invisibles: la animación se copia a los brazos con hombro.)
+  // (En personas son pivotes invisibles: su ángulo mueve las manos flotantes.)
   const armL = isHuman ? new THREE.Mesh() : ellipsoid(
     isHuman ? 0.11 : isSlim ? 0.13 : 0.17,
     isHuman ? 0.25 : isSlim ? 0.42 : 0.27,
@@ -1844,12 +1783,13 @@ export function createPetScene(
   armR.position.x = armX;
   body.add(armL, armR);
 
+
   const footMeshes: THREE.Mesh[] = [];
   [-1, 1].forEach((side) => {
     const f = ellipsoid(
-      isHuman ? 0.1 : isSlim ? 0.22 : 0.31,
-      isHuman ? 0.085 : isSlim ? 0.15 : 0.17,
-      isHuman ? 0.18 : isSlim ? 0.36 : 0.43,
+      isHuman ? 0.15 : isSlim ? 0.22 : 0.31,
+      isHuman ? 0.1 : isSlim ? 0.15 : 0.17,
+      isHuman ? 0.22 : isSlim ? 0.36 : 0.43,
       isHuman
         ? toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').multiplyScalar(0.5), toonRamp)
         : feetMat,
@@ -1857,8 +1797,8 @@ export function createPetScene(
       true,
       0.035
     );
-    f.position.set(side * (isHuman ? 0.11 : isSlim ? 0.28 : 0.42), -0.88, 0.08);
-    f.rotation.y = side * 0.22;
+    f.position.set(side * (isHuman ? 0.155 : isSlim ? 0.28 : 0.42), -0.88, isHuman ? 0.05 : 0.08);
+    f.rotation.y = side * (isHuman ? 0.08 : 0.22);
     if (isHuman) {
       // Zapatillas: suela blanca
       const sole = ellipsoid(1.06, 0.32, 1.04, toon(0xffffff, toonRamp), 14, false);
@@ -2222,7 +2162,7 @@ export function createPetScene(
       none: 0, short: 0.15, bob: 0.15, long: 0.15, braids: 0.14, ponytail: 0.13, twintails: 0.13,
       spiky: 0.2, curly: 0.2, bun: 0.16, pompadour: 0.22, mohawk: 0.24, afro: 0.38,
     };
-    const lift = hairLift[hairStyle] ?? 0.15;
+    const lift = isHuman ? (hairStyle === 'none' ? 0 : humanHairTop) : hairLift[hairStyle] ?? 0.15;
     const widen = 1 + lift * 0.6;
     const kx = (headInfo.w / 1.0) * widen;
     const kz = (headInfo.d / 0.96) * widen;
@@ -2239,6 +2179,7 @@ export function createPetScene(
       o.position.y -= rigY;
       headRig.add(o);
     });
+    humanHeadRig = headRig;
     headRig.scale.setScalar(HUMAN_HEAD_K);
     headRig.position.y = HUMAN_HEAD_Y;
     body.add(headRig);
@@ -2248,7 +2189,7 @@ export function createPetScene(
   const outfitId = config.outfit ?? 'none';
   const torso =
       isHuman
-        ? { y: 0.1, sx: 0.27, sy: 0.38, sz: 0.2, from: 0.24 }
+        ? { y: -0.02, sx: 0.35, sy: 0.43, sz: 0.28, from: 0.2 }
         : isMeeseeks
         ? { y: -0.28, sx: 0.52, sy: 0.78, sz: 0.46, from: 0.3 }
         : isCat
@@ -2310,6 +2251,34 @@ export function createPetScene(
     ) => {
       const gap = opts.gap ?? 0;
       const grow = opts.grow ?? 1.05;
+      if (humanTorsoProfile) {
+        // Personas: la prenda copia el perfil del torso, un poco más ancha y con el bajo suelto.
+        const cutY = torso.y + torso.sy * Math.cos(Math.PI * (opts.from ?? torso.from)) * 1.03;
+        const prof: THREE.Vector2[] = [];
+        humanTorsoProfile.forEach((pt, i) => {
+          const prev = humanTorsoProfile![i - 1];
+          if (pt.y <= cutY) prof.push(pt.clone());
+          else if (prev && prev.y < cutY) {
+            const k = (cutY - prev.y) / (pt.y - prev.y);
+            prof.push(new THREE.Vector2(prev.x + (pt.x - prev.x) * k, cutY));
+          }
+        });
+        prof[0]!.set(0.3, prof[0]!.y - 0.03);
+        prof.forEach((pt) => {
+          const flare = 1 + Math.max(0, -0.12 - pt.y) * 0.3;
+          pt.x *= grow * flare;
+        });
+        const geo = new THREE.LatheGeometry(prof, 36, gap / 2, Math.PI * 2 - gap);
+        const mat = toon(color, toonRamp);
+        (mat as THREE.Material).side = THREE.DoubleSide;
+        const m = new THREE.Mesh(geo, mat);
+        m.scale.z = HUMAN_TORSO_Z * (1 + (grow - 1) * 0.6);
+        const out = new THREE.Mesh(geo, OUTLINE_MAT);
+        out.scale.setScalar(1.014);
+        m.add(out);
+        body.add(m);
+        return m;
+      }
       const geo = new THREE.SphereGeometry(
         1,
         32,
@@ -2714,6 +2683,35 @@ export function createPetScene(
   sleepBubble.position.set(0.16, headY + 0.08, faceZ + 0.08);
   body.add(sleepBubble);
 
+  // --- VFX 5: GOTA DE SUDOR (¡UPS!) ---
+  const sweatMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.95 });
+  const sweatShineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+  const sweatInkMat = new THREE.MeshBasicMaterial({ color: 0x1e2a4a, side: THREE.BackSide, transparent: true });
+  const sweat = new THREE.Group();
+  {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), sweatMat);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.062, 0.1, 16, 1, true), sweatMat);
+    tip.position.y = 0.075;
+    const ink = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), sweatInkMat);
+    ink.scale.setScalar(1.18);
+    const inkTip = new THREE.Mesh(new THREE.ConeGeometry(0.062, 0.1, 16, 1, true), sweatInkMat);
+    inkTip.scale.setScalar(1.18);
+    inkTip.position.y = 0.08;
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), sweatShineMat);
+    shine.position.set(-0.025, 0.02, 0.055);
+    sweat.add(ink, inkTip, ball, tip, shine);
+  }
+  const sweatBase = isHuman
+    ? new THREE.Vector3(
+        humanHead.w * HUMAN_HEAD_K * 0.86,
+        HUMAN_HEAD_Y + humanHead.h * HUMAN_HEAD_K * 0.4,
+        humanHead.d * HUMAN_HEAD_K * 0.45
+      )
+    : new THREE.Vector3(headInfo.w * 0.82, headInfo.y + headInfo.h * 0.42, headInfo.d * 0.45);
+  sweat.position.copy(sweatBase);
+  sweat.visible = false;
+  body.add(sweat);
+
   if (isHuman) {
     // Personas: cara dibujada y acabado limpio de juguete, sin contorno de tinta.
     eyes.visible = false;
@@ -2874,7 +2872,7 @@ export function createPetScene(
     pages.position.set(0, 0.02, 0.01);
     pages.rotation.x = -0.5;
     book.add(cover, pages);
-    book.position.set(0, isHuman ? 0.0 : -0.18, (isHuman ? 0.2 : torso.sz) + 0.16);
+    book.position.set(0, isHuman ? -0.05 : -0.18, (isHuman ? 0.26 : torso.sz) + 0.16);
     body.add(book);
   }
 
@@ -2910,6 +2908,7 @@ export function createPetScene(
     jumpY: 0,
     jumpV: 0,
     squash: 1,
+    squashV: 0,
     joy: 0,
     spin: 0,
     blinkAt: 2,
@@ -2921,9 +2920,20 @@ export function createPetScene(
     antennaVel: 0,
     lastRootY: 0,
     hopAt: 4,
+    syllable: 0,
+    syllableAt: 0,
+    pointer: new THREE.Vector2(),
+    pointerAt: -10,
+    eyeLook: new THREE.Vector2(),
+    now: 0,
+    launchAt: -1,
+    launchV: 0,
+    /** 0..1: encogimiento e inclinación de "¡ups!" suavizados. */
+    oopsK: 0,
   };
 
   const update = (dt: number, t: number) => {
+    s.now = t;
     const sleepy = s.mood === 'sleepy';
     const sad = s.mood === 'sad';
     const angry = s.mood === 'angry';
@@ -2957,20 +2967,34 @@ export function createPetScene(
       s.jumpV = 1.65;
     }
 
+    // Salto con anticipación: se aplasta un instante y luego despega
+    if (s.launchAt > 0) {
+      s.squash = Math.min(s.squash, 0.76);
+      if (t >= s.launchAt) {
+        s.jumpV = Math.max(s.jumpV, s.launchV);
+        s.launchAt = -1;
+      }
+    }
     if (s.jumpY > 0 || s.jumpV > 0) {
       s.jumpV -= 9.5 * dt;
       s.jumpY += s.jumpV * dt;
       if (s.jumpY <= 0) {
+        // Aterrizaje elástico: cuanto más rápido cae, más se aplasta
+        s.squash = 1 - Math.min(0.26, Math.abs(s.jumpV) * 0.075);
         s.jumpY = 0;
         s.jumpV = 0;
-        s.squash = 0.82;
       }
     }
-    s.squash += (1 - s.squash) * Math.min(1, dt * 9);
-    const stretch = s.jumpV > 0 ? 1 + Math.min(0.12, s.jumpV * 0.04) : 1;
+    // Muelle subamortiguado: vuelve a su forma con un rebote de gelatina
+    const sdt = Math.min(dt, 0.05);
+    s.squashV += ((1 - s.squash) * 260 - s.squashV * 13) * sdt;
+    s.squash += s.squashV * sdt;
+    const stretch = s.jumpV > 0 ? 1 + Math.min(0.18, s.jumpV * 0.06) : 1;
     const b = Math.sin(t * breath) * 0.018;
-    const sy = baseScaleY * (1 + b) * s.squash * stretch;
-    const sxz = (baseScaleX * (1 - b * 0.6)) / Math.sqrt(s.squash * stretch);
+    s.oopsK += ((s.mood === 'oops' ? 1 : 0) - s.oopsK) * Math.min(1, dt * 6);
+    const shrink = 1 - s.oopsK * 0.12;
+    const sy = baseScaleY * (1 + b) * s.squash * stretch * shrink;
+    const sxz = ((baseScaleX * (1 - b * 0.6)) / Math.sqrt(s.squash * stretch)) * (1 - s.oopsK * 0.06);
     body.scale.set(sxz, sy, sxz);
     body.position.y = -(1 - s.squash) * 0.35;
 
@@ -3018,7 +3042,21 @@ export function createPetScene(
     root.rotation.x =
       s.rotX + (sad ? 0.12 : 0) + (sleepy ? 0.1 + Math.sin(t * 1.5) * 0.05 : 0);
     root.rotation.z =
-      love ? Math.sin(t * 3.8) * 0.09 : Math.sin(t * 0.9) * 0.025;
+      (love ? Math.sin(t * 3.8) * 0.09 : Math.sin(t * 0.9) * 0.025) +
+      // ¡Ups!: inclinación cómica de 15° con un pequeño temblor de nervios
+      s.oopsK * (0.26 + Math.sin(t * 9) * 0.015);
+    // Gota de sudor: resbala por la sien y se desvanece, en bucle
+    sweat.visible = s.oopsK > 0.05;
+    if (sweat.visible) {
+      const p = (t * 0.7) % 1;
+      sweat.position.set(sweatBase.x + p * 0.03, sweatBase.y - p * 0.22, sweatBase.z);
+      const pop = Math.min(1, p * 6) * 1.5;
+      sweat.scale.set(pop * (1 - p * 0.15), pop * (1 + p * 0.25), pop);
+      const fade = (p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1) * s.oopsK;
+      sweatMat.opacity = 0.95 * fade;
+      sweatShineMat.opacity = 0.95 * fade;
+      sweatInkMat.opacity = fade;
+    }
 
     // Parpadeo y apertura de ojos
     if (t > s.blinkAt) {
@@ -3035,64 +3073,44 @@ export function createPetScene(
       s.lookAt = t + 1.2 + Math.random() * 2.5;
     }
     s.look.lerp(s.lookTarget, Math.min(1, dt * 6));
-    eyes.position.set(s.look.x, 0.17 + headY + eyeDY - rigY + s.look.y, 0);
-
-    const eyeOpen = sleepy
-      ? 0.16
-      : love
-        ? 0.28
-        : rage
-          ? 0.72
-          : happy && config.eyeStyle !== 'happy' && s.joy > 0
-            ? 0.45
-            : 1;
-    if (faceMat) {
-      const fe: FaceEyes =
-        sleepy || blinkScale < 0.45 ? 'closed' : (happy && s.joy > 0) || celebrate || love ? 'happy' : 'open';
-      const fm: FaceMouth = (s.speaking && Math.sin(t * 16) > 0) || celebrate || s.joy > 0.6 ? 'open' : 'normal';
-      const next = faceTex(fe, fm);
-      if (faceMat.map !== next) faceMat.map = next;
-    }
-    eyeParts.forEach((e) => e.scale.set(eyeK * eyeSX, blinkScale * eyeOpen * eyeK * eyeSY, eyeK));
-
-    // Cejas expresivas 3D según emoción (enojo \ /, tristeza / \, normal)
-    const targetBrowTilt =
-      rage
-        ? -0.52
-        : angry
-          ? -0.38
-          : sad || sleepy
-            ? 0.32
-            : celebrate || love
-              ? 0.16
-              : baseBrowAngle;
-    browL.rotation.z = targetBrowTilt - browRot;
-    browR.rotation.z = -targetBrowTilt + browRot;
-    browL.position.y = browBaseY - rigY + (rage || angry ? -0.05 : celebrate ? 0.04 : 0);
-    browR.position.y = browL.position.y;
-
-    // Boca según estado (hablando, comiendo, enojado, feliz)
     const talking = s.speaking;
-    const chomping = eating;
-    smileGroup.visible =
-      !talking && !chomping && !sad && !angry && !rage && s.mood !== 'hungry';
-    open.visible =
-      talking || chomping || s.mood === 'hungry' || celebrate || s.joy > 0.3 || rage;
-    frown.visible = (sad || angry) && !talking && !chomping;
-
-    if (open.visible) {
-      const o = chomping
-        ? 0.35 + Math.abs(Math.sin(t * 20)) * 0.85
-        : talking
-          ? 0.55 + Math.abs(Math.sin(t * 16)) * 0.65
-          : rage
-            ? 0.75 + Math.abs(Math.sin(t * 18)) * 0.4
-            : s.mood === 'hungry'
-              ? 0.8 + Math.sin(t * 3) * 0.1
-              : 1;
-      open.scale.set(1, o, 1);
+    const oops = s.mood === 'oops';
+    // Lip-sync cómico: sílabas irregulares mientras habla
+    if (talking && t > s.syllableAt) {
+      s.syllable = (s.syllable + 1 + Math.floor(Math.random() * 2)) % 3;
+      s.syllableAt = t + 0.07 + Math.random() * 0.09;
     }
-    smileGroup.scale.setScalar(happy ? 1.16 : 1);
+    const mouthPose: MouthPose = talking
+      ? (['rest', 'half', 'open'] as const)[s.syllable]!
+      : eating
+        ? Math.sin(t * 18) > 0 ? 'half' : 'rest'
+        : celebrate || s.joy > 0.5 || love
+          ? 'happy'
+          : rage || angry
+            ? 'zigzag'
+            : oops
+              ? 'wavy'
+              : sad || s.mood === 'hungry'
+                ? 'frown'
+                : sleepy
+                  ? 'half'
+                  : 'rest';
+    // La mirada combina el paseo de ojos con el dedo del jugador (si toca o pasa por encima)
+    const pointerOn = t - s.pointerAt < 2.5;
+    const lookX = Math.max(-1, Math.min(1, pointerOn ? s.pointer.x : s.look.x / 0.03));
+    const lookY = Math.max(-1, Math.min(1, pointerOn ? s.pointer.y : s.look.y / 0.0175));
+    // Las pupilas se deslizan suavemente hacia el objetivo
+    s.eyeLook.x += (lookX - s.eyeLook.x) * Math.min(1, dt * 9);
+    s.eyeLook.y += (lookY - s.eyeLook.y) * Math.min(1, dt * 9);
+    face.update({
+      lookX: s.eyeLook.x,
+      lookY: s.eyeLook.y,
+      blink: sleepy ? 1 : 1 - blinkScale,
+      eyes: sleepy ? 'closed' : celebrate || love || (happy && s.joy > 0.3) ? 'happy' : 'open',
+      mouth: mouthPose,
+      browTilt: rage ? 0.5 : angry ? 0.35 : oops ? -0.35 : sad ? -0.3 : 0,
+      browLift: celebrate || oops ? 0.35 : angry || rage ? -0.2 : 0,
+    });
 
     // Brazos y pies animados
     const wave = s.joy > 0 || talking || celebrate || love;
@@ -3144,8 +3162,8 @@ export function createPetScene(
 
     if (humanArms) {
       // Brazos colgando desde el hombro (el ángulo base de la animación es para brazos-bolita).
-      humanArms[0]!.rotation.z = -armL.rotation.z + 0.42;
-      humanArms[1]!.rotation.z = -armR.rotation.z - 0.42;
+      humanArms[0]!.rotation.z = -armL.rotation.z + 0.42 - 0.1;
+      humanArms[1]!.rotation.z = -armR.rotation.z - 0.42 + 0.1;
     }
 
     if (tailGroup) {
@@ -3256,9 +3274,24 @@ export function createPetScene(
     }
   };
 
+  if (personLight) {
+    // Las piezas opacas proyectan sombra; todo (incluidas las calcomanías) la recibe.
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || m.material === OUTLINE_MAT) return;
+      const mat = m.material as THREE.Material;
+      m.receiveShadow = true;
+      m.castShadow = !mat.transparent;
+    });
+    islandPedestal.traverse((o) => ((o as THREE.Mesh).receiveShadow = true));
+    // La cara no recibe sombras (se verían como manchas): solo el cuerpo queda sombreado por la cabeza.
+    humanHeadRig?.traverse((o) => ((o as THREE.Mesh).receiveShadow = false));
+  }
+
   return {
     scene,
     camera,
+    shadows: personLight,
     update,
     setMood: (mood) => {
       const prev = s.mood;
@@ -3269,14 +3302,24 @@ export function createPetScene(
         s.jumpV = Math.max(s.jumpV, 3.2);
       } else if (mood === 'rage' && prev !== 'rage') {
         s.jumpV = Math.max(s.jumpV, 2.2);
+      } else if (mood === 'oops' && prev !== 'oops') {
+        // Respingo: se aplasta de golpe antes de encogerse
+        s.squash = 0.8;
       }
     },
     setSpeaking: (speaking) => (s.speaking = speaking),
     setEnergy: (energy01) => (s.energy = Math.max(0, Math.min(1, energy01))),
     joy: () => {
+      // Anticipación (aplastado) → salto estirado → aterrizaje elástico
       s.joy = 1.3;
       s.spin = 1;
-      s.jumpV = Math.max(s.jumpV, 2.8);
+      s.squash = 0.74;
+      s.launchAt = s.now + 0.09;
+      s.launchV = 2.8;
+    },
+    lookAt: (x, y) => {
+      s.pointer.set(Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y)));
+      s.pointerAt = s.now;
     },
     drag: (dx, dy) => {
       s.dragging = true;
