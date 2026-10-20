@@ -13,7 +13,7 @@ import {
   type SupportedLocale,
 } from '@lingopulse/shared';
 import { AnimatedBar, PressableScale, ScoreRing } from './motion';
-import { speakEnglishPhrase } from '../services/speech';
+import { speakNeural } from '../services/neuralTts';
 import { THEME, TYPE } from '../theme/colors';
 
 const BAND_STYLE = {
@@ -25,6 +25,20 @@ const BAND_STYLE = {
 function wordStyle(w: PronunciationWord) {
   if (w.errorType === 'Omission') return { bg: THEME.fill, border: THEME.ink3, text: THEME.ink3 };
   return BAND_STYLE[pronunciationBand(effectiveWordAccuracy(w))];
+}
+
+/** Retroalimentación hablada en inglés, con tono alegre y las palabras a pulir como modelo. */
+function feedbackSpeech(report: PronunciationReport): string {
+  const score = Math.round(report.pronScore);
+  const opener =
+    score >= 85 ? `Awesome! Your pronunciation score is ${score}.` : score >= 65 ? `Nice work! You got ${score}.` : `Good try! You got ${score}, and we can make it better together.`;
+  const toPolish = weakWords(report, 3)
+    .filter((w) => w.errorType !== 'Omission')
+    .map((w) => w.word.replace(/[^A-Za-z'-]/g, ''))
+    .filter(Boolean);
+  if (!toPolish.length) return `${opener} Every word sounded clear. Keep it up!`;
+  const list = toPolish.map((w) => `"${w}"`).join(', ');
+  return `${opener} Let's polish ${list}. Listen: ${toPolish.join('... ')}. Now you try!`;
 }
 
 /**
@@ -77,6 +91,10 @@ export function PronunciationReportView({
           <Text style={styles.reviewingText}>La IA está escuchando sonido por sonido para afinar el resultado…</Text>
         </View>
       ) : null}
+      <PressableScale onPress={() => void speakNeural(feedbackSpeech(report), locale, { style: 'cheerful' })} hapticKind="light" style={styles.feedbackBtn}>
+        <Ionicons name="volume-high" size={16} color="#FFFFFF" />
+        <Text style={styles.feedbackBtnText}>Escuchar mi retroalimentación</Text>
+      </PressableScale>
       <View style={styles.top}>
         <ScoreRing score={report.pronScore} size={78} stroke={8} label="pronunc." />
         <View style={{ flex: 1, gap: 6 }}>
@@ -141,11 +159,11 @@ export function PronunciationReportView({
               {selected.errorType === 'Omission' ? 'no se escuchó' : `${effectiveWordAccuracy(selected)}/100`}
             </Text>
             <View style={{ flex: 1 }} />
-            <PressableScale onPress={() => speakEnglishPhrase(selected.word, locale)} hapticKind="light" style={styles.listen}>
+            <PressableScale onPress={() => void speakNeural(selected.word, locale, { style: 'friendly' })} hapticKind="light" style={styles.listen}>
               <Ionicons name="volume-high" size={16} color={THEME.blue} />
             </PressableScale>
             <PressableScale
-              onPress={() => speakEnglishPhrase(selected.word, locale, { rate: 0.6 })}
+              onPress={() => void speakNeural(selected.word, locale, { style: 'calm', rate: 0.65 })}
               hapticKind="light"
               style={styles.listen}
             >
@@ -194,6 +212,17 @@ function Legend({ color, label }: { color: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  feedbackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    backgroundColor: THEME.blue,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  feedbackBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
   wrap: { gap: 12 },
   sourceTag: {
     flexDirection: 'row',

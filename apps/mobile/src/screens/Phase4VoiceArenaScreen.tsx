@@ -8,8 +8,10 @@ import { useOptionalGame } from '../context/GameContext';
 import {
   fetchArenaScorecard,
   sendArenaTurn,
+  sendArenaVoiceTurn,
   startArenaSession,
 } from '../services/api';
+import { encodeAudio } from '../services/transcribe';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme/colors';
 import { useSpeechCapture } from '../hooks/useSpeechCapture';
@@ -27,6 +29,7 @@ export function Phase4VoiceArenaScreen() {
     lesson,
     locale,
     speakWithPip,
+    babbleWithPip,
     addVoicedFuelMs,
     markPhaseCompleted,
     setActiveStep,
@@ -40,18 +43,62 @@ export function Phase4VoiceArenaScreen() {
     useState<ClientArenaTurnPayload | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [spokenDraft, setSpokenDraft] = useState('');
-  const capture = useSpeechCapture(locale);
-  const [turnAudio, setTurnAudio] = useState<{ responseWindowMs: number; voicedMs: number } | null>(null);
+  // Conversación de baja latencia: el audio se manda junto con el turno (sin evaluar pronunciación).
+  const capture = useSpeechCapture(locale, { transcribe: false });
   const [showSim, setShowSim] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [lastReplyMs, setLastReplyMs] = useState<number | null>(null);
   const isRecording = capture.state === 'recording';
+
+  /** Un turno completo en un solo viaje: transcripción + respuesta + voz neuronal de la mascota. */
+  const runVoiceTurn = async (input: {
+    transcript?: string;
+    audio?: { audioBase64: string; mimeType: string } | null;
+    responseWindowMs?: number;
+    voicedMs?: number;
+  }) => {
+    if (!sessionState || sessionState.isSessionClosed || thinking) return;
+    const learnerId = `learner-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: learnerId, speaker: 'learner', text: input.transcript?.trim() || '…' }]);
+    setSpokenDraft('');
+    setThinking(true);
+    // Mientras piensa, la mascota murmura: la espera se siente como parte de la charla.
+    babbleWithPip('hmm, hm hm?');
+    const r = await sendArenaVoiceTurn({
+      sessionId: sessionState.sessionId,
+      locale,
+      ...input,
+      voice: { pitch: game?.pet.voicePitch, rate: game?.pet.voiceRate },
+    });
+    setThinking(false);
+    setLastReplyMs(r.ms);
+    setMessages((prev) => [
+      ...prev.map((m) => (m.id === learnerId ? { ...m, text: r.transcript || '[No se entendió el audio]' } : m)),
+      {
+        id: r.turn.agentTurnId,
+        speaker: 'agent' as const,
+        text: r.turn.speak,
+        stage: r.turn.stage,
+        fuelCreditedSec: Math.round(r.turn.creditedFuelMsThisTurn / 1000),
+      },
+    ]);
+    setSessionState(r.turn);
+    if (r.turn.creditedFuelMsThisTurn > 0) addVoicedFuelMs(r.turn.creditedFuelMsThisTurn);
+    speakWithPip(r.turn.speak, r.speechAudioBase64);
+  };
 
   const handleMic = async () => {
     if (isRecording) {
       const res = await capture.stop();
-      if (res.transcript) setSpokenDraft(res.transcript);
-      setTurnAudio({ responseWindowMs: res.metrics.durationMs, voicedMs: res.metrics.voicedMs });
+      const timing = { responseWindowMs: res.metrics.durationMs, voicedMs: res.metrics.voicedMs };
+      if (res.transcript) {
+        // Web: el navegador ya transcribió en vivo, se envía el texto al instante.
+        await runVoiceTurn({ transcript: res.transcript, ...timing });
+      } else if (res.source) {
+        const audio = await encodeAudio(res.source).catch(() => null);
+        await runVoiceTurn({ audio, ...timing });
+      }
     } else {
-      setTurnAudio(null);
       await capture.start();
     }
   };
@@ -84,6 +131,10 @@ export function Phase4VoiceArenaScreen() {
     if (!sessionState || sessionState.isSessionClosed) return;
     const textToSend = (customTranscript ?? spokenDraft).trim();
     if (audioStatus === 'usable' && !textToSend) return;
+    if (audioStatus === 'usable') {
+      await runVoiceTurn({ transcript: textToSend });
+      return;
+    }
 
     setMessages((prev) => [
       ...prev,
@@ -98,16 +149,11 @@ export function Phase4VoiceArenaScreen() {
     ]);
     setSpokenDraft('');
 
-    // Si el turno viene del micrófono, se envían los tiempos medidos del audio real.
-    const measured = customTranscript === undefined ? turnAudio : null;
-    setTurnAudio(null);
     const turnRes = await sendArenaTurn({
       sessionId: sessionState.sessionId,
       locale,
       transcript: textToSend,
       audioStatus,
-      responseWindowMs: measured?.responseWindowMs,
-      voicedMs: measured?.voicedMs,
     });
 
     setSessionState(turnRes);
@@ -227,6 +273,12 @@ export function Phase4VoiceArenaScreen() {
           ))}
         </View>
 
+        {thinking ? (
+          <Text style={{ fontSize: 13, color: COLORS.inkMuted, fontStyle: 'italic' }}>{game?.pet.name ?? 'Pip'} está pensando…</Text>
+        ) : lastReplyMs !== null ? (
+          <Text style={{ fontSize: 12, color: COLORS.inkMuted }}>⚡ Respuesta en {(lastReplyMs / 1000).toFixed(1)} s</Text>
+        ) : null}
+
         {/* Controles de Hablar / Enviar si la sesión sigue abierta */}
         {!sessionState?.isSessionClosed ? (
           <View style={styles.controlsArea}>
@@ -271,7 +323,7 @@ export function Phase4VoiceArenaScreen() {
               style={styles.sendVoiceBtn}
             >
               <Text style={styles.sendVoiceBtnText}>
-                Enviar Turno de Voz →
+                Enviar lo escrito →
               </Text>
             </Pressable>
 

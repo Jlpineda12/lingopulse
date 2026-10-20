@@ -54,7 +54,7 @@ export const NEED_RINGS = {
 };
 
 export function HomeScreen() {
-  const { locale, speakWithPip, lesson } = useAppState();
+  const { locale, speakWithPip, babbleWithPip, lesson } = useAppState();
   const {
     pet,
     mood,
@@ -193,7 +193,7 @@ export function HomeScreen() {
 
       {/* Sesión de Hoy: la acción principal de la portada */}
       <Reveal index={1}>
-        <TodaySessionCard pet={pet} mood={mood} stage={petStage.stage} steps={sessionSteps} onPetTap={() => speakWithPip(greeting.en)} />
+        <TodaySessionCard pet={pet} mood={mood} stage={petStage.stage} steps={sessionSteps} onPetTap={() => babbleWithPip(greeting.en)} />
       </Reveal>
 
       {!voiceDone ? (

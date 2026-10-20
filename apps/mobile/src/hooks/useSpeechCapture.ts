@@ -39,6 +39,8 @@ export interface CaptureResult {
   silent?: boolean;
   /** Revisión con IA que llega después (~20 s) para afinar pronunciación y transcripción. */
   review?: Promise<PronunciationReview | null> | null;
+  /** Grabación sin transcribir (con `transcribe: false`), para enviarla en un solo viaje. */
+  source?: string | Blob | null;
 }
 
 type CaptureState = 'idle' | 'recording' | 'processing';
@@ -164,10 +166,22 @@ export function getCaptureSupport() {
   };
 }
 
-export function useSpeechCapture(locale: SupportedLocale, options: { referenceText?: string } = {}) {
+export function useSpeechCapture(
+  locale: SupportedLocale,
+  options: {
+    referenceText?: string;
+    /**
+     * false = no transcribir al detener (la conversación de la Voice Arena manda el audio junto
+     * con el turno para responder más rápido). En web se devuelve igualmente el texto en vivo.
+     */
+    transcribe?: boolean;
+  } = {}
+) {
   // La frase de referencia puede cambiar entre grabaciones: se lee al detener.
   const referenceRef = useRef(options.referenceText);
   referenceRef.current = options.referenceText;
+  const transcribeRef = useRef(options.transcribe ?? true);
+  transcribeRef.current = options.transcribe ?? true;
   const [state, setState] = useState<CaptureState>('idle');
   const [liveTranscript, setLiveTranscript] = useState('');
   const [level, setLevel] = useState(0);
@@ -396,6 +410,9 @@ export function useSpeechCapture(locale: SupportedLocale, options: { referenceTe
     // Devuelve el audio al altavoz para escuchar la grabación y la voz de la mascota.
     await AudioModule.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
     suspendSfx(false);
+    if (!transcribeRef.current) {
+      return { transcript: '', audioUrl: uri, metrics: c.vad.metrics(c.startedAt, endedAt, null), pronunciation: null, source: uri };
+    }
     const server = uri ? await transcribeRecording(uri, locale, referenceRef.current) : null;
     return {
       transcript: server?.transcript ?? '',
@@ -448,6 +465,9 @@ export function useSpeechCapture(locale: SupportedLocale, options: { referenceTe
     const webTranscript = c.finals.join(' ').replace(/\s+/g, ' ').trim();
     const vadMetrics = c.vad.metrics(c.startedAt, endedAt, confidence);
     cleanupWeb();
+    if (!transcribeRef.current) {
+      return { transcript: webTranscript, audioUrl, metrics: vadMetrics, pronunciation: null, source: blob };
+    }
     // Si el backend tiene voz configurada, también evalúa la pronunciación de la grabación web.
     const server = blob ? await transcribeRecording(blob, locale, referenceRef.current) : null;
     return {

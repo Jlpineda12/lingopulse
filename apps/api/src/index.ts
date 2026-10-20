@@ -28,6 +28,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assessPronunciation, isAzureSpeechEnabled } from './services/azurePronunciation.js';
+import { isAzureTtsEnabled, synthesizeSpeech } from './services/azureTts.js';
+import { fastTranscribe, isFastSttEnabled } from './services/fastStt.js';
 import {
   assessPronunciationWithGemini,
   generateGeminiFeedback,
@@ -77,7 +79,7 @@ function coachProvider(): 'gemini' | 'anthropic' | 'local' {
 /** Límites por IP y minuto: las rutas de IA cuestan dinero, las demás son baratas. */
 const aiLimiter = new RateLimiter(Number(process.env.RATE_LIMIT_AI_PER_MIN) || 30);
 const generalLimiter = new RateLimiter(Number(process.env.RATE_LIMIT_PER_MIN) || 240);
-const AI_ROUTES = new Set(['/api/speech/transcribe', '/api/speech/review', '/api/coach/feedback']);
+const AI_ROUTES = new Set(['/api/speech/transcribe', '/api/speech/review', '/api/coach/feedback', '/api/tts', '/api/voice-arena/turn-audio']);
 
 /** Grabaciones convertidas y revisiones de pronunciación en curso (ver audioCache.ts). */
 const audioCache = new AudioCache<GeminiAssessment>();
@@ -231,11 +233,99 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // 6b. Fase 4 en un solo viaje (baja latencia): audio → transcripción rápida → turno →
+    // respuesta de la mascota ya sintetizada con voz neuronal. La app no espera tres peticiones.
+    if (req.method === 'POST' && url.pathname === '/api/voice-arena/turn-audio') {
+      const body = await readJsonBody<{
+        sessionId: string;
+        transcript?: string;
+        audioBase64?: string;
+        mimeType?: string;
+        language?: string;
+        responseWindowMs?: number;
+        voicedMs?: number;
+        withSpeech?: boolean;
+        voice?: { pitch?: number; rate?: number };
+      }>(req, AUDIO_BODY_LIMIT);
+      const started = Date.now();
+      const language = body.language === 'en-GB' ? 'en-GB' : 'en-US';
+      let transcript = String(body.transcript ?? '').trim().slice(0, 2000);
+      let audioStatus: AudioStatus = 'usable';
+      let sttMs = 0;
+      if (!transcript && body.audioBase64) {
+        if (!isFastSttEnabled()) {
+          sendJson(res, 503, { error: 'stt_disabled' });
+          return;
+        }
+        try {
+          const fast = await fastTranscribe(decodeAudio(body.audioBase64), String(body.mimeType ?? 'audio/mp4'), language);
+          transcript = fast.transcript;
+          if (fast.silent || !transcript) audioStatus = 'unusable';
+        } catch (err) {
+          console.warn(`[LingoPulse API] transcripción rápida falló: ${err instanceof Error ? err.message : err}`);
+          sendJson(res, 502, { error: 'stt_failed' });
+          return;
+        }
+        sttMs = Date.now() - started;
+      }
+      const turn = processLearnerVoiceTurn({
+        sessionId: body.sessionId,
+        transcript,
+        audioStatus,
+        responseWindowMs: body.responseWindowMs,
+        voicedMs: body.voicedMs,
+      });
+      let speechAudioBase64: string | null = null;
+      const ttsStarted = Date.now();
+      if (body.withSpeech && isAzureTtsEnabled() && turn.speak) {
+        speechAudioBase64 = await synthesizeSpeech(turn.speak, {
+          locale: language,
+          style: 'cheerful',
+          pitch: body.voice?.pitch,
+          rate: body.voice?.rate,
+        })
+          .then((b) => b.toString('base64'))
+          .catch(() => null);
+      }
+      const totalMs = Date.now() - started;
+      console.log(`[LingoPulse API] turno de voz en ${totalMs} ms (stt ${sttMs} ms · voz ${Date.now() - ttsStarted} ms)`);
+      sendJson(res, 200, { transcript, audioStatus, turn, speechAudioBase64, timings: { sttMs, totalMs } });
+      return;
+    }
+
     // 7. Fase 4: Cerrar sesión y obtener Scorecard con evidencia + FSRS
     if (req.method === 'POST' && url.pathname === '/api/voice-arena/scorecard') {
       const body = await readJsonBody<{ sessionId: string }>(req);
       const scorecard = generateVoiceScorecard(body.sessionId);
       sendJson(res, 200, scorecard);
+      return;
+    }
+
+    // Voz neuronal expresiva (Azure SSML, estilo cheerful) para la mascota y la retroalimentación.
+    if (req.method === 'GET' && url.pathname === '/api/tts/status') {
+      sendJson(res, 200, { enabled: isAzureTtsEnabled(), provider: isAzureTtsEnabled() ? 'azure' : 'none' });
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/tts') {
+      if (!isAzureTtsEnabled()) {
+        sendJson(res, 503, { error: 'tts_disabled' });
+        return;
+      }
+      const body = await readJsonBody<{ text?: string; locale?: string; style?: string; pitch?: number; rate?: number }>(req);
+      const text = String(body.text ?? '').trim();
+      if (!text) {
+        sendJson(res, 400, { error: 'empty_text' });
+        return;
+      }
+      try {
+        const audio = await synthesizeSpeech(text, { locale: body.locale, style: body.style, pitch: body.pitch, rate: body.rate });
+        setCorsHeaders(res);
+        res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': audio.length, 'Cache-Control': 'private, max-age=86400' });
+        res.end(audio);
+      } catch (err) {
+        console.warn(`[LingoPulse API] voz neuronal falló: ${err instanceof Error ? err.message : err}`);
+        sendJson(res, 502, { error: 'tts_failed' });
+      }
       return;
     }
 

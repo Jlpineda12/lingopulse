@@ -243,6 +243,68 @@ export async function startArenaSession(
   return data;
 }
 
+export interface ArenaVoiceTurnResult {
+  transcript: string;
+  turn: ClientArenaTurnPayload;
+  /** Respuesta de la mascota ya sintetizada (MP3 en base64) si el servidor tiene voz neuronal. */
+  speechAudioBase64: string | null;
+  /** Tiempo total de ida y vuelta (ms). */
+  ms: number;
+}
+
+/**
+ * Turno de voz en un solo viaje: el servidor transcribe (rápido, sin evaluar pronunciación),
+ * procesa el turno y devuelve la respuesta ya sintetizada. Sin servidor, cae al motor local.
+ */
+export async function sendArenaVoiceTurn(params: {
+  sessionId: string;
+  locale: SupportedLocale;
+  transcript?: string;
+  audio?: { audioBase64: string; mimeType: string } | null;
+  responseWindowMs?: number;
+  voicedMs?: number;
+  voice?: { pitch?: number; rate?: number };
+}): Promise<ArenaVoiceTurnResult> {
+  const started = Date.now();
+  const transcript = (params.transcript ?? '').trim();
+  try {
+    if (!(await ensureAiConsent())) throw new Error('ai_consent_denied');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${getApiBaseUrl()}/api/voice-arena/turn-audio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...apiHeaders() },
+      body: JSON.stringify({
+        sessionId: params.sessionId,
+        language: params.locale,
+        transcript,
+        audioBase64: transcript ? undefined : params.audio?.audioBase64,
+        mimeType: params.audio?.mimeType,
+        responseWindowMs: params.responseWindowMs,
+        voicedMs: params.voicedMs,
+        withSpeech: true,
+        voice: params.voice,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as { transcript: string; turn: ClientArenaTurnPayload; speechAudioBase64: string | null };
+    return { transcript: data.transcript, turn: data.turn, speechAudioBase64: data.speechAudioBase64, ms: Date.now() - started };
+  } catch {
+    // Sin servidor (o sesión local): el motor local responde al texto que haya.
+    const turn = await sendArenaTurn({
+      sessionId: params.sessionId,
+      locale: params.locale,
+      transcript,
+      audioStatus: transcript ? 'usable' : 'unusable',
+      responseWindowMs: params.responseWindowMs,
+      voicedMs: params.voicedMs,
+    });
+    return { transcript, turn, speechAudioBase64: null, ms: Date.now() - started };
+  }
+}
+
 export async function sendArenaTurn(params: {
   sessionId: string;
   locale: SupportedLocale;

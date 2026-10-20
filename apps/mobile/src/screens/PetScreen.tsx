@@ -76,7 +76,7 @@ export function PetScreen() {
     buyOrWearOutfit,
     petStage,
   } = useGame();
-  const { speakWithPip, pipIsSpeaking } = useAppState();
+  const { speakWithPip, babbleWithPip, pipIsSpeaking } = useAppState();
   const [reactKey, setReactKey] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -196,6 +196,8 @@ export function PetScreen() {
               petThePet();
               setReactKey((k) => k + 1);
               setNotice(`¡Acariciaste a ${pet.name}! Su humor mejoró.`);
+              // Responde en su idioma (balbuceo) con una reacción corta
+              babbleWithPip(['Hehe!', 'Yay! Again!', 'Hi hi!', 'Wheee!', 'I love you!'][Math.floor(Math.random() * 5)]!);
             }}
             backgroundColor={tint}
           />

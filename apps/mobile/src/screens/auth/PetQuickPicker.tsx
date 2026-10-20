@@ -10,6 +10,7 @@ import { Chip, ui } from '../../components/ui';
 import { randomizeTomodachiPet, SPECIES, SPECIES_PRESET_COLORS, type PetConfig, type PetSpecies } from '../../game/pet';
 import { petTint, SHADOW, THEME } from '../../theme/colors';
 import { styles } from './authStyles';
+import { babble } from '../../services/babble';
 
 /** Nombre sugerido para cada amigo (el jugador puede cambiarlo cuando quiera). */
 const NAME_FOR: Record<PetSpecies, string> = {
@@ -71,8 +72,8 @@ export function PetQuickPicker({
     onChangeDraft({ ...draft, species: id, bodyColor: preset.bodyColor, bellyColor: preset.bellyColor, catchphrase: preset.defaultCatchphrase, voicePitch: preset.defaultPitch });
     if (!nameTouched) onChangePetName(NAME_FOR[id]);
     setReactKey((k) => k + 1);
-    // Se presenta con su propia voz
-    onSpeak(`Hi! I'm ${nameTouched ? shownName : NAME_FOR[id]}!`, preset.defaultPitch, 1);
+    // Se presenta en su idioma (balbuceo con su tono de voz)
+    babble(`Hi! I'm ${nameTouched ? shownName : NAME_FOR[id]}!`, { pitch: preset.defaultPitch });
   };
 
   return (

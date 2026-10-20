@@ -49,7 +49,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-async function encodeAudio(source: string | Blob): Promise<{ audioBase64: string; mimeType: string } | null> {
+export async function encodeAudio(source: string | Blob): Promise<{ audioBase64: string; mimeType: string } | null> {
   if (typeof source === 'string') {
     if (Platform.OS === 'web') return null;
     // API nueva de archivos (SDK 54+): la antigua readAsStringAsync ya no existe en el import principal.

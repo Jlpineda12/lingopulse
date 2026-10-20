@@ -8,6 +8,8 @@ import { loadJson, saveJson } from './storage';
  */
 const KEY = 'ai_consent_v1';
 let granted: boolean | null = null;
+/** "Ahora no": no se vuelve a preguntar en esta sesión (cada envío usaría el corrector sin conexión). */
+let declinedThisSession = false;
 let pending: Array<(ok: boolean) => void> = [];
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
@@ -20,6 +22,7 @@ async function load(): Promise<boolean> {
 /** Resuelve true si el jugador ya aceptó o acepta ahora; false si lo rechaza. */
 export async function ensureAiConsent(): Promise<boolean> {
   if (await load()) return true;
+  if (declinedThisSession) return false;
   return new Promise((resolve) => {
     pending.push(resolve);
     notify();
@@ -28,6 +31,7 @@ export async function ensureAiConsent(): Promise<boolean> {
 
 export function answerAiConsent(ok: boolean) {
   granted = ok;
+  declinedThisSession = !ok;
   if (ok) void saveJson(KEY, { granted: true });
   const waiting = pending;
   pending = [];

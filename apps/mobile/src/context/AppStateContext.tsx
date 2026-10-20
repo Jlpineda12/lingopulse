@@ -8,7 +8,8 @@ import {
   type VoiceScorecardDTO,
 } from '@lingopulse/shared';
 import { fetchCurriculumByLocale } from '../services/api';
-import { speakEnglishPhrase } from '../services/speech';
+import { babble, stopBabble } from '../services/babble';
+import { playSpeechBase64, speakNeural, stopNeural } from '../services/neuralTts';
 import { useGame } from './GameContext';
 
 export type ActiveStep = LessonPhase | 'scorecard';
@@ -26,7 +27,10 @@ interface AppStateContextValue {
   pipMessage: string;
   setPipMessage: (msg: string) => void;
   pipIsSpeaking: boolean;
-  speakWithPip: (textEn: string) => void;
+  /** La mascota dice algo en inglés con voz neuronal alegre (o la del dispositivo). */
+  speakWithPip: (textEn: string, audioBase64?: string | null) => void;
+  /** La mascota "habla" en su idioma (balbuceo estilo Animalese) mientras se ve el texto. */
+  babbleWithPip: (text: string) => void;
   totalVoicedMsToday: number;
   addVoicedFuelMs: (ms: number) => void;
   streakDays: number;
@@ -103,8 +107,22 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     game.addSpeechEnergy(ms / 1000);
   };
 
-  const speakWithPip = (textEn: string) => {
-    speakEnglishPhrase(textEn, locale, {
+  const speakWithPip = (textEn: string, audioBase64?: string | null) => {
+    stopBabble();
+    const opts = {
+      pitch: game.pet.voicePitch ?? 1.15,
+      rate: game.pet.voiceRate ?? 1.0,
+      style: 'cheerful' as const,
+      onStart: () => setPipIsSpeaking(true),
+      onDone: () => setPipIsSpeaking(false),
+    };
+    if (audioBase64) playSpeechBase64(audioBase64, opts);
+    else void speakNeural(textEn, locale, opts);
+  };
+
+  const babbleWithPip = (text: string) => {
+    stopNeural();
+    babble(text, {
       pitch: game.pet.voicePitch ?? 1.15,
       rate: game.pet.voiceRate ?? 1.0,
       onStart: () => setPipIsSpeaking(true),
@@ -128,6 +146,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         setPipMessage,
         pipIsSpeaking,
         speakWithPip,
+        babbleWithPip,
         totalVoicedMsToday,
         addVoicedFuelMs,
         streakDays,
