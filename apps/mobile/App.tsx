@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   Easing,
   Platform,
   SafeAreaView,
@@ -10,7 +11,11 @@ import {
   View,
 } from 'react-native';
 import { AppStateProvider } from './src/context/AppStateContext';
-import { GameProvider, useGame } from './src/context/GameContext';
+import { GameProvider, useGame, type Screen } from './src/context/GameContext';
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { navigationRef, type RootStackParamList } from './src/navigation/navigationRef';
 import { CompanionTraveler, RewardToast, TabBar, TopBar } from './src/components/AppChrome';
 import { SplashScreen } from './src/components/SplashScreen';
 import { GrowthCelebration } from './src/components/GrowthCelebration';
@@ -46,8 +51,8 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   document.head.appendChild(style);
 }
 
-function CurrentScreen() {
-  const { screen, tab } = useGame();
+/** Pantalla de detalle (se apila sobre las pestañas). */
+function DetailContent({ screen }: { screen: Screen }) {
   switch (screen.name) {
     case 'speaking':
       return <SpeakingScreen topicId={screen.topicId} />;
@@ -72,12 +77,71 @@ function CurrentScreen() {
     case 'privacy':
       return <PrivacyScreen />;
     default:
-      if (tab === 'daily') return <DailyScreen />;
-      if (tab === 'practice') return <PracticeHubScreen />;
-      if (tab === 'pet') return <PetScreen />;
-      return <HomeScreen />;
+      return null;
   }
 }
+
+function TabContent() {
+  const { tab } = useGame();
+  if (tab === 'daily') return <DailyScreen />;
+  if (tab === 'practice') return <PracticeHubScreen />;
+  if (tab === 'pet') return <PetScreen />;
+  return <HomeScreen />;
+}
+
+/** Marco común: desplazamiento vertical y ancho máximo legible. */
+function ScreenFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: THEME.bg }}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.maxWidth}>{children}</View>
+    </ScrollView>
+  );
+}
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+function TabsRoute() {
+  const { tab, setTab, currentAccount } = useGame();
+  const scrollKey = `${currentAccount?.id}-tab-${tab}`;
+  // Android: "Atrás" en una pestaña secundaria vuelve a Inicio en vez de cerrar la app.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigationRef.isReady() && navigationRef.canGoBack()) return false;
+      if (tab !== 'home') {
+        setTab('home');
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [tab, setTab]);
+  return (
+    <ScreenFrame key={scrollKey}>
+      <ScreenTransition transitionKey={scrollKey}>
+        <TabContent />
+      </ScreenTransition>
+    </ScreenFrame>
+  );
+}
+
+function DetailRoute({ route }: NativeStackScreenProps<RootStackParamList, 'screen'>) {
+  return (
+    <ScreenFrame>
+      <DetailContent screen={route.params.screen} />
+    </ScreenFrame>
+  );
+}
+
+const navTheme = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: THEME.bg, card: THEME.bg },
+};
 
 /** Transición suave entre pantallas (fundido + leve desplazamiento). */
 function ScreenTransition({
@@ -117,15 +181,8 @@ function ScreenTransition({
 }
 
 function Shell() {
-  const { ready, currentAccount, progress, screen, tab, pet, streakView } = useGame();
+  const { ready, currentAccount, progress, pet, streakView, syncNavigation } = useGame();
   const [splashDone, setSplashDone] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const transitionKey =
-    screen.name === 'tabs' ? `tab-${tab}` : JSON.stringify(screen);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [transitionKey]);
 
   // A1–A2: la app explica en español. B1 en adelante: toda la app en inglés.
   // El registro y el test de ubicación van en español (aún no se conoce el nivel real).
@@ -174,20 +231,29 @@ function Shell() {
   return (
     <View style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" backgroundColor={THEME.bg} />
-      <TopBar />
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <NavigationContainer
+        key={currentAccount.id}
+        ref={navigationRef}
+        theme={navTheme}
+        onReady={syncNavigation}
+        onStateChange={syncNavigation}
       >
-        <View style={styles.maxWidth}>
-          <ScreenTransition transitionKey={`${currentAccount.id}-${transitionKey}`}>
-            <CurrentScreen />
-          </ScreenTransition>
+        <TopBar />
+        <View style={{ flex: 1 }}>
+          <Stack.Navigator
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: THEME.bg },
+              animation: 'slide_from_right',
+              gestureEnabled: true,
+              fullScreenGestureEnabled: true,
+            }}
+          >
+            <Stack.Screen name="tabs" component={TabsRoute} />
+            <Stack.Screen name="screen" component={DetailRoute} />
+          </Stack.Navigator>
         </View>
-      </ScrollView>
+      </NavigationContainer>
       <CompanionTraveler />
       <TabBar />
       <RewardToast />
@@ -201,13 +267,15 @@ function Shell() {
 
 export default function App() {
   return (
-    <GameProvider>
-      <AppStateProvider>
-        <SafeAreaView style={styles.safeArea}>
-          <Shell />
-        </SafeAreaView>
-      </AppStateProvider>
-    </GameProvider>
+    <SafeAreaProvider>
+      <GameProvider>
+        <AppStateProvider>
+          <SafeAreaView style={styles.safeArea}>
+            <Shell />
+          </SafeAreaView>
+        </AppStateProvider>
+      </GameProvider>
+    </SafeAreaProvider>
   );
 }
 

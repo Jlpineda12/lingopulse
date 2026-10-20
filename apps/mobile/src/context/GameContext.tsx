@@ -24,6 +24,8 @@ import {
 import { currentEvent, EMPTY_EVENT_PROGRESS, type EventProgress } from '../game/events';
 import { buildLeague, LEAGUE_TIERS, previousWeekKey, weekElapsed, zoneFor, type LeagueEntry } from '../game/league';
 import { loadJson, removeKeys, saveJson } from '../services/storage';
+import { StackActions } from '@react-navigation/native';
+import { currentNavScreen, navigationRef } from '../navigation/navigationRef';
 import {
   applyDecay,
   clampStat,
@@ -241,6 +243,8 @@ interface GameContextValue {
   screen: Screen;
   openScreen: (screen: Screen) => void;
   goBack: () => void;
+  /** La pila nativa cambió: actualiza `screen` (lo llama el NavigationContainer). */
+  syncNavigation: () => void;
   lastReward: Reward | null;
   dismissReward: () => void;
   /** `refId` = id del ejercicio; si es de una isla ("unit:a1-03:reading") marca ese paso. */
@@ -315,7 +319,23 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [streakCelebration, setStreakCelebration] = useState<Reward | null>(null);
   const [stats, setStats] = useState<PetStats>(DEFAULT_STATS);
   const [tab, setTab] = useState<TabId>('home');
-  const [stack, setStack] = useState<Screen[]>([{ name: 'tabs' }]);
+  // La pila de pantallas vive en React Navigation (pila nativa); aquí solo se refleja la visible.
+  const [screen, setScreen] = useState<Screen>({ name: 'tabs' });
+  const pendingScreensRef = useRef<Screen[]>([]);
+  const resetToTabs = useCallback(() => {
+    pendingScreensRef.current = [];
+    if (navigationRef.isReady() && navigationRef.canGoBack()) navigationRef.dispatch(StackActions.popToTop());
+    setScreen({ name: 'tabs' });
+  }, []);
+  const syncNavigation = useCallback(() => {
+    // Pantallas pedidas antes de que la pila estuviera lista (p. ej. al terminar el registro)
+    if (navigationRef.isReady() && pendingScreensRef.current.length) {
+      const queued = pendingScreensRef.current;
+      pendingScreensRef.current = [];
+      queued.forEach((sc) => navigationRef.dispatch(StackActions.push('screen', { screen: sc })));
+    }
+    setScreen(currentNavScreen());
+  }, []);
   const [lastReward, setLastReward] = useState<Reward | null>(null);
   const [todayKey, setTodayKey] = useState(localDateKey());
   const [emotionOverride, setEmotionOverride] = useState<PetMood | null>(null);
@@ -370,7 +390,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setStats(applyDecay(s));
     setEmotionOverride(null);
     setTab('home');
-    setStack([{ name: 'tabs' }]);
+    resetToTabs();
   }, []);
 
   useEffect(() => {
@@ -601,7 +621,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setPet(newPet);
       setStats(newStats);
       setTab('home');
-      setStack([{ name: 'tabs' }]);
+      resetToTabs();
 
       saveJson(userKey(id, 'progress'), newProgress);
       saveJson(userKey(id, 'pet'), newPet);
@@ -664,7 +684,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     saveJson('active_account_v1', { id: null });
     setLastReward(null);
     setTab('home');
-    setStack([{ name: 'tabs' }]);
+    resetToTabs();
   }, []);
 
   const deleteAccount = useCallback(
@@ -823,12 +843,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       todayActivities,
       tab,
       setTab: (t) => {
-        setStack([{ name: 'tabs' }]);
+        resetToTabs();
         setTab(t);
       },
-      screen: stack[stack.length - 1]!,
-      openScreen: (s) => setStack((st) => [...st, s]),
-      goBack: () => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st)),
+      screen,
+      openScreen: (sc) => {
+        if (navigationRef.isReady()) navigationRef.dispatch(StackActions.push('screen', { screen: sc }));
+        else pendingScreensRef.current.push(sc);
+      },
+      goBack: () => {
+        if (navigationRef.isReady() && navigationRef.canGoBack()) navigationRef.goBack();
+      },
+      syncNavigation,
       lastReward,
       dismissReward: () => setLastReward(null),
       completeActivity,
@@ -1202,7 +1228,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     dismissGrowth,
     todayKey,
     tab,
-    stack,
+    screen,
+    resetToTabs,
+    syncNavigation,
     lastReward,
     completeActivity,
     awardDailyQuiz,
