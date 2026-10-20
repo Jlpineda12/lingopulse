@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Ellipse, G, Path, Polygon, Rect } from 'react-native-svg';
+import React, { useMemo, useRef, useState } from 'react';
+import { PanResponder, ScrollView, StyleSheet, View } from 'react-native';
+import Svg, { Circle, Ellipse, G, Path, Polygon, Polyline, Rect } from 'react-native-svg';
+import { FACE_LAYOUT, FACE_TEX_H, FACE_TEX_W } from '../pet3d/faceTexture';
 import { Text } from '../i18n';
 import {
   ACCESSORIES,
@@ -24,6 +25,7 @@ import {
   OUTFITS,
   PANTS_COLORS,
   PANTS_STYLES,
+  PAINT_COLORS,
   PERSONALITIES,
   SKIN_TONES,
   SPECIES,
@@ -60,10 +62,11 @@ export type MiiCategory =
   | 'glasses'
   | 'clothes'
   | 'hats'
+  | 'paint'
   | 'voice';
 
 const INK = '#1E2436';
-const FACE_CATEGORIES: MiiCategory[] = ['face', 'hair', 'brows', 'eyes', 'nose', 'mouth', 'beard', 'glasses'];
+const FACE_CATEGORIES: MiiCategory[] = ['face', 'hair', 'brows', 'eyes', 'nose', 'mouth', 'beard', 'glasses', 'paint'];
 
 const CATEGORIES: Array<{ id: MiiCategory; label: string; tint: string }> = [
   { id: 'body', label: 'Cuerpo', tint: '#5B8CFF' },
@@ -77,6 +80,7 @@ const CATEGORIES: Array<{ id: MiiCategory; label: string; tint: string }> = [
   { id: 'glasses', label: 'Gafas', tint: '#1FB5A8' },
   { id: 'clothes', label: 'Ropa', tint: '#22B567' },
   { id: 'hats', label: 'Gorros', tint: '#FF9500' },
+  { id: 'paint', label: 'Pintura', tint: '#EC4899' },
   { id: 'voice', label: 'Voz', tint: '#E0559B' },
 ];
 
@@ -1099,6 +1103,114 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 /* ------------------------------------------------------------------ */
+/* Pintura facial libre                                                */
+/* ------------------------------------------------------------------ */
+
+const PAD_W = 300;
+const PAD_H = Math.round((PAD_W * FACE_TEX_H) / FACE_TEX_W);
+
+function FacePaintPad({ pet, onChange }: { pet: PetConfig; onChange: (patch: Partial<PetConfig>) => void }) {
+  const [color, setColor] = useState<string>(PAINT_COLORS[2]!);
+  const [size, setSize] = useState(10);
+  const [live, setLive] = useState<number[]>([]);
+  const liveRef = useRef<number[]>([]);
+  const state = useRef({ color, size, pet, onChange });
+  state.current = { color, size, pet, onChange };
+  const strokes = pet.facePaint ?? [];
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: (e) => {
+          const { locationX, locationY } = e.nativeEvent;
+          liveRef.current = [locationX / PAD_W, locationY / PAD_H];
+          setLive([...liveRef.current]);
+        },
+        onPanResponderMove: (e) => {
+          const { locationX, locationY } = e.nativeEvent;
+          const x = locationX / PAD_W;
+          const y = locationY / PAD_H;
+          const pts = liveRef.current;
+          const lx = pts[pts.length - 2] ?? x;
+          const ly = pts[pts.length - 1] ?? y;
+          if (Math.hypot(x - lx, y - ly) > 0.008 && pts.length < 400) {
+            liveRef.current = [...pts, x, y];
+            setLive(liveRef.current);
+          }
+        },
+        onPanResponderRelease: () => {
+          const pts = liveRef.current.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 1000) / 1000);
+          liveRef.current = [];
+          setLive([]);
+          if (pts.length < 2) return;
+          const { pet: p, color: c, size: w, onChange: done } = state.current;
+          haptic('light');
+          done({ facePaint: [...(p.facePaint ?? []), { c, w, p: pts }].slice(-60) });
+        },
+      }),
+    []
+  );
+
+  const toPoints = (p: number[]) => {
+    const out: string[] = [];
+    for (let i = 0; i + 1 < p.length; i += 2) out.push(`${(p[i]! * PAD_W).toFixed(1)},${(p[i + 1]! * PAD_H).toFixed(1)}`);
+    return out.join(' ');
+  };
+  const k = PAD_W / FACE_TEX_W;
+  const eyeY = FACE_LAYOUT.eyes * PAD_H;
+  const mouthY = FACE_LAYOUT.mouth * PAD_H;
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={styles.hint}>Dibuja con el dedo sobre la cara: maquillaje, pecas, tatuajes temporales, bigotes de gato… Se ve en 3D al instante.</Text>
+      <View style={styles.padWrap}>
+        <View {...responder.panHandlers} style={{ width: PAD_W, height: PAD_H }}>
+          <Svg width={PAD_W} height={PAD_H} pointerEvents="none">
+            <Ellipse cx={PAD_W / 2} cy={PAD_H * 0.55} rx={PAD_W * 0.42} ry={PAD_H * 0.62} fill={pet.bodyColor} />
+            {/* Guías de los rasgos actuales */}
+            <Ellipse cx={PAD_W / 2 - 74 * k} cy={eyeY} rx={30 * k} ry={30 * k} fill="none" stroke={INK} strokeOpacity={0.25} strokeWidth={2} />
+            <Ellipse cx={PAD_W / 2 + 74 * k} cy={eyeY} rx={30 * k} ry={30 * k} fill="none" stroke={INK} strokeOpacity={0.25} strokeWidth={2} />
+            <Path d={`M${PAD_W / 2 - 30 * k} ${mouthY} Q${PAD_W / 2} ${mouthY + 18 * k} ${PAD_W / 2 + 30 * k} ${mouthY}`} stroke={INK} strokeOpacity={0.25} strokeWidth={2} fill="none" />
+            {strokes.map((st, i) =>
+              st.p.length <= 2 ? (
+                <Circle key={i} cx={st.p[0]! * PAD_W} cy={st.p[1]! * PAD_H} r={(st.w * k) / 2} fill={st.c} />
+              ) : (
+                <Polyline key={i} points={toPoints(st.p)} stroke={st.c} strokeWidth={st.w * k} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              )
+            )}
+            {live.length >= 2 ? (
+              <Polyline points={toPoints(live)} stroke={color} strokeWidth={size * k} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            ) : null}
+          </Svg>
+        </View>
+      </View>
+      <Swatches colors={PAINT_COLORS} value={color} onPick={setColor} />
+      <View style={styles.chipRow}>
+        {[
+          { w: 5, label: 'Fino' },
+          { w: 10, label: 'Medio' },
+          { w: 18, label: 'Grueso' },
+        ].map((b) => (
+          <PressableScale key={b.w} hapticKind="select" onPress={() => setSize(b.w)} style={[styles.chip, size === b.w && styles.chipActive]}>
+            <View style={{ width: b.w * 0.9, height: b.w * 0.9, borderRadius: 99, backgroundColor: size === b.w ? '#FFFFFF' : color }} />
+            <Text style={[styles.chipText, size === b.w && { color: '#FFFFFF' }]}>{b.label}</Text>
+          </PressableScale>
+        ))}
+        <PressableScale hapticKind="select" disabled={!strokes.length} onPress={() => onChange({ facePaint: strokes.slice(0, -1) })} style={[styles.chip, !strokes.length && { opacity: 0.4 }]}>
+          <Text style={styles.chipText}>↶ Deshacer</Text>
+        </PressableScale>
+        <PressableScale hapticKind="select" disabled={!strokes.length} onPress={() => onChange({ facePaint: [] })} style={[styles.chip, !strokes.length && { opacity: 0.4 }]}>
+          <Text style={styles.chipText}>Borrar todo</Text>
+        </PressableScale>
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Creador                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -1135,7 +1247,10 @@ export function MiiCreator({
   };
   const setTune = (key: keyof FaceTuning, v: number) => change({ tuning: { ...tune, [key]: v } });
   const categories = CATEGORIES.filter(
-    (c) => (showVoice || c.id !== 'voice') && (humanoid || (c.id !== 'nose' && c.id !== 'beard' && c.id !== 'hair'))
+    (c) =>
+      (showVoice || c.id !== 'voice') &&
+      (humanoid || (c.id !== 'nose' && c.id !== 'beard' && c.id !== 'hair')) &&
+      (isHuman || c.id !== 'paint')
   );
   const activeCat: MiiCategory = categories.some((c) => c.id === cat) ? cat : 'body';
   const faceFocus = FACE_CATEGORIES.includes(activeCat);
@@ -1204,7 +1319,7 @@ export function MiiCreator({
                 {iconKind ? (
                   <MiiPartIcon kind={iconKind} value={iconValue} pet={pet} size={40} />
                 ) : (
-                  <Glyph name={c.id === 'body' ? `species-${pet.species === 'human' ? 'meeseeks' : pet.species}` : 'mic'} size={34} />
+                  <Glyph name={c.id === 'body' ? `species-${pet.species === 'human' ? 'meeseeks' : pet.species}` : c.id === 'paint' ? 'sparkles' : 'mic'} size={34} />
                 )}
               </View>
               <Text style={[styles.catLabel, active && { color: '#FFFFFF' }]}>{c.label}</Text>
@@ -1317,6 +1432,14 @@ export function MiiCreator({
             </Section>
             <Section title="Color del pelo">
               <Swatches colors={HAIR_COLORS} value={pet.hairColor} onPick={(c) => change({ hairColor: c })} />
+            </Section>
+            <Section title="Mechas">
+              <View style={styles.chipRow}>
+                <PressableScale hapticKind="select" onPress={() => change({ hairHighlight: undefined })} style={[styles.chip, !pet.hairHighlight && styles.chipActive]}>
+                  <Text style={[styles.chipText, !pet.hairHighlight && { color: '#FFFFFF' }]}>Sin mechas</Text>
+                </PressableScale>
+              </View>
+              <Swatches colors={HAIR_COLORS} value={pet.hairHighlight} onPick={(c) => change({ hairHighlight: c })} />
             </Section>
           </>
         ) : null}
@@ -1464,6 +1587,8 @@ export function MiiCreator({
             />
           </Section>
         ) : null}
+
+        {activeCat === 'paint' ? <FacePaintPad pet={pet} onChange={change} /> : null}
 
         {activeCat === 'voice' ? (
           <>
@@ -1688,6 +1813,14 @@ const styles = StyleSheet.create({
     borderColor: '#F9A8D4',
   },
   listenText: { fontSize: 13, fontWeight: '800', color: '#BE185D' },
+  padWrap: {
+    alignSelf: 'center',
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#F5EFE6',
+    borderWidth: 2,
+    borderColor: THEME.fill2,
+  },
   moodRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   moodChip: { padding: 8, borderRadius: 999, backgroundColor: THEME.fill },
 });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { PetConfig, PetMood, PetStage } from '../game/pet';
-import { box, createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon as toonMaterial } from './toonKit';
+import { box, createSkinRamp, createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon as toonMaterial } from './toonKit';
 import type { PetSceneAction, SceneNpc, UnitSceneTheme } from '../game/unitScenes';
 import { buildNpc, buildUnitSceneProps } from './unitSceneProps';
 import {
@@ -308,10 +308,12 @@ export function createPetScene(
 
   const toonRamp = createToonRamp();
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  // Las personas usan menos luz ambiente y más luz principal: así se ve el volumen de la cara.
+  const personLight = config.species === 'human';
+  scene.add(new THREE.AmbientLight(0xffffff, personLight ? 0.42 : 0.7));
   // Relleno de cielo/suelo para un sombreado limpio y suave.
-  scene.add(new THREE.HemisphereLight(0xfff7ee, 0xc9d6ff, 0.55));
-  const key = new THREE.DirectionalLight(0xfff6e5, 1.85);
+  scene.add(new THREE.HemisphereLight(0xfff7ee, 0xc9d6ff, personLight ? 0.38 : 0.55));
+  const key = new THREE.DirectionalLight(0xfff6e5, personLight ? 2.1 : 1.85);
   key.position.set(3.2, 4.8, 5.0);
   scene.add(key);
   const rim = new THREE.DirectionalLight(0xa8d0ff, 0.9);
@@ -389,10 +391,9 @@ export function createPetScene(
    * Material de cada pieza: las personas usan un acabado de juguete de vinilo mate
    * (sombreado suave con volumen, como los Mii); chibi y animales mantienen el toon.
    */
-  const toon = (color: THREE.ColorRepresentation, ramp: THREE.DataTexture): THREE.MeshPhongMaterial | THREE.MeshToonMaterial =>
-    isHuman
-      ? new THREE.MeshPhongMaterial({ color, shininess: 22, specular: 0x1c1c1c })
-      : toonMaterial(color, ramp);
+  const skinRamp = isHuman ? createSkinRamp() : null;
+  const toon = (color: THREE.ColorRepresentation, ramp: THREE.DataTexture): THREE.MeshToonMaterial =>
+    toonMaterial(color, skinRamp ?? ramp);
   const petStage = options.stage ?? 'adult';
   const tune = config.tuning ?? {};
   const tstep = (v?: number) => Math.max(-3, Math.min(3, Math.round(v ?? 0)));
@@ -439,15 +440,15 @@ export function createPetScene(
    * Proporciones de persona: la cara se modela a escala "chibi" (centro en y = 0.42) y luego
    * toda la cabeza se reduce y se sube sobre un cuerpo más largo, como un Mii.
    */
-  const HUMAN_HEAD_K = 0.74;
-  const HUMAN_HEAD_Y = 0.74;
+  const HUMAN_HEAD_K = 0.62;
+  const HUMAN_HEAD_Y = 0.94;
   const rigY = isHuman ? 0.42 : 0;
   const humanHeadParts: THREE.Object3D[] = [];
   /** Parches de barriga: se ocultan cuando la ropa cubre el torso. */
   const bellyParts: THREE.Object3D[] = [];
   const humanSleeves: THREE.Mesh[] = [];
   let humanArms: THREE.Group[] | null = null;
-  let faceMat: THREE.MeshPhongMaterial | null = null;
+  let faceMat: THREE.MeshToonMaterial | null = null;
   const faceCache = new Map<string, THREE.DataTexture>();
   const faceTex = (e: FaceEyes, m: FaceMouth) => {
     const k = `${e}|${m}`;
@@ -569,9 +570,8 @@ export function createPetScene(
       FACE_THETA_START,
       FACE_THETA_SPAN
     );
-    faceMat = new THREE.MeshPhongMaterial({
-      shininess: 22,
-      specular: 0x1c1c1c,
+    faceMat = new THREE.MeshToonMaterial({
+      gradientMap: skinRamp ?? toonRamp,
       transparent: true,
       depthWrite: false,
       polygonOffset: true,
@@ -584,75 +584,85 @@ export function createPetScene(
     faceDecal.renderOrder = 2;
     humanHeadParts.push(faceDecal);
     body.add(...humanHeadParts);
-    // Cuello corto y grueso: la cabeza descansa sobre los hombros como un juguete.
-    const neck = cylinder(0.15, 0.17, 0.12, bodyMat, 16, 0);
-    neck.position.set(0, 0.2, 0);
-    // Torso en forma de pera: hombros redondeados que caen suaves y base más ancha.
+    // Cuerpo de Mii: cuello fino y corto, torso recto y estrecho (hombros más angostos
+    // que la cabeza), brazos largos y delgados con la mano a la altura de la cadera, piernas largas.
+    const neck = cylinder(0.075, 0.08, 0.14, bodyMat, 16, 0);
+    neck.position.set(0, 0.46, 0);
     const torsoProfile = [
-      [0.0, 0.21], [0.18, 0.2], [0.3, 0.165], [0.365, 0.1], [0.385, 0.0],
-      [0.375, -0.15], [0.35, -0.3], [0.345, -0.42], [0.31, -0.52], [0.0, -0.54],
+      [0.0, 0.47], [0.1, 0.465], [0.19, 0.44], [0.245, 0.4], [0.265, 0.33],
+      [0.262, 0.18], [0.248, 0.02], [0.236, -0.12], [0.238, -0.2], [0.2, -0.25], [0.0, -0.26],
     ]
       .reverse() // de abajo hacia arriba: normales hacia afuera
       .map(([r, y]) => new THREE.Vector2(r!, y!));
     const torsoGeo = new THREE.LatheGeometry(torsoProfile, 28);
     const shirt = new THREE.Mesh(torsoGeo, shirtMat);
-    shirt.scale.z = 0.76;
+    shirt.scale.z = 0.74;
     const shirtOut = new THREE.Mesh(torsoGeo, OUTLINE_MAT);
     shirtOut.scale.setScalar(1.025);
     shirt.add(shirtOut);
-    shirt.position.y = 0.0;
-    const hips = ellipsoid(0.33, 0.15, 0.25, pantsMat, 22, true, 0.035);
-    hips.position.set(0, -0.47, 0);
+    const hips = ellipsoid(0.235, 0.1, 0.18, pantsMat, 22, true, 0.03);
+    hips.position.set(0, -0.24, 0);
     body.add(neck, shirt, hips);
     const pantsStyle = config.pantsStyle ?? 'jeans';
     const cuffMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').offsetHSL(0, -0.05, 0.12), toonRamp);
     [-1, 1].forEach((side) => {
+      const lx = side * 0.11;
       if (pantsStyle === 'jeans') {
-        const leg = cylinder(0.105, 0.098, 0.36, pantsMat, 14);
-        leg.position.set(side * 0.13, -0.66, 0.0);
-        // Dobladillo vuelto, como unos jeans de muñeco
-        const cuff = cylinder(0.112, 0.112, 0.06, cuffMat, 14);
-        cuff.position.set(side * 0.13, -0.8, 0.0);
+        const leg = cylinder(0.088, 0.082, 0.62, pantsMat, 14);
+        leg.position.set(lx, -0.55, 0.0);
+        const cuff = cylinder(0.092, 0.092, 0.05, cuffMat, 14);
+        cuff.position.set(lx, -0.83, 0.0);
         body.add(leg, cuff);
       } else {
-        // Shorts o falda: pierna de piel con medias cortas
-        const legSkin = cylinder(0.075, 0.07, 0.32, bodyMat, 12);
-        legSkin.position.set(side * 0.13, -0.68, 0.0);
-        const sock = cylinder(0.08, 0.08, 0.07, toon(0xffffff, toonRamp), 12);
-        sock.position.set(side * 0.13, -0.82, 0.0);
+        // Shorts o falda: pierna de piel con calcetín
+        const legSkin = cylinder(0.062, 0.058, 0.6, bodyMat, 12);
+        legSkin.position.set(lx, -0.56, 0.0);
+        const sock = cylinder(0.066, 0.066, 0.08, toon(0xffffff, toonRamp), 12);
+        sock.position.set(lx, -0.82, 0.0);
         body.add(legSkin, sock);
         if (pantsStyle === 'shorts') {
-          const short = cylinder(0.12, 0.115, 0.13, pantsMat, 14);
-          short.position.set(side * 0.13, -0.55, 0.0);
+          const short = cylinder(0.1, 0.095, 0.2, pantsMat, 14);
+          short.position.set(lx, -0.34, 0.0);
           body.add(short);
         }
       }
     });
     if (pantsStyle === 'skirt') {
-      const skirtGeo = new THREE.CylinderGeometry(0.34, 0.46, 0.3, 28, 1, true);
+      const skirtGeo = new THREE.CylinderGeometry(0.24, 0.34, 0.32, 28, 1, true);
       const skirtMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B'), toonRamp);
       (skirtMat as THREE.Material).side = THREE.DoubleSide;
       const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-      skirt.position.y = -0.58;
+      skirt.position.y = -0.36;
       skirt.scale.z = 0.8;
       const skirtOut = new THREE.Mesh(skirtGeo, OUTLINE_MAT);
       skirtOut.scale.set(1.02, 1, 1.02);
       skirt.add(skirtOut);
       body.add(skirt);
     }
-    // Brazos con hombro como pivote: manga del color favorito, brazo y mano.
+    // Brazos con pivote en el hombro: manga, antebrazo (o manga larga) y mano redonda.
     humanArms = [-1, 1].map((side) => {
       const pivot = new THREE.Group();
-      // Hombro redondo: la manga nace del hombro y se abre como en las camisetas de los Mii.
-      pivot.position.set(side * 0.35, 0.06, 0.0);
-      const sleeve = ellipsoid(0.125, 0.15, 0.12, toon(accent, toonRamp), 18, true, 0.025);
-      sleeve.position.y = -0.07;
+      pivot.position.set(side * 0.27, 0.36, 0.0);
+      const sleeve = cylinder(0.078, 0.072, 0.28, toon(accent, toonRamp), 14);
+      sleeve.position.y = -0.12;
+      const cap = ellipsoid(0.082, 0.07, 0.082, sleeve.material as THREE.Material, 14, false);
+      cap.position.y = 0.02;
+      sleeve.add(cap);
+      cap.position.y = 0.14;
       humanSleeves.push(sleeve);
-      const arm = cylinder(0.058, 0.054, 0.3, bodyMat, 14, 1.12);
-      arm.position.y = -0.3;
-      const hand = ellipsoid(0.074, 0.08, 0.07, bodyMat, 16, true, 0.02);
-      hand.position.y = -0.48;
-      pivot.add(arm, sleeve, hand);
+      const forearm = cylinder(0.055, 0.05, 0.3, bodyMat, 14, 1.12);
+      forearm.position.y = -0.4;
+      const cuffSleeve = cylinder(0.068, 0.063, 0.3, sleeve.material as THREE.Material, 14);
+      cuffSleeve.position.y = -0.4;
+      cuffSleeve.userData.longSleeve = true;
+      cuffSleeve.visible = false;
+      humanSleeves.push(cuffSleeve);
+      const hand = ellipsoid(0.062, 0.068, 0.058, bodyMat, 16, true, 0.018);
+      hand.position.y = -0.6;
+      // Brazo de piel debajo de la manga (se ve con camisetas de tirantes)
+      const upper = cylinder(0.056, 0.055, 0.3, bodyMat, 12, 0);
+      upper.position.y = -0.12;
+      pivot.add(upper, forearm, sleeve, cuffSleeve, hand);
       body.add(pivot);
       return pivot;
     });
@@ -1130,6 +1140,20 @@ export function createPetScene(
       });
     }
 
+    if (isSlim && config.hairHighlight && hairStyle !== 'buzz') {
+      // Mechas de color sobre el pelo (como las de Tomodachi Life)
+      const hlMat = toon(new THREE.Color(config.hairHighlight), toonRamp);
+      // Franjas que siguen la curva del casquete de pelo (no sobresalen)
+      [-0.75, -0.28, 0.18, 0.62, 2.4, 3.9].forEach((dphi) => {
+        const strip = new THREE.Mesh(
+          new THREE.SphereGeometry(1, 4, 12, Math.PI / 2 + dphi - 0.07, 0.14, Math.PI * 0.08, Math.PI * 0.42),
+          hlMat
+        );
+        strip.scale.set(0.735, 0.345, 0.695);
+        strip.position.set(0, -0.03, -0.04);
+        hairGroup.add(strip);
+      });
+    }
     if (isHuman && hairStyle !== 'buzz') {
       // Brillo del pelo (reflejo de vinilo, como el de los Mii)
       const shineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false });
@@ -1669,7 +1693,9 @@ export function createPetScene(
     body.add(fh);
     if (facialHair === 'beard') {
       // Barba completa: casquete que abraza la mandíbula por debajo de la boca.
-      const beardGeo = new THREE.SphereGeometry(1, 30, 10, Math.PI / 2 - 1.3, 2.6, Math.PI * 0.58, Math.PI * 0.34);
+      // Empieza justo debajo de la boca (en personas la boca está dibujada más abajo)
+      const beardStart = isHuman ? (FACE_THETA_START + (FACE_LAYOUT.mouth + 0.07) * FACE_THETA_SPAN) / Math.PI : 0.58;
+      const beardGeo = new THREE.SphereGeometry(1, 30, 10, Math.PI / 2 - 1.3, 2.6, Math.PI * beardStart, Math.PI * (0.92 - beardStart));
       const beardMat = toon(fhColor, toonRamp);
       (beardMat as THREE.Material).side = THREE.DoubleSide;
       const beard = new THREE.Mesh(beardGeo, beardMat);
@@ -1821,9 +1847,9 @@ export function createPetScene(
   const footMeshes: THREE.Mesh[] = [];
   [-1, 1].forEach((side) => {
     const f = ellipsoid(
-      isHuman ? 0.16 : isSlim ? 0.22 : 0.31,
-      isHuman ? 0.12 : isSlim ? 0.15 : 0.17,
-      isHuman ? 0.27 : isSlim ? 0.36 : 0.43,
+      isHuman ? 0.1 : isSlim ? 0.22 : 0.31,
+      isHuman ? 0.085 : isSlim ? 0.15 : 0.17,
+      isHuman ? 0.18 : isSlim ? 0.36 : 0.43,
       isHuman
         ? toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').multiplyScalar(0.5), toonRamp)
         : feetMat,
@@ -1831,7 +1857,7 @@ export function createPetScene(
       true,
       0.035
     );
-    f.position.set(side * (isHuman ? 0.14 : isSlim ? 0.28 : 0.42), -0.88, 0.12);
+    f.position.set(side * (isHuman ? 0.11 : isSlim ? 0.28 : 0.42), -0.88, 0.08);
     f.rotation.y = side * 0.22;
     if (isHuman) {
       // Zapatillas: suela blanca
@@ -2222,7 +2248,7 @@ export function createPetScene(
   const outfitId = config.outfit ?? 'none';
   const torso =
       isHuman
-        ? { y: -0.19, sx: 0.4, sy: 0.37, sz: 0.3, from: 0.3 }
+        ? { y: 0.1, sx: 0.27, sy: 0.38, sz: 0.2, from: 0.24 }
         : isMeeseeks
         ? { y: -0.28, sx: 0.52, sy: 0.78, sz: 0.46, from: 0.3 }
         : isCat
@@ -2257,10 +2283,12 @@ export function createPetScene(
     }
   };
   const sleeveColor = sleeveColorFor(outfitId);
+  const LONG_SLEEVES = ['sweater', 'jacket', 'blazer', 'labcoat', 'raincoat', 'hero', 'jester', 'chef', 'coat', 'hoodie', 'stripes'];
   if (isHuman) {
     humanSleeves.forEach((sl) => {
+      if (sl.userData.longSleeve) sl.visible = LONG_SLEEVES.includes(outfitId);
       if (outfitId === 'tank') sl.visible = false;
-      (sl.material as THREE.MeshPhongMaterial).color.set(sleeveColor ?? accent);
+      (sl.material as THREE.MeshToonMaterial).color.set(sleeveColor ?? accent);
     });
   } else if (sleeveColor !== null) {
     // Mangas sobre los brazos de cualquier especie: así la ropa se lee como ropa.
@@ -2846,7 +2874,7 @@ export function createPetScene(
     pages.position.set(0, 0.02, 0.01);
     pages.rotation.x = -0.5;
     book.add(cover, pages);
-    book.position.set(0, isHuman ? -0.35 : -0.18, (isHuman ? 0.3 : torso.sz) + 0.16);
+    book.position.set(0, isHuman ? 0.0 : -0.18, (isHuman ? 0.2 : torso.sz) + 0.16);
     body.add(book);
   }
 
@@ -3260,6 +3288,7 @@ export function createPetScene(
     },
     dispose: () => {
       toonRamp.dispose();
+      skinRamp?.dispose();
       faceCache.forEach((tx) => tx.dispose());
       scene.traverse((obj) => {
         const m = obj as THREE.Mesh;

@@ -223,6 +223,13 @@ export interface PetConfig {
   /** Color del pantalón / parte baja (humanos). */
   pantsColor?: string;
   faceShape?: FaceShape;
+  /**
+   * Pintura facial libre (como en Tomodachi Life): trazos sobre la cara.
+   * `p` son pares x,y normalizados (0–1) dentro de la textura de la cara; `w` en píxeles de textura.
+   */
+  facePaint?: Array<{ c: string; w: number; p: number[] }>;
+  /** Mechas del pelo (color) — null/undefined = sin mechas. */
+  hairHighlight?: string;
   /** Pantalón, short o falda (personas). */
   pantsStyle?: PantsStyle;
   /** Forma de las orejas (personas). */
@@ -456,6 +463,8 @@ export const FACIAL_HAIR: Array<{ id: FacialHair; label: string }> = [
 ];
 
 export const GLASSES_COLORS = ['#1E2436', '#7C4A27', '#B91C1C', '#2563EB', '#16A34A', '#F4B942', '#9B5DE5', '#E2E8F0'];
+
+export const PAINT_COLORS = ['#1E2436', '#FFFFFF', '#E11D48', '#FF7A1A', '#FACC15', '#22B567', '#2563EB', '#9B5DE5', '#FF8FB1', '#8B5A2B'];
 
 export const LIP_COLORS = ['#B23A48', '#E07A8B', '#C2593F', '#8C3B2E', '#F29EAE', '#7A2E3A'];
 

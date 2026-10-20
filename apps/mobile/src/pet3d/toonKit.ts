@@ -28,6 +28,28 @@ export function createToonRamp(): THREE.DataTexture {
   return tex;
 }
 
+/**
+ * Rampa cálida y mate para personas (piel y tela, estilo Tomodachi): sin brillo especular,
+ * sombras rosadas/anaranjadas suaves en vez de grises, para que no parezcan de porcelana.
+ */
+export function createSkinRamp(): THREE.DataTexture {
+  const n = 16;
+  const data = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const k = Math.pow(i / (n - 1), 0.6);
+    data[i * 4] = Math.round(150 + (255 - 150) * k);
+    data[i * 4 + 1] = Math.round(100 + (246 - 100) * k);
+    data[i * 4 + 2] = Math.round(96 + (236 - 96) * k);
+    data[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, n, 1, THREE.RGBAFormat);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** Grosor relativo del contorno: fino, para un acabado de figura más limpio. */
 export const OUTLINE_WEIGHT = 0.42;
 

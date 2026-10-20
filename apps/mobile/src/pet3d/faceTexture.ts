@@ -379,6 +379,14 @@ export function drawMiiFace(config: PetConfig, eyesState: FaceEyes = 'open', mou
     R.ellipse(cx + 92 + tstep(t.moleX) * 14, H * 0.6 - tstep(t.moleY) * 14, 4.5, 4.5, [60, 40, 36]);
   }
 
+  // ---------------- Pintura facial libre (encima de todo) ----------------
+  (config.facePaint ?? []).forEach((st) => {
+    const pts: Array<[number, number]> = [];
+    for (let i = 0; i + 1 < st.p.length; i += 2) pts.push([st.p[i]! * W, st.p[i + 1]! * H]);
+    if (pts.length === 1) R.ellipse(pts[0]![0], pts[0]![1], st.w / 2, st.w / 2, hex(st.c));
+    else R.stroke(pts, st.w, hex(st.c));
+  });
+
   const tex = new THREE.DataTexture(R.data, W, H, THREE.RGBAFormat);
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearFilter;
