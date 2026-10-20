@@ -5,10 +5,12 @@ import {
 } from '@lingopulse/shared';
 
 import { apiHeaders, getApiBaseUrl } from './config';
+import { ensureAiConsent } from './aiConsent';
 
 export type CoachEngine = 'claude' | 'local';
 
 async function fetchJson<T>(path: string, init: RequestInit, timeoutMs: number): Promise<T> {
+  if (!(await ensureAiConsent())) throw new Error('ai_consent_denied');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

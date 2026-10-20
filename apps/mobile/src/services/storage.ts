@@ -28,3 +28,12 @@ export async function clearAll(): Promise<void> {
     // ignore
   }
 }
+
+/** Borra varias claves (por ejemplo, todos los datos de un jugador al eliminar su cuenta). */
+export async function removeKeys(keys: string[]): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove(keys.map((k) => PREFIX + k));
+  } catch {
+    // ignore
+  }
+}

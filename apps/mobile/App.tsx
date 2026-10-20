@@ -15,6 +15,8 @@ import { CompanionTraveler, RewardToast, TabBar, TopBar } from './src/components
 import { SplashScreen } from './src/components/SplashScreen';
 import { GrowthCelebration } from './src/components/GrowthCelebration';
 import { TutorialOverlay } from './src/components/TutorialOverlay';
+import { AiConsentModal } from './src/components/AiConsentModal';
+import { PrivacyScreen, SettingsScreen } from './src/screens/SettingsScreen';
 import { StreakCelebration } from './src/components/FireStreakCard';
 import { scheduleReminders } from './src/services/reminders';
 import { preloadSfx } from './src/services/sfx';
@@ -65,6 +67,10 @@ function CurrentScreen() {
       return <LeagueScreen />;
     case 'unit':
       return <UnitScreen unitId={screen.unitId} />;
+    case 'settings':
+      return <SettingsScreen />;
+    case 'privacy':
+      return <PrivacyScreen />;
     default:
       if (tab === 'daily') return <DailyScreen />;
       if (tab === 'practice') return <PracticeHubScreen />;
@@ -188,6 +194,7 @@ function Shell() {
       <StreakCelebration />
       <GrowthCelebration />
       <TutorialOverlay />
+      <AiConsentModal />
     </View>
   );
 }

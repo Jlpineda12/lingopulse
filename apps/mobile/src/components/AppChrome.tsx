@@ -14,7 +14,7 @@ import { Pet3D } from './Pet3D';
 
 export function TopBar() {
   const { locale, toggleLocale } = useAppState();
-  const { progress, currentAccount, logout, setTab, streakView } = useGame();
+  const { progress, currentAccount, setTab, streakView, openScreen } = useGame();
   const [showStreakPopover, setShowStreakPopover] = useState(false);
   // En teléfonos angostos (≤ 410 px) solo se muestra el logo para que quepan todas las píldoras.
   const compact = useWindowDimensions().width <= 410;
@@ -124,12 +124,12 @@ export function TopBar() {
           {/* Cambiar de jugador / Salir */}
           {currentAccount ? (
             <PressableScale
-              onPress={logout}
-              accessibilityLabel="Cambiar de jugador"
+              onPress={() => openScreen({ name: 'settings' })}
+              accessibilityLabel="Ajustes, privacidad y cuenta"
               style={styles.pill}
             >
               <View style={styles.pillInner}>
-                <Ionicons name="people-outline" size={15} color={THEME.ink} />
+                <Ionicons name="settings-outline" size={15} color={THEME.ink} />
               </View>
             </PressableScale>
           ) : null}
@@ -162,17 +162,24 @@ import { Glyph } from './Glyph';
  */
 export function CompanionTraveler() {
   const { screen, tab, pet, mood, stats, petThePet, setTab, lastReward, petStage } = useGame();
-  const [minimized, setMinimized] = useState(false);
+  // Por defecto va recogido en una píldora para no tapar el contenido; se asoma unos segundos
+  // cuando hay algo que celebrar y el jugador puede abrirlo cuando quiera.
+  const [minimized, setMinimized] = useState(true);
   const [reactKey, setReactKey] = useState(0);
 
   useEffect(() => {
     if (lastReward || mood === 'celebrate' || mood === 'love') {
       setReactKey((k) => k + 1);
+      setMinimized(false);
+      const t = setTimeout(() => setMinimized(true), 3500);
+      return () => clearTimeout(t);
     }
+    return undefined;
   }, [lastReward, mood]);
 
-  // En el Santuario de Mascota ('pet') o en la Ruta Principal ('home') ya se muestra en grande
-  if (screen.name === 'tabs' && (tab === 'pet' || tab === 'home')) {
+  // En el Santuario de Mascota ('pet') o en la Ruta Principal ('home') ya se muestra en grande,
+  // y en las islas la mascota ya actúa dentro del diorama de la unidad.
+  if ((screen.name === 'tabs' && (tab === 'pet' || tab === 'home')) || ['unit', 'settings', 'privacy'].includes(screen.name)) {
     return null;
   }
 

@@ -133,3 +133,40 @@ Guía completa, desde las claves hasta instalar la app en tu celular y el de tu 
 - **Más modelos y personalización:** especies Zorro Explorador y Tiburón Grumete; accesorios piratas (sombrero de paja, pañuelo, parche, gorro de capitán); ropa 3D (chaleco pirata, marinero, abrigo de capitán, sudadera, bufanda); comida nueva (onigiri, banquete pirata). Diseños originales, inspirados pero sin copiar personajes de terceros.
 - **Íconos propios en lugar de emojis:** `components/Glyph.tsx` dibuja en SVG (estilo sticker Nintendo/Duolingo con contorno de tinta) comida, muebles, casas, monedas, accesorios y caritas paramétricas que muestran exactamente cada ceja, boca, mejilla, ojos, especie y emoción.
 - **Ideas de producto para enganchar a jóvenes:** [`docs/04_ideas_enganche_jovenes.md`](./docs/04_ideas_enganche_jovenes.md).
+
+## Novedades: unidades diarias, mascota que nace de un huevo y publicación
+
+**Islas = unidades (72, 12 por nivel A1–C2).** Cada isla es una unidad completa al estilo de los libros por
+unidades: vocabulario → gramática → *situaciones* (4 funciones comunicativas con frases, diálogo y práctica)
+→ reading → listening → speaking → writing → quiz final (10 preguntas que cambian en cada intento; se aprueba
+con 70 %). Una isla nueva por día: la siguiente se abre al día siguiente y solo si la anterior está conquistada.
+Contenido en `packages/shared/src/units` (`content/*.ts` y `content/lessons-*.ts`); el listening cambia de
+velocidad, número de escuchas y transcripción según el nivel (`LISTENING_PROFILES`).
+
+**Isla temática en 3D.** La isla actual del mapa y la cabecera de cada unidad muestran a la mascota actuando el
+tema (saludar a un amigo, pedir un café, leer, celebrar…) con su decorado (`src/game/unitScenes.ts`,
+`src/pet3d/unitSceneProps.ts`).
+
+**Mascota.** Nace de un huevo y crece por etapas con la XP (huevo → bebé → niño → joven → adulto). El creador
+estilo Mii (`src/components/MiiCreator.tsx`) permite crear personas, el chibi o animales: forma de cara, piel,
+orejas, pelo y mechas, cejas, ojos, nariz, boca, barba, gafas, ropa, gorros, voz y pintura facial libre, con
+ajustes de tamaño, forma, inclinación, separación y altura. La cara de las personas se dibuja en una textura
+(`src/pet3d/faceTexture.ts`).
+
+**Tutorial** interactivo para jugadores nuevos (`src/components/TutorialOverlay.tsx`), repetible desde Ajustes.
+
+**Publicación en tiendas:** permiso previo para enviar voz/texto a IA, Ajustes con política de privacidad y
+eliminación de cuenta, manifiesto de privacidad de iOS y configuración de producción. Pasos y respuestas para
+los formularios en `docs/07_publicacion_tiendas.md`; política pública en `docs/privacidad.md`.
+
+### Variables nuevas
+
+| Variable | Dónde | Para qué |
+| --- | --- | --- |
+| `RATE_LIMIT_AI_PER_MIN`, `RATE_LIMIT_PER_MIN` | API | Límite de peticiones por IP (IA / general) |
+| `ALLOW_OPEN_API=1` | API | Permite producción sin `APP_ACCESS_KEY` (no recomendado) |
+| `AZURE_CONCURRENCY` | API | Tramos de audio evaluados en paralelo |
+| `GEMINI_FAST_TRANSCRIPT=0`, `GEMINI_STT_MODEL` | API | Transcripción rápida con Gemini Flash-Lite |
+| `FFMPEG_TIMEOUT_MS` | API | Tiempo máximo de conversión de audio |
+| `EXPO_PUBLIC_SUPPORT_EMAIL` | App | Correo de soporte en Ajustes y en la política |
+| `APP_VARIANT=development` | App (EAS) | Compilación de desarrollo con acceso a la red local |

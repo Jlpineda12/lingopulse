@@ -23,7 +23,7 @@ import {
 } from '@lingopulse/shared';
 import { currentEvent, EMPTY_EVENT_PROGRESS, type EventProgress } from '../game/events';
 import { buildLeague, LEAGUE_TIERS, previousWeekKey, weekElapsed, zoneFor, type LeagueEntry } from '../game/league';
-import { loadJson, saveJson } from '../services/storage';
+import { loadJson, removeKeys, saveJson } from '../services/storage';
 import {
   applyDecay,
   clampStat,
@@ -158,7 +158,9 @@ export type Screen =
   | { name: 'minigame'; game?: 'word-rush' | 'sharp-ear' | 'sentence-builder' | 'error-hunt' | 'event-rush' }
   | { name: 'event' }
   | { name: 'league' }
-  | { name: 'unit'; unitId: string };
+  | { name: 'unit'; unitId: string }
+  | { name: 'settings' }
+  | { name: 'privacy' };
 
 /** Resultado del quiz final de una isla. */
 export interface UnitQuizResult {
@@ -669,6 +671,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       const next = accounts.filter((a) => a.id !== accountId);
       setAccounts(next);
       saveJson('accounts_v1', { list: next });
+      // Eliminar la cuenta borra de verdad todos sus datos del dispositivo.
+      void removeKeys([userKey(accountId, 'progress'), userKey(accountId, 'pet'), userKey(accountId, 'petStats')]);
       if (activeAccountId === accountId) {
         setActiveAccountId(null);
         saveJson('active_account_v1', { id: null });

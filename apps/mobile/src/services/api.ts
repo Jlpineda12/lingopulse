@@ -19,6 +19,7 @@ import {
 } from '@lingopulse/shared';
 
 import { apiHeaders, getApiBaseUrl } from './config';
+import { ensureAiConsent } from './aiConsent';
 
 /**
  * Fallback local en memoria por si el usuario abre la app móvil sin haber iniciado `npm run dev:api`.
@@ -60,6 +61,8 @@ async function fetchWithFallback<T>(
   fallbackFn: () => T
 ): Promise<{ data: T; source: 'api' | 'local_engine' }> {
   try {
+    // Los envíos con contenido del jugador (POST) necesitan su permiso; si no, se usa el motor local.
+    if ((options.method ?? 'GET') !== 'GET' && !(await ensureAiConsent())) throw new Error('ai_consent_denied');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1800);
     const res = await fetch(`${getApiBaseUrl()}${path}`, {

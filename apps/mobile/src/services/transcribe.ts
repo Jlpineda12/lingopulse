@@ -3,6 +3,7 @@ import { File } from 'expo-file-system';
 import { mergePronunciation, type PronunciationReport, type SupportedLocale } from '@lingopulse/shared';
 import { apiHeaders, getApiBaseUrl } from './config';
 import { getUiLanguage } from '../i18n';
+import { ensureAiConsent } from './aiConsent';
 
 export interface ServerTranscript {
   transcript: string;
@@ -68,6 +69,7 @@ export async function transcribeRecording(
   referenceText?: string
 ): Promise<ServerTranscript | null> {
   try {
+    if (!(await ensureAiConsent())) return null;
     const encoded = await encodeAudio(source);
     if (!encoded) return null;
     const { audioBase64, mimeType } = encoded;
@@ -107,6 +109,7 @@ export async function transcribeRecording(
 }
 
 async function postReview(body: object): Promise<Response> {
+  if (!(await ensureAiConsent())) throw new Error('ai_consent_denied');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 180_000);
   try {
