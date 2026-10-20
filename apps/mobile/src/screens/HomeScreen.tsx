@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '../i18n';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import {
   CEFR_LEVEL_META,
   DAILY_CATEGORY_META,
@@ -30,10 +30,11 @@ import type { TopicIllustrationKind } from '../components/CustomTopicIcons';
 import { OptionButton } from '../components/MultipleChoice';
 import { PressableScale, Reveal } from '../components/motion';
 import { Badge, Button, Card, Eyebrow, LargeTitle, SectionHeader, ui, type IconName } from '../components/ui';
-import { levelProgress, MOOD_META, moodMessage } from '../game/pet';
+import { moodMessage } from '../game/pet';
 import { speakEnglishPhrase } from '../services/speech';
-import { petTint, SHADOW, THEME, TYPE, type GradientKey } from '../theme/colors';
+import { THEME, TYPE, type GradientKey } from '../theme/colors';
 import { Glyph } from '../components/Glyph';
+import { TodaySessionCard, type SessionStep } from '../components/TodaySessionCard';
 import { eventMissions } from '../game/events';
 import { LEAGUE_TIERS } from '../game/league';
 
@@ -56,7 +57,6 @@ export function HomeScreen() {
   const { locale, speakWithPip, lesson } = useAppState();
   const {
     pet,
-    stats,
     mood,
     progress,
     currentAccount,
@@ -64,10 +64,10 @@ export function HomeScreen() {
     todayActivities,
     setTab,
     openScreen,
-    triggerPetEmotion,
     eventState,
     league,
     replayTutorial,
+    petStage,
   } = useGame();
 
   const [trapIdx, setTrapIdx] = useState(0);
@@ -79,11 +79,9 @@ export function HomeScreen() {
   const hour = new Date().getHours();
   const drop = useMemo(() => getDailyDrop(todayKey, progress.level), [todayKey, progress.level]);
   const practice = useMemo(() => getDailyPractice(todayKey, progress.level), [todayKey, progress.level]);
-  const lvl = levelProgress(progress.xp);
   const levelInfo = CEFR_LEVEL_META[progress.level];
   const featuredMeta = DAILY_CATEGORY_META[drop.featured.category];
   const greeting = moodMessage(pet.name, mood, pet.catchphrase);
-  const moodInfo = MOOD_META[mood] ?? MOOD_META.happy;
 
   const baseHello = hour < 12 ? 'Good morning' : hour < 19 ? 'Good afternoon' : 'Good evening';
   const hello = currentAccount ? `${baseHello}, ${currentAccount.playerName}` : baseHello;
@@ -151,6 +149,35 @@ export function HomeScreen() {
 
   const activeStepNumber = pathIslands.find((n) => !n.done)?.step ?? pathIslands.length;
 
+  // Sesión de Hoy: tres pasos cortos; hablar con la mascota es el centro.
+  const voiceDone = todayActivities.some((a) => a.kind === 'speaking' || a.kind === 'lesson');
+  const sessionSteps: SessionStep[] = [
+    {
+      id: 'word',
+      icon: 'sparkles',
+      title: `Palabra del día: “${drop.featured.term}”`,
+      minutes: 1,
+      done: todayActivities.some((a) => a.kind === 'daily'),
+      onPress: () => setTab('daily'),
+    },
+    {
+      id: 'voice',
+      icon: 'mic',
+      title: `Habla con ${pet.name}`,
+      minutes: 3,
+      done: voiceDone,
+      onPress: () => openScreen({ name: 'speaking', topicId: practice.speaking.id }),
+    },
+    {
+      id: 'listen',
+      icon: 'headset',
+      title: 'Escucha y responde',
+      minutes: 1,
+      done: todayActivities.some((a) => a.kind === 'listening'),
+      onPress: () => openScreen({ name: 'listening', trackId: practice.listening.id }),
+    },
+  ];
+
   const canvasAmbientBg = ATMOSPHERE_META[weatherMode].skyBottom;
 
   return (
@@ -164,57 +191,25 @@ export function HomeScreen() {
         </View>
       </Reveal>
 
-      {/* Píldora compacta de estado del compañero (el modelo 3D viaja contigo directamente sobre la isla activa del mapa) */}
+      {/* Sesión de Hoy: la acción principal de la portada */}
       <Reveal index={1}>
-        <View
-          style={[
-            styles.companionStatusBanner,
-            SHADOW.card,
-            { backgroundColor: petTint(pet.bodyColor, 0.86) },
-            (mood === 'angry' || mood === 'rage') && {
-              backgroundColor: moodInfo.badgeBg,
-              borderColor: moodInfo.badgeColor,
-            },
-          ]}
-        >
-          <View style={styles.companionBannerTop}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.companionTitleRow}>
-                <Glyph name={moodInfo.glyph} size={27} />
-                <Text style={styles.companionBannerName}>
-                  {pet.name} · {moodInfo.labelEs}
-                </Text>
-              </View>
-              <Text style={styles.companionBannerSub}>
-                Nivel {lvl.level} · {lvl.current}/{lvl.needed} XP
-              </Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <PressableScale onPress={() => setTab('pet')} hapticKind="select" style={styles.customizeBtn}>
-                <Ionicons name="paw" size={13} color={THEME.blue} />
-                <Text style={styles.customizeBtnText}>Ver a {pet.name}</Text>
-              </PressableScale>
-            </View>
-          </View>
-
-          <View style={styles.companionBannerBottom}>
-            <PressableScale onPress={() => speakWithPip(greeting.en)} hapticKind="light" style={styles.speechPill}>
-              <Ionicons name="volume-high" size={14} color={THEME.blue} />
-              <Text style={styles.speechPillText} numberOfLines={1}>
-                “{greeting.en}”
-              </Text>
-            </PressableScale>
-
-            <View style={styles.miniNeedsRow}>
-              <MiniNeed icon="nutrition" value={stats.fullness} color={NEED_RINGS.fullness[1]} />
-              <MiniNeed icon="flash" value={stats.energy} color={NEED_RINGS.energy[1]} />
-              <MiniNeed icon="heart" value={stats.happiness} color={NEED_RINGS.happiness[1]} />
-            </View>
-          </View>
-        </View>
+        <TodaySessionCard pet={pet} mood={mood} stage={petStage.stage} steps={sessionSteps} onPetTap={() => speakWithPip(greeting.en)} />
       </Reveal>
 
+      {!voiceDone ? (
+        // Hasta practicar la voz, la casa, la tienda y los minijuegos quedan en segundo plano.
+        <Reveal index={2}>
+          <View style={styles.lockedTeaser}>
+            <Ionicons name="lock-closed" size={16} color={THEME.ink3} />
+            <Text style={styles.lockedTeaserText}>
+              Habla con {pet.name} para desbloquear hoy la ruta de islas, el evento, la liga y los minijuegos.
+            </Text>
+          </View>
+        </Reveal>
+      ) : null}
+
+      {voiceDone ? (
+      <>
       {/* Evento semanal y liga */}
       <Reveal index={2}>
         <View style={styles.liveRow}>
@@ -387,6 +382,9 @@ export function HomeScreen() {
         </Reveal>
       ) : null}
 
+      </>
+      ) : null}
+
       <PressableScale onPress={replayTutorial} hapticKind="select" style={{ alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 }}>
         <Text style={{ color: THEME.blue, fontWeight: '700', fontSize: 14 }}>¿Cómo funciona LingoPulse? Ver tutorial</Text>
       </PressableScale>
@@ -396,16 +394,19 @@ export function HomeScreen() {
   );
 }
 
-function MiniNeed({ icon, value, color }: { icon: IconName; value: number; color: string }) {
-  return (
-    <View style={styles.miniNeedPill}>
-      <Ionicons name={icon} size={12} color={color} />
-      <Text style={[styles.miniNeedText, value < 25 && { color: THEME.red }]}>{Math.round(value)}%</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
+  lockedTeaser: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(30,36,54,0.04)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(30,36,54,0.06)',
+    borderStyle: 'dashed',
+  },
+  lockedTeaserText: { flex: 1, fontSize: 13, color: THEME.ink2, lineHeight: 18 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
