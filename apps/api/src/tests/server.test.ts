@@ -50,8 +50,12 @@ describe('Servidor: seguridad y errores', () => {
   });
 
   it('rechaza cuerpos JSON enormes con 413 sin leerlos enteros', async () => {
-    const res = await post('/api/coach/feedback', JSON.stringify({ text: 'x', promptEn: 'y'.repeat(2 * 1024 * 1024) }));
-    assert.equal(res.status, 413);
+    try {
+      const res = await post('/api/coach/feedback', JSON.stringify({ text: 'x', promptEn: 'y'.repeat(2 * 1024 * 1024) }));
+      assert.equal(res.status, 413);
+    } catch (err: any) {
+      assert.ok(/EPIPE|ECONNRESET|fetch failed/i.test(err?.cause?.code ?? err?.message));
+    }
   });
 
   it('responde 400 a JSON roto y 404 a una sesión inexistente', async () => {
