@@ -1,33 +1,25 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { PanResponder, ScrollView, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Ellipse, G, Path, Polygon, Polyline, Rect } from 'react-native-svg';
-import { FACE_LAYOUT, FACE_TEX_H, FACE_TEX_W } from '../pet3d/faceTexture';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import Svg, { Circle, Ellipse, G, Path, Polygon, Rect } from 'react-native-svg';
 import { Text } from '../i18n';
 import {
   ACCESSORIES,
-  BELLY_COLORS,
+  BACK_ITEMS,
   BLUSH_STYLES,
   BODY_COLORS,
   BROW_STYLES,
-  EAR_STYLES,
   EYE_COLORS,
   EYE_STYLES,
-  FACE_SHAPES,
-  FACIAL_HAIR,
   FAVORITE_COLORS,
   GLASSES_COLORS,
   GLASSES,
-  HAIR_COLORS,
-  HAIR_STYLES,
-  LIP_COLORS,
+  HELD_ITEMS,
   MOUTH_STYLES,
-  NOSE_STYLES,
+  NECK_ITEMS,
   OUTFITS,
-  PANTS_COLORS,
-  PANTS_STYLES,
-  PAINT_COLORS,
+  PATTERN_COLORS,
+  PATTERNS,
   PERSONALITIES,
-  SKIN_TONES,
   SPECIES,
   SPECIES_PRESET_COLORS,
   SUGGESTED_CATCHPHRASES,
@@ -52,35 +44,35 @@ import { SHADOW, THEME } from '../theme/colors';
 
 export type MiiCategory =
   | 'body'
-  | 'face'
-  | 'hair'
-  | 'brows'
   | 'eyes'
-  | 'nose'
   | 'mouth'
-  | 'beard'
-  | 'glasses'
-  | 'clothes'
+  | 'brows'
+  | 'cheeks'
+  | 'pattern'
   | 'hats'
-  | 'paint'
+  | 'glasses'
+  | 'neck'
+  | 'hand'
+  | 'back'
+  | 'clothes'
   | 'voice';
 
 const INK = '#1E2436';
-const FACE_CATEGORIES: MiiCategory[] = ['face', 'hair', 'brows', 'eyes', 'nose', 'mouth', 'beard', 'glasses', 'paint'];
+const FACE_CATEGORIES: MiiCategory[] = ['eyes', 'mouth', 'brows', 'cheeks', 'glasses'];
 
 const CATEGORIES: Array<{ id: MiiCategory; label: string; tint: string }> = [
-  { id: 'body', label: 'Cuerpo', tint: '#5B8CFF' },
-  { id: 'face', label: 'Cara', tint: '#FF9F6B' },
-  { id: 'hair', label: 'Pelo', tint: '#B07A4A' },
-  { id: 'brows', label: 'Cejas', tint: '#7B5CFF' },
+  { id: 'body', label: 'Especie', tint: '#5B8CFF' },
   { id: 'eyes', label: 'Ojos', tint: '#2EA8FF' },
-  { id: 'nose', label: 'Nariz', tint: '#FF7A8A' },
   { id: 'mouth', label: 'Boca', tint: '#FF4769' },
-  { id: 'beard', label: 'Barba', tint: '#8B5A2B' },
-  { id: 'glasses', label: 'Gafas', tint: '#1FB5A8' },
-  { id: 'clothes', label: 'Ropa', tint: '#22B567' },
+  { id: 'brows', label: 'Cejas', tint: '#7B5CFF' },
+  { id: 'cheeks', label: 'Mejillas', tint: '#FF7A8A' },
+  { id: 'pattern', label: 'Dibujo', tint: '#F59E0B' },
   { id: 'hats', label: 'Gorros', tint: '#FF9500' },
-  { id: 'paint', label: 'Pintura', tint: '#EC4899' },
+  { id: 'glasses', label: 'Gafas', tint: '#1FB5A8' },
+  { id: 'neck', label: 'Cuello', tint: '#EC4899' },
+  { id: 'hand', label: 'Mano', tint: '#8B5CF6' },
+  { id: 'back', label: 'Espalda', tint: '#0EA5E9' },
+  { id: 'clothes', label: 'Ropa', tint: '#22B567' },
   { id: 'voice', label: 'Voz', tint: '#E0559B' },
 ];
 
@@ -91,13 +83,9 @@ const CATEGORIES: Array<{ id: MiiCategory; label: string; tint: string }> = [
 type IconKind =
   | 'category'
   | 'species'
-  | 'face'
-  | 'hair'
   | 'brows'
   | 'eyes'
-  | 'nose'
   | 'mouth'
-  | 'beard'
   | 'glasses'
   | 'cheeks'
   | 'outfit'
@@ -123,8 +111,6 @@ const faceShapePath = (shape: string) => {
 function HeadBase({ skin, shape = 'round', faint = false }: { skin: string; shape?: string; faint?: boolean }) {
   return (
     <G opacity={faint ? 0.55 : 1}>
-      <Circle cx="16.5" cy="38" r="4" fill={skin} stroke={INK} strokeWidth="2" />
-      <Circle cx="51.5" cy="38" r="4" fill={skin} stroke={INK} strokeWidth="2" />
       <Path d={faceShapePath(shape)} fill={skin} stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
       <Ellipse cx="27" cy="25" rx="5" ry="2.6" fill="#FFFFFF" opacity={0.45} />
     </G>
@@ -149,90 +135,6 @@ function GuideFace({ show = { eyes: true, mouth: true, brows: false } }: { show?
       {show.mouth ? <Path d="M30 48 Q34 51 38 48" stroke={INK} strokeWidth="2" fill="none" strokeLinecap="round" /> : null}
     </G>
   );
-}
-
-function HairShape({ style, color }: { style: string; color: string }) {
-  const p = { fill: color, stroke: INK, strokeWidth: 2.2, strokeLinejoin: 'round' as const };
-  switch (style) {
-    case 'spiky':
-      return <Polygon points="17,32 13,16 24,24 30,10 36,22 44,11 46,24 55,17 51,32" {...p} />;
-    case 'bob':
-      return <Path d="M15 44 C13 22 23 15 34 15 C45 15 55 22 53 44 L47 45 L46 29 L22 29 L21 45 Z" {...p} />;
-    case 'afro':
-      return <Path d="M14 36 C8 26 14 12 26 12 C30 6 40 6 43 12 C55 12 60 26 54 36 C50 30 44 26 34 26 C24 26 18 30 14 36 Z" {...p} />;
-    case 'ponytail':
-      return (
-        <G>
-          <Path d="M52 26 C62 30 62 44 56 50 C56 42 54 36 49 32 Z" {...p} />
-          <Path d="M17 32 C17 20 25 15 34 15 C43 15 51 20 51 32 C44 26 26 26 17 32 Z" {...p} />
-        </G>
-      );
-    case 'twintails':
-      return (
-        <G>
-          <Path d="M17 30 C8 34 7 48 12 54 C13 46 15 40 19 36 Z" {...p} />
-          <Path d="M51 30 C60 34 61 48 56 54 C55 46 53 40 49 36 Z" {...p} />
-          <Path d="M17 32 C17 20 25 15 34 15 C43 15 51 20 51 32 C44 27 26 27 17 32 Z" {...p} />
-        </G>
-      );
-    case 'pompadour':
-      return <Path d="M18 31 C16 18 26 9 38 10 C48 11 52 18 50 31 C46 24 38 22 30 24 C24 25 20 27 18 31 Z" {...p} />;
-    case 'curly':
-      return (
-        <G>
-          {[18, 24, 30, 36, 42, 48].map((x, i) => (
-            <Circle key={x} cx={x + 1} cy={i % 2 ? 19 : 23} r="6" {...p} />
-          ))}
-        </G>
-      );
-    case 'mohawk':
-      return <Polygon points="30,30 28,8 34,4 40,8 38,30" {...p} />;
-    case 'bun':
-      return (
-        <G>
-          <Circle cx="34" cy="11" r="6.5" {...p} />
-          <Path d="M17 31 C17 20 25 16 34 16 C43 16 51 20 51 31 C44 25 26 25 17 31 Z" {...p} />
-        </G>
-      );
-    case 'long':
-      return (
-        <G>
-          <Path d="M15 32 C14 20 24 14 34 14 C44 14 54 20 53 32 L55 60 L45 60 L46 32 L22 32 L23 60 L13 60 Z" {...p} />
-        </G>
-      );
-    case 'short':
-      return <Path d="M17 33 C16 20 25 15 34 15 C43 15 52 20 51 33 L48 31 C45 25 38 24 30 26 C25 27 21 29 19 33 Z" {...p} />;
-    case 'buzz':
-      return <Path d="M17.5 33 C17 21 25 17 34 17 C43 17 51 21 50.5 33 C45 27 23 27 17.5 33 Z" fill={color} stroke={INK} strokeWidth={2.2} opacity={0.85} />;
-    case 'sidepart':
-      return (
-        <G>
-          <Path d="M17 33 C16 20 25 15 34 15 C43 15 52 20 51 33 L48 31 C45 25 40 23 36 23 C30 24 24 27 19 33 Z" {...p} />
-          <Path d="M24 17.5 L26 25" stroke={INK} strokeWidth="1.4" opacity={0.5} />
-        </G>
-      );
-    case 'wavy':
-      return (
-        <G>
-          <Path d="M15 32 C14 20 24 14 34 14 C44 14 54 20 53 32 C56 38 51 42 54 48 C55 54 49 56 47 52 L46 32 L22 32 L21 52 C19 56 13 54 14 48 C17 42 12 38 15 32 Z" {...p} />
-        </G>
-      );
-    case 'braids':
-      return (
-        <G>
-          {[0, 1, 2, 3].map((i) => (
-            <G key={i}>
-              <Circle cx={17 - i * 0.5} cy={36 + i * 6} r="3.6" {...p} />
-              <Circle cx={51 + i * 0.5} cy={36 + i * 6} r="3.6" {...p} />
-            </G>
-          ))}
-          <Path d="M17 32 C17 20 25 15 34 15 C43 15 51 20 51 32 C44 26 26 26 17 32 Z" {...p} />
-          <Path d="M34 16 L34 24" stroke={INK} strokeWidth="1.4" opacity={0.5} />
-        </G>
-      );
-    default:
-      return null;
-  }
 }
 
 function EyesShape({ style, iris }: { style: string; iris: string }) {
@@ -368,36 +270,6 @@ function BrowsShape({ style, color }: { style: string; color: string }) {
   }
 }
 
-function NoseShape({ style, skin }: { style: string; skin: string }) {
-  const shade = { fill: skin, stroke: INK, strokeWidth: 1.8 };
-  switch (style) {
-    case 'button':
-      return <Ellipse cx="34" cy="43" rx="2.4" ry="2" {...shade} />;
-    case 'round':
-      return <Circle cx="34" cy="43" r="3.6" {...shade} />;
-    case 'pointy':
-      return <Path d="M34 37 L38 45 L32 45 Z" {...shade} strokeLinejoin="round" />;
-    case 'wide':
-      return (
-        <G>
-          <Ellipse cx="34" cy="44" rx="5.5" ry="2.4" {...shade} />
-          <Circle cx="31.5" cy="44.5" r="0.8" fill={INK} />
-          <Circle cx="36.5" cy="44.5" r="0.8" fill={INK} />
-        </G>
-      );
-    case 'snub':
-      return (
-        <G>
-          <Path d="M31 45 Q34 39 37 45 Z" {...shade} />
-          <Circle cx="32.8" cy="44.6" r="0.7" fill={INK} />
-          <Circle cx="35.2" cy="44.6" r="0.7" fill={INK} />
-        </G>
-      );
-    default:
-      return <Path d="M30 44 L38 44" stroke={INK} strokeWidth="1.2" opacity={0.25} />;
-  }
-}
-
 function MouthShape({ style, lip }: { style: string; lip: string }) {
   const s = { stroke: INK, strokeWidth: 2.2, strokeLinecap: 'round' as const };
   switch (style) {
@@ -463,38 +335,6 @@ function MouthShape({ style, lip }: { style: string; lip: string }) {
       return <Path d="M33 46 Q37 47.5 34 49 Q37 50.5 33 52" fill="none" stroke={lip} strokeWidth={2.4} strokeLinecap="round" />;
     default:
       return <Path d="M28 47 Q34 53 40 47" fill="none" {...s} stroke={lip === '#B23A48' ? INK : lip} />;
-  }
-}
-
-function BeardShape({ style, color }: { style: string; color: string }) {
-  const p = { fill: color, stroke: INK, strokeWidth: 1.6, strokeLinejoin: 'round' as const };
-  const mustache = (
-    <Path d="M27 46 Q31 42 34 45 Q37 42 41 46 Q37 47 34 46 Q31 47 27 46 Z" {...p} />
-  );
-  switch (style) {
-    case 'stubble':
-      return <Path d="M19 42 Q22 56 34 57 Q46 56 49 42 Q44 52 34 52 Q24 52 19 42 Z" fill={color} opacity={0.35} />;
-    case 'mustache':
-      return mustache;
-    case 'curly':
-      return (
-        <G>
-          {mustache}
-          <Path d="M27 46 Q23 46 24 42" fill="none" stroke={INK} strokeWidth="1.6" />
-          <Path d="M41 46 Q45 46 44 42" fill="none" stroke={INK} strokeWidth="1.6" />
-        </G>
-      );
-    case 'goatee':
-      return <Path d="M30 52 Q34 50 38 52 Q37 58 34 59 Q31 58 30 52 Z" {...p} />;
-    case 'beard':
-      return (
-        <G>
-          <Path d="M18 40 Q19 58 34 60 Q49 58 50 40 Q47 52 40 51 Q34 49 28 51 Q21 52 18 40 Z" {...p} />
-          {mustache}
-        </G>
-      );
-    default:
-      return null;
   }
 }
 
@@ -714,9 +554,161 @@ function HatShape({ id, accent }: { id: string; accent: string }) {
           <Path d="M22 24 C21 10 28 8 34 12 C40 8 47 10 46 24 Z" fill="#A0673A" {...s} />
         </G>
       );
+    case 'propeller':
+      return (
+        <G>
+          <Path d="M18 26 C18 14 26 10 34 10 C42 10 50 14 50 26 Z" fill="#FFD43B" {...s} />
+          <Path d="M34 10 C38 14 40 20 40 26 M34 10 C30 14 28 20 28 26" fill="none" stroke="#38BDF8" strokeWidth="3" />
+          <Path d="M34 10 V4" stroke={INK} strokeWidth="2" />
+          <Ellipse cx="26" cy="4" rx="8" ry="2.4" fill="#38BDF8" {...s} />
+          <Ellipse cx="42" cy="4" rx="8" ry="2.4" fill="#FF5C8A" {...s} />
+        </G>
+      );
+    case 'party':
+      return (
+        <G>
+          <Polygon points="24,26 36,2 46,26" fill={accent} {...s} />
+          <Circle cx="34" cy="16" r="2" fill="#FFFFFF" />
+          <Circle cx="40" cy="22" r="2" fill="#FFFFFF" />
+          <Circle cx="30" cy="22" r="2" fill="#FFFFFF" />
+          <Circle cx="36" cy="3" r="3.5" fill="#FFD43B" {...s} />
+        </G>
+      );
+    case 'sprout':
+      return (
+        <G>
+          <Path d="M34 24 V12" stroke="#3FAE5C" strokeWidth="3" strokeLinecap="round" />
+          <Ellipse cx="27" cy="11" rx="7" ry="3.6" fill="#4CC96B" {...s} transform="rotate(-20 27 11)" />
+          <Ellipse cx="41" cy="11" rx="7" ry="3.6" fill="#4CC96B" {...s} transform="rotate(20 41 11)" />
+        </G>
+      );
+    case 'tiara':
+      return (
+        <G>
+          <Path d="M18 24 Q34 14 50 24" fill="none" stroke="#F4C44E" strokeWidth="3.4" />
+          <Polygon points="34,8 31,18 37,18" fill="#F4C44E" {...s} />
+          <Polygon points="24,13 22,21 27,20" fill="#F4C44E" {...s} />
+          <Polygon points="44,13 46,21 41,20" fill="#F4C44E" {...s} />
+          <Circle cx="34" cy="16" r="2.4" fill="#FF5C8A" />
+        </G>
+      );
+    case 'santa':
+      return (
+        <G>
+          <Path d="M18 26 C20 10 36 4 52 12 L46 18 C40 14 30 16 28 26 Z" fill="#E11D48" {...s} />
+          <Rect x="15" y="22" width="38" height="7" rx="3.5" fill="#FFFFFF" {...s} />
+          <Circle cx="53" cy="12" r="4.5" fill="#FFFFFF" {...s} />
+        </G>
+      );
+    case 'mushroom':
+      return (
+        <G>
+          <Path d="M8 26 C8 8 60 8 60 26 Z" fill="#EF4444" {...s} />
+          <Circle cx="24" cy="17" r="3.4" fill="#FFFFFF" />
+          <Circle cx="38" cy="13" r="4" fill="#FFFFFF" />
+          <Circle cx="49" cy="20" r="2.8" fill="#FFFFFF" />
+        </G>
+      );
     default:
       return null;
   }
+}
+
+/** Ícono de cuello, mano, espalda o dibujo del cuerpo. */
+export function PropIcon({ kind, id, color, size = 48 }: { kind: 'neck' | 'hand' | 'back' | 'pattern'; id: string; color: string; size?: number }) {
+  const s = { stroke: INK, strokeWidth: 2, strokeLinejoin: 'round' as const };
+  const art = (() => {
+    if (id === 'none') return <Path d="M22 22 L46 46 M46 22 L22 46" stroke={THEME.ink3} strokeWidth="3" strokeLinecap="round" opacity={0.5} />;
+    if (kind === 'pattern') {
+      const ball = <Circle cx="34" cy="36" r="22" fill="#FFD9B8" {...s} />;
+      const pc = color;
+      switch (id) {
+        case 'spots':
+          return <G>{ball}<Circle cx="24" cy="28" r="5" fill={pc} /><Circle cx="42" cy="44" r="6" fill={pc} /><Circle cx="44" cy="26" r="3.5" fill={pc} /><Circle cx="27" cy="46" r="3" fill={pc} /></G>;
+        case 'hearts':
+          return <G>{ball}<Path d="M26 34 l-5 -5 a3 3 0 0 1 5 -4 a3 3 0 0 1 5 4 z" fill={pc} /><Path d="M43 46 l-5 -5 a3 3 0 0 1 5 -4 a3 3 0 0 1 5 4 z" fill={pc} /></G>;
+        case 'stars':
+          return <G>{ball}<Polygon points="26,22 28,28 34,28 29,32 31,38 26,34 21,38 23,32 18,28 24,28" fill={pc} /><Polygon points="44,36 45.5,40 49.5,40 46.5,42.5 47.5,46.5 44,44 40.5,46.5 41.5,42.5 38.5,40 42.5,40" fill={pc} /></G>;
+        case 'stripes':
+          return <G>{ball}<Path d="M18 28 Q24 30 26 24 M16 38 Q24 40 28 34 M50 28 Q44 30 42 24 M52 38 Q44 40 40 34" stroke={pc} strokeWidth="3.4" fill="none" strokeLinecap="round" /></G>;
+        case 'patch':
+          return <G>{ball}<Ellipse cx="42" cy="32" rx="9" ry="10" fill={pc} /></G>;
+        default:
+          return ball;
+      }
+    }
+    if (kind === 'neck') {
+      const band = <Path d="M14 30 Q34 42 54 30" stroke={color} strokeWidth="4" fill="none" strokeLinecap="round" />;
+      switch (id) {
+        case 'bow':
+          return <G>{band}<Path d="M34 40 L20 32 L20 48 Z M34 40 L48 32 L48 48 Z" fill={color} {...s} /><Circle cx="34" cy="40" r="4" fill={color} {...s} /></G>;
+        case 'bell':
+          return <G><Path d="M14 30 Q34 42 54 30" stroke="#E11D48" strokeWidth="4" fill="none" strokeLinecap="round" /><Circle cx="34" cy="46" r="8" fill="#F4C44E" {...s} /><Path d="M28 47 H40" stroke={INK} strokeWidth="2" /></G>;
+        case 'bandana':
+          return <G>{band}<Polygon points="20,36 48,36 34,56" fill={color} {...s} /><Circle cx="30" cy="42" r="1.8" fill="#FFFFFF" /><Circle cx="38" cy="44" r="1.8" fill="#FFFFFF" /></G>;
+        case 'bowtie':
+          return <G><Polygon points="34,40 18,32 18,48" fill={color} {...s} /><Polygon points="34,40 50,32 50,48" fill={color} {...s} /><Circle cx="34" cy="40" r="3.5" fill={color} {...s} /></G>;
+        case 'medal':
+          return <G><Path d="M24 14 L32 36 M44 14 L36 36" stroke={color} strokeWidth="5" strokeLinecap="round" /><Circle cx="34" cy="44" r="10" fill="#F4C44E" {...s} /><Polygon points="34,38 36,42 40,42 37,45 38,49 34,47 30,49 31,45 28,42 32,42" fill="#FFF2A8" /></G>;
+        case 'lei':
+          return <G>{[18, 26, 34, 42, 50].map((x, i) => <Circle key={x} cx={x} cy={32 + Math.sin((i / 4) * Math.PI) * 9} r="5" fill={['#FF7AA8', '#FFD43B', '#FFFFFF', '#FF9F1C', '#FF7AA8'][i]} {...s} />)}</G>;
+        case 'pearls':
+          return <G>{[16, 22, 28, 34, 40, 46, 52].map((x, i) => <Circle key={x} cx={x} cy={30 + Math.sin((i / 6) * Math.PI) * 10} r="3" fill="#FFFAF0" {...s} />)}<Circle cx="34" cy="45" r="5" fill="#FFFAF0" {...s} /></G>;
+        default:
+          return band;
+      }
+    }
+    if (kind === 'hand') {
+      switch (id) {
+        case 'balloon':
+          return <G><Path d="M34 40 Q30 50 34 62" stroke="#8A8AA0" strokeWidth="1.6" fill="none" /><Ellipse cx="34" cy="24" rx="13" ry="16" fill={color} {...s} /><Ellipse cx="29" cy="18" rx="3" ry="5" fill="#FFFFFF" opacity={0.6} /></G>;
+        case 'lollipop':
+          return <G><Path d="M34 36 V62" stroke="#FFFFFF" strokeWidth="4" /><Path d="M34 36 V62" stroke={INK} strokeWidth="1" opacity={0.4} /><Circle cx="34" cy="24" r="14" fill="#FF7AA8" {...s} /><Path d="M34 24 m-8 0 a8 8 0 1 0 8 -8 a5 5 0 1 0 5 5" stroke="#FFFFFF" strokeWidth="3" fill="none" /></G>;
+        case 'wand':
+          return <G><Path d="M22 58 L38 30" stroke="#3B2A4F" strokeWidth="4" strokeLinecap="round" /><Polygon points="42,10 45,19 54,19 47,25 50,34 42,28 34,34 37,25 30,19 39,19" fill="#F4C44E" {...s} /></G>;
+        case 'flower':
+          return <G><Path d="M34 34 V62" stroke="#3FAE5C" strokeWidth="3" />{[0, 72, 144, 216, 288].map((a) => <Ellipse key={a} cx={34 + Math.cos((a * Math.PI) / 180) * 8} cy={24 + Math.sin((a * Math.PI) / 180) * 8} rx="6" ry="5" fill={color} {...s} />)}<Circle cx="34" cy="24" r="4.5" fill="#FFD43B" {...s} /></G>;
+        case 'icecream':
+          return <G><Polygon points="24,32 44,32 34,60" fill="#E8B46A" {...s} /><Circle cx="34" cy="28" r="10" fill="#FF9EC4" {...s} /><Circle cx="34" cy="16" r="8" fill="#FFF3D6" {...s} /><Circle cx="34" cy="7" r="3" fill="#E11D48" {...s} /></G>;
+        case 'microphone':
+          return <G><Rect x="30" y="30" width="8" height="28" rx="3" fill="#2A2540" {...s} /><Circle cx="34" cy="22" r="10" fill="#C0C6D4" {...s} /><Path d="M27 31 H41" stroke={color} strokeWidth="3" /></G>;
+        case 'flag':
+          return <G><Path d="M22 8 V60" stroke="#8A5A32" strokeWidth="3.4" strokeLinecap="round" /><Polygon points="23,10 52,20 23,30" fill={color} {...s} /></G>;
+        case 'teddy':
+          return <G><Circle cx="24" cy="18" r="5" fill="#B07A4A" {...s} /><Circle cx="44" cy="18" r="5" fill="#B07A4A" {...s} /><Circle cx="34" cy="26" r="11" fill="#B07A4A" {...s} /><Ellipse cx="34" cy="48" rx="12" ry="12" fill="#B07A4A" {...s} /><Circle cx="30" cy="24" r="1.6" fill={INK} /><Circle cx="38" cy="24" r="1.6" fill={INK} /><Ellipse cx="34" cy="30" rx="4" ry="3" fill="#F2D3B0" /></G>;
+        case 'umbrella':
+          return <G><Path d="M34 24 V54 Q34 60 40 58" stroke="#6B4A2F" strokeWidth="3" fill="none" strokeLinecap="round" /><Path d="M8 30 C8 6 60 6 60 30 Q53 25 47 30 Q40 25 34 30 Q28 25 21 30 Q14 25 8 30 Z" fill={color} {...s} /></G>;
+        default:
+          return null;
+      }
+    }
+    switch (id) {
+      case 'angel':
+        return <G><Path d="M32 34 C18 18 6 22 6 28 C10 30 6 36 14 38 C10 42 20 44 32 38 Z" fill="#FFFFFF" {...s} /><Path d="M36 34 C50 18 62 22 62 28 C58 30 62 36 54 38 C58 42 48 44 36 38 Z" fill="#FFFFFF" {...s} /></G>;
+      case 'bat':
+        return <G><Path d="M32 32 L8 22 Q12 30 8 36 Q16 34 18 40 Q22 34 32 38 Z" fill="#4C3A78" {...s} /><Path d="M36 32 L60 22 Q56 30 60 36 Q52 34 50 40 Q46 34 36 38 Z" fill="#4C3A78" {...s} /></G>;
+      case 'butterfly':
+        return <G><Ellipse cx="22" cy="26" rx="12" ry="10" fill={color} {...s} /><Ellipse cx="46" cy="26" rx="12" ry="10" fill={color} {...s} /><Ellipse cx="25" cy="42" rx="8" ry="7" fill={color} {...s} /><Ellipse cx="43" cy="42" rx="8" ry="7" fill={color} {...s} /><Circle cx="20" cy="25" r="3" fill="#FFFFFF" /><Circle cx="48" cy="25" r="3" fill="#FFFFFF" /></G>;
+      case 'fairy':
+        return <G><Ellipse cx="22" cy="24" rx="7" ry="15" fill="#BFE9FF" {...s} transform="rotate(-35 22 24)" /><Ellipse cx="46" cy="24" rx="7" ry="15" fill="#BFE9FF" {...s} transform="rotate(35 46 24)" /><Ellipse cx="25" cy="44" rx="5" ry="9" fill="#BFE9FF" {...s} transform="rotate(-70 25 44)" /><Ellipse cx="43" cy="44" rx="5" ry="9" fill="#BFE9FF" {...s} transform="rotate(70 43 44)" /></G>;
+      case 'backpack':
+        return <G><Rect x="18" y="14" width="32" height="40" rx="10" fill={color} {...s} /><Rect x="24" y="34" width="20" height="14" rx="5" fill="#FFFFFF" opacity={0.5} {...s} /><Path d="M22 22 H46" stroke={INK} strokeWidth="2" /></G>;
+      case 'cape':
+        return <G><Path d="M22 12 H46 L56 58 Q34 52 12 58 Z" fill={color} {...s} /></G>;
+      case 'jetpack':
+        return <G><Rect x="16" y="12" width="14" height="34" rx="6" fill="#C7CFDC" {...s} /><Rect x="38" y="12" width="14" height="34" rx="6" fill="#C7CFDC" {...s} /><Polygon points="18,46 28,46 23,60" fill="#FFA52E" /><Polygon points="40,46 50,46 45,60" fill="#FFA52E" /></G>;
+      case 'shell':
+        return <G><Path d="M10 46 C10 14 58 14 58 46 Z" fill="#5FAE4C" {...s} /><Path d="M28 24 L40 24 L44 34 L34 42 L24 34 Z" fill="#8FD16F" {...s} /></G>;
+      default:
+        return null;
+    }
+  })();
+  return (
+    <Svg width={size} height={size} viewBox="0 0 68 68">
+      <Circle cx="34" cy="36" r="31" fill="#EEF4FF" />
+      {art}
+    </Svg>
+  );
 }
 
 function OutfitShape({ id, color, pants }: { id: string; color: string; pants: string }) {
@@ -869,46 +861,18 @@ function OutfitShape({ id, color, pants }: { id: string; color: string; pants: s
 /** Ícono de una pieza del creador. `value` es el id de la pieza. */
 export function MiiPartIcon({ kind, value, pet, size = 56 }: { kind: IconKind; value: string; pet: PetConfig; size?: number }) {
   const skin = pet.bodyColor;
-  const hair = pet.hairColor ?? '#4A2E1B';
+  const brow = '#4A2E1B';
   const iris = pet.eyeColor ?? '#3B7BFF';
   const lip = pet.lipColor ?? '#B23A48';
-  const shape = pet.species === 'human' ? pet.faceShape ?? 'round' : 'round';
+  const shape = 'round';
   const body = (() => {
     switch (kind) {
-      case 'species':
-        if (value !== 'human') return null;
-        return (
-          <G>
-            <HeadBase skin={SPECIES_PRESET_COLORS.human.bodyColor} />
-            <HairShape style="short" color="#7C4A27" />
-            <EyesShape style="round" iris="#5B3A1E" />
-            <MouthShape style="smile" lip="#B23A48" />
-          </G>
-        );
-      case 'face':
-        return (
-          <G>
-            <HeadBase skin={skin} shape={value} />
-            <GuideFace />
-          </G>
-        );
-      case 'hair':
-        return (
-          <G>
-            {value === 'long' || value === 'braids' ? <HairShape style={value} color={hair} /> : null}
-            <HeadBase skin={skin} shape={shape} />
-            <GuideFace />
-            {value !== 'long' && value !== 'braids' ? <HairShape style={value} color={hair} /> : null}
-            {value === 'long' ? <Path d="M17 32 C17 20 25 15 34 15 C43 15 51 20 51 32 C44 26 26 26 17 32 Z" fill={hair} stroke={INK} strokeWidth={2.2} /> : null}
-            {value === 'none' ? <Path d="M24 22 L44 46" stroke={THEME.ink3} strokeWidth="2" opacity={0.5} /> : null}
-          </G>
-        );
       case 'brows':
         return (
           <G>
             <HeadBase skin={skin} shape={shape} faint />
             <GuideFace />
-            <BrowsShape style={value} color={hair} />
+            <BrowsShape style={value} color={brow} />
           </G>
         );
       case 'eyes':
@@ -918,28 +882,12 @@ export function MiiPartIcon({ kind, value, pet, size = 56 }: { kind: IconKind; v
             <EyesShape style={value} iris={iris} />
           </G>
         );
-      case 'nose':
-        return (
-          <G>
-            <HeadBase skin={skin} shape={shape} faint />
-            <GuideFace />
-            <NoseShape style={value} skin={skin} />
-          </G>
-        );
       case 'mouth':
         return (
           <G>
             <HeadBase skin={skin} shape={shape} faint />
             <GuideFace show={{ eyes: true }} />
             <MouthShape style={value} lip={lip} />
-          </G>
-        );
-      case 'beard':
-        return (
-          <G>
-            <HeadBase skin={skin} shape={shape} faint />
-            <GuideFace />
-            <BeardShape style={value} color={hair} />
           </G>
         );
       case 'glasses':
@@ -972,7 +920,7 @@ export function MiiPartIcon({ kind, value, pet, size = 56 }: { kind: IconKind; v
         return null;
     }
   })();
-  if (kind === 'species' && value !== 'human') {
+  if (kind === 'species') {
     return <Glyph name={`species-${value}`} size={size} />;
   }
   return (
@@ -1103,114 +1051,6 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 /* ------------------------------------------------------------------ */
-/* Pintura facial libre                                                */
-/* ------------------------------------------------------------------ */
-
-const PAD_W = 300;
-const PAD_H = Math.round((PAD_W * FACE_TEX_H) / FACE_TEX_W);
-
-function FacePaintPad({ pet, onChange }: { pet: PetConfig; onChange: (patch: Partial<PetConfig>) => void }) {
-  const [color, setColor] = useState<string>(PAINT_COLORS[2]!);
-  const [size, setSize] = useState(10);
-  const [live, setLive] = useState<number[]>([]);
-  const liveRef = useRef<number[]>([]);
-  const state = useRef({ color, size, pet, onChange });
-  state.current = { color, size, pet, onChange };
-  const strokes = pet.facePaint ?? [];
-
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: (e) => {
-          const { locationX, locationY } = e.nativeEvent;
-          liveRef.current = [locationX / PAD_W, locationY / PAD_H];
-          setLive([...liveRef.current]);
-        },
-        onPanResponderMove: (e) => {
-          const { locationX, locationY } = e.nativeEvent;
-          const x = locationX / PAD_W;
-          const y = locationY / PAD_H;
-          const pts = liveRef.current;
-          const lx = pts[pts.length - 2] ?? x;
-          const ly = pts[pts.length - 1] ?? y;
-          if (Math.hypot(x - lx, y - ly) > 0.008 && pts.length < 400) {
-            liveRef.current = [...pts, x, y];
-            setLive(liveRef.current);
-          }
-        },
-        onPanResponderRelease: () => {
-          const pts = liveRef.current.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 1000) / 1000);
-          liveRef.current = [];
-          setLive([]);
-          if (pts.length < 2) return;
-          const { pet: p, color: c, size: w, onChange: done } = state.current;
-          haptic('light');
-          done({ facePaint: [...(p.facePaint ?? []), { c, w, p: pts }].slice(-60) });
-        },
-      }),
-    []
-  );
-
-  const toPoints = (p: number[]) => {
-    const out: string[] = [];
-    for (let i = 0; i + 1 < p.length; i += 2) out.push(`${(p[i]! * PAD_W).toFixed(1)},${(p[i + 1]! * PAD_H).toFixed(1)}`);
-    return out.join(' ');
-  };
-  const k = PAD_W / FACE_TEX_W;
-  const eyeY = FACE_LAYOUT.eyes * PAD_H;
-  const mouthY = FACE_LAYOUT.mouth * PAD_H;
-
-  return (
-    <View style={{ gap: 12 }}>
-      <Text style={styles.hint}>Dibuja con el dedo sobre la cara: maquillaje, pecas, tatuajes temporales, bigotes de gato… Se ve en 3D al instante.</Text>
-      <View style={styles.padWrap}>
-        <View {...responder.panHandlers} style={{ width: PAD_W, height: PAD_H }}>
-          <Svg width={PAD_W} height={PAD_H} pointerEvents="none">
-            <Ellipse cx={PAD_W / 2} cy={PAD_H * 0.55} rx={PAD_W * 0.42} ry={PAD_H * 0.62} fill={pet.bodyColor} />
-            {/* Guías de los rasgos actuales */}
-            <Ellipse cx={PAD_W / 2 - 74 * k} cy={eyeY} rx={30 * k} ry={30 * k} fill="none" stroke={INK} strokeOpacity={0.25} strokeWidth={2} />
-            <Ellipse cx={PAD_W / 2 + 74 * k} cy={eyeY} rx={30 * k} ry={30 * k} fill="none" stroke={INK} strokeOpacity={0.25} strokeWidth={2} />
-            <Path d={`M${PAD_W / 2 - 30 * k} ${mouthY} Q${PAD_W / 2} ${mouthY + 18 * k} ${PAD_W / 2 + 30 * k} ${mouthY}`} stroke={INK} strokeOpacity={0.25} strokeWidth={2} fill="none" />
-            {strokes.map((st, i) =>
-              st.p.length <= 2 ? (
-                <Circle key={i} cx={st.p[0]! * PAD_W} cy={st.p[1]! * PAD_H} r={(st.w * k) / 2} fill={st.c} />
-              ) : (
-                <Polyline key={i} points={toPoints(st.p)} stroke={st.c} strokeWidth={st.w * k} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              )
-            )}
-            {live.length >= 2 ? (
-              <Polyline points={toPoints(live)} stroke={color} strokeWidth={size * k} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            ) : null}
-          </Svg>
-        </View>
-      </View>
-      <Swatches colors={PAINT_COLORS} value={color} onPick={setColor} />
-      <View style={styles.chipRow}>
-        {[
-          { w: 5, label: 'Fino' },
-          { w: 10, label: 'Medio' },
-          { w: 18, label: 'Grueso' },
-        ].map((b) => (
-          <PressableScale key={b.w} hapticKind="select" onPress={() => setSize(b.w)} style={[styles.chip, size === b.w && styles.chipActive]}>
-            <View style={{ width: b.w * 0.9, height: b.w * 0.9, borderRadius: 99, backgroundColor: size === b.w ? '#FFFFFF' : color }} />
-            <Text style={[styles.chipText, size === b.w && { color: '#FFFFFF' }]}>{b.label}</Text>
-          </PressableScale>
-        ))}
-        <PressableScale hapticKind="select" disabled={!strokes.length} onPress={() => onChange({ facePaint: strokes.slice(0, -1) })} style={[styles.chip, !strokes.length && { opacity: 0.4 }]}>
-          <Text style={styles.chipText}>↶ Deshacer</Text>
-        </PressableScale>
-        <PressableScale hapticKind="select" disabled={!strokes.length} onPress={() => onChange({ facePaint: [] })} style={[styles.chip, !strokes.length && { opacity: 0.4 }]}>
-          <Text style={styles.chipText}>Borrar todo</Text>
-        </PressableScale>
-      </View>
-    </View>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Creador                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -1233,12 +1073,9 @@ export function MiiCreator({
   onSpeakSample?: (text: string, pitch: number, rate: number) => void;
   initialCategory?: MiiCategory;
 }) {
-  const [cat, setCat] = useState<MiiCategory>(initialCategory ?? (pet.species === 'human' ? 'face' : 'body'));
+  const [cat, setCat] = useState<MiiCategory>(initialCategory ?? 'body');
   const [mood, setMood] = useState<PetMood>('happy');
   const [reactKey, setReactKey] = useState(0);
-  const isHuman = pet.species === 'human';
-  /** Nariz y barba solo para siluetas humanas; el chibi y los animales conservan su cara. */
-  const humanoid = isHuman || pet.species === 'meeseeks';
   const tune = pet.tuning ?? {};
 
   const change = (patch: Partial<PetConfig>) => {
@@ -1246,14 +1083,42 @@ export function MiiCreator({
     setReactKey((k) => k + 1);
   };
   const setTune = (key: keyof FaceTuning, v: number) => change({ tuning: { ...tune, [key]: v } });
-  const categories = CATEGORIES.filter(
-    (c) =>
-      (showVoice || c.id !== 'voice') &&
-      (humanoid || (c.id !== 'nose' && c.id !== 'beard' && c.id !== 'hair')) &&
-      (isHuman || c.id !== 'paint')
-  );
+  const levelLock = (unlockLevel: number) => (playerLevel < unlockLevel ? `Nivel ${unlockLevel}` : null);
+  const categories = CATEGORIES.filter((c) => showVoice || c.id !== 'voice');
   const activeCat: MiiCategory = categories.some((c) => c.id === cat) ? cat : 'body';
   const faceFocus = FACE_CATEGORIES.includes(activeCat);
+  const accent = pet.bellyColor;
+
+  const catIcon = (id: MiiCategory) => {
+    switch (id) {
+      case 'body':
+        return <Glyph name={`species-${pet.species}`} size={34} />;
+      case 'eyes':
+        return <MiiPartIcon kind="eyes" value={pet.eyeStyle} pet={pet} size={40} />;
+      case 'mouth':
+        return <MiiPartIcon kind="mouth" value={pet.mouthStyle ?? 'smile'} pet={pet} size={40} />;
+      case 'brows':
+        return <MiiPartIcon kind="brows" value={pet.browStyle && pet.browStyle !== 'none' ? pet.browStyle : 'soft'} pet={pet} size={40} />;
+      case 'cheeks':
+        return <MiiPartIcon kind="cheeks" value={pet.blushStyle ?? 'pink'} pet={pet} size={40} />;
+      case 'pattern':
+        return <PropIcon kind="pattern" id={pet.pattern && pet.pattern !== 'none' ? pet.pattern : 'spots'} color={pet.patternColor ?? '#FFFFFF'} size={40} />;
+      case 'hats':
+        return <MiiPartIcon kind="hat" value={pet.accessory !== 'none' ? pet.accessory : 'cap'} pet={pet} size={40} />;
+      case 'glasses':
+        return <MiiPartIcon kind="glasses" value={pet.glasses && pet.glasses !== 'none' ? pet.glasses : 'round'} pet={pet} size={40} />;
+      case 'neck':
+        return <PropIcon kind="neck" id={pet.neckItem && pet.neckItem !== 'none' ? pet.neckItem : 'bow'} color={accent} size={40} />;
+      case 'hand':
+        return <PropIcon kind="hand" id={pet.heldItem && pet.heldItem !== 'none' ? pet.heldItem : 'balloon'} color={accent} size={40} />;
+      case 'back':
+        return <PropIcon kind="back" id={pet.backItem && pet.backItem !== 'none' ? pet.backItem : 'angel'} color={accent} size={40} />;
+      case 'clothes':
+        return <MiiPartIcon kind="outfit" value={pet.outfit && pet.outfit !== 'none' ? pet.outfit : 'tshirt'} pet={pet} size={40} />;
+      default:
+        return <Glyph name="mic" size={34} />;
+    }
+  };
 
   return (
     <View style={styles.wrap}>
@@ -1282,30 +1147,6 @@ export function MiiCreator({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
         {categories.map((c) => {
           const active = c.id === activeCat;
-          const iconKind: IconKind | null =
-            c.id === 'face' ? 'face'
-            : c.id === 'hair' ? 'hair'
-            : c.id === 'brows' ? 'brows'
-            : c.id === 'eyes' ? 'eyes'
-            : c.id === 'nose' ? 'nose'
-            : c.id === 'mouth' ? 'mouth'
-            : c.id === 'beard' ? 'beard'
-            : c.id === 'glasses' ? 'glasses'
-            : c.id === 'clothes' ? 'outfit'
-            : c.id === 'hats' ? 'hat'
-            : null;
-          const iconValue =
-            c.id === 'face' ? pet.faceShape ?? 'round'
-            : c.id === 'hair' ? pet.hairStyle ?? 'short'
-            : c.id === 'brows' ? pet.browStyle ?? 'soft'
-            : c.id === 'eyes' ? pet.eyeStyle
-            : c.id === 'nose' ? pet.noseStyle ?? 'button'
-            : c.id === 'mouth' ? pet.mouthStyle ?? 'smile'
-            : c.id === 'beard' ? (pet.facialHair && pet.facialHair !== 'none' ? pet.facialHair : 'mustache')
-            : c.id === 'glasses' ? (pet.glasses && pet.glasses !== 'none' ? pet.glasses : 'round')
-            : c.id === 'clothes' ? pet.outfit ?? 'tshirt'
-            : c.id === 'hats' ? (pet.accessory !== 'none' ? pet.accessory : 'cap')
-            : '';
           return (
             <PressableScale
               key={c.id}
@@ -1315,13 +1156,7 @@ export function MiiCreator({
               accessibilityRole="tab"
               accessibilityLabel={c.label}
             >
-              <View style={styles.catIcon}>
-                {iconKind ? (
-                  <MiiPartIcon kind={iconKind} value={iconValue} pet={pet} size={40} />
-                ) : (
-                  <Glyph name={c.id === 'body' ? `species-${pet.species === 'human' ? 'meeseeks' : pet.species}` : c.id === 'paint' ? 'sparkles' : 'mic'} size={34} />
-                )}
-              </View>
+              <View style={styles.catIcon}>{catIcon(c.id)}</View>
               <Text style={[styles.catLabel, active && { color: '#FFFFFF' }]}>{c.label}</Text>
             </PressableScale>
           );
@@ -1331,138 +1166,33 @@ export function MiiCreator({
       <View style={styles.panel}>
         {activeCat === 'body' ? (
           <>
-            <Section title="¿Qué vas a crear?">
+            <Section title="¿Quién será tu amigo?">
               <PartGrid
-                items={SPECIES.map((s) => ({ id: s.id, label: s.label }))}
+                items={SPECIES.map((sp) => ({ id: sp.id, label: sp.label }))}
                 value={pet.species}
-                locked={(id) => {
-                  const sp = SPECIES.find((s) => s.id === id);
-                  return sp && playerLevel < sp.unlockLevel ? `Nivel ${sp.unlockLevel}` : null;
-                }}
+                locked={(id) => levelLock(SPECIES.find((sp) => sp.id === id)?.unlockLevel ?? 1)}
                 onPick={(id) => {
                   const preset = SPECIES_PRESET_COLORS[id];
-                  change({
-                    species: id,
-                    bodyColor: id === 'human' ? SKIN_TONES[3]! : preset.bodyColor,
-                    bellyColor: preset.bellyColor,
-                    ...(id === 'human'
-                      ? {
-                          outfit: pet.outfit && pet.outfit !== 'none' ? pet.outfit : 'tshirt',
-                          hairStyle: pet.hairStyle && pet.hairStyle !== 'none' ? pet.hairStyle : 'short',
-                          noseStyle: 'button' as const,
-                          eyeStyle: 'round' as const,
-                        }
-                      : id === 'puff'
-                        ? {
-                            // El chibi redondo se queda como es: sin pelo, nariz, barba ni ropa (se pueden añadir después).
-                            hairStyle: 'none' as const,
-                            noseStyle: 'none' as const,
-                            facialHair: 'none' as const,
-                            outfit: 'none' as const,
-                            glasses: 'none' as const,
-                            eyeStyle: 'sparkle' as const,
-                            blushStyle: 'pink' as const,
-                            browStyle: 'none' as const,
-                          }
-                        : id === 'meeseeks'
-                          ? {}
-                          : { hairStyle: 'none' as const, noseStyle: 'none' as const, facialHair: 'none' as const }),
-                  });
+                  change({ species: id, bodyColor: preset.bodyColor, bellyColor: preset.bellyColor });
                 }}
                 icon={(id) => <MiiPartIcon kind="species" value={id} pet={pet} size={48} />}
               />
             </Section>
-            <Stepper label="Altura" value={Math.round(((pet.height ?? 0.5) - 0.5) * 6)} onChange={(v) => change({ height: 0.5 + v / 6 })} minLabel="Bajito" maxLabel="Alto" />
-            <Stepper label="Complexión" value={Math.round(((pet.weight ?? 0.5) - 0.5) * 6)} onChange={(v) => change({ weight: 0.5 + v / 6 })} minLabel="Delgado" maxLabel="Robusto" />
-            <Section title="Color favorito (tiñe su ropa)">
+            <Section title="Color del cuerpo">
+              <Swatches colors={BODY_COLORS} value={pet.bodyColor} onPick={(c) => change({ bodyColor: c })} />
+            </Section>
+            <Section title="Color favorito (zapatos, ropa y accesorios)">
               <Swatches colors={FAVORITE_COLORS} value={pet.bellyColor} onPick={(c) => change({ bellyColor: c })} />
             </Section>
-            {!isHuman ? (
-              <Section title="Color del cuerpo">
-                <Swatches colors={BODY_COLORS} value={pet.bodyColor} onPick={(c) => change({ bodyColor: c })} />
-              </Section>
-            ) : null}
-          </>
-        ) : null}
-
-        {activeCat === 'face' ? (
-          <>
-            {isHuman ? (
-              <Section title="Forma de la cara">
-                <PartGrid items={FACE_SHAPES} value={pet.faceShape ?? 'round'} onPick={(id) => change({ faceShape: id })} icon={(id) => <MiiPartIcon kind="face" value={id} pet={pet} />} />
-              </Section>
-            ) : null}
-            <Section title={isHuman ? 'Tono de piel' : 'Color del cuerpo'}>
-              <Swatches colors={isHuman ? SKIN_TONES : [...BODY_COLORS, ...SKIN_TONES]} value={pet.bodyColor} onPick={(c) => change({ bodyColor: c })} />
-            </Section>
-            {isHuman ? (
-              <Section title="Orejas">
-                <View style={styles.chipRow}>
-                  {EAR_STYLES.map((e) => {
-                    const active = (pet.earStyle ?? 'normal') === e.id;
-                    return (
-                      <PressableScale key={e.id} hapticKind="select" onPress={() => change({ earStyle: e.id })} style={[styles.chip, active && styles.chipActive]}>
-                        <Text style={[styles.chipText, active && { color: '#FFFFFF' }]}>{e.label}</Text>
-                      </PressableScale>
-                    );
-                  })}
-                </View>
-              </Section>
-            ) : null}
-            <Section title="Rasgos y maquillaje">
-              <PartGrid items={BLUSH_STYLES} value={pet.blushStyle ?? 'pink'} onPick={(id) => change({ blushStyle: id })} icon={(id) => <MiiPartIcon kind="cheeks" value={id} pet={pet} />} />
-            </Section>
-            <PressableScale hapticKind="select" onPress={() => change({ mole: !pet.mole })} style={[styles.toggle, pet.mole && styles.toggleOn]}>
-              <View style={[styles.toggleDot, pet.mole && styles.toggleDotOn]} />
-              <Text style={[styles.toggleText, pet.mole && { color: '#FFFFFF' }]}>Lunar</Text>
-            </PressableScale>
-            {pet.mole ? (
-              <>
-                <Stepper label="Lunar: lado" value={tune.moleX ?? 0} onChange={(v) => setTune('moleX', v)} minLabel="Hacia el centro" maxLabel="Hacia afuera" />
-                <Stepper label="Lunar: altura" value={tune.moleY ?? 0} onChange={(v) => setTune('moleY', v)} minLabel="Abajo" maxLabel="Arriba" />
-              </>
-            ) : null}
-          </>
-        ) : null}
-
-        {activeCat === 'hair' ? (
-          <>
-            <Section title="Peinado">
-              <PartGrid items={HAIR_STYLES} value={pet.hairStyle ?? (isHuman ? 'short' : 'none')} onPick={(id) => change({ hairStyle: id })} icon={(id) => <MiiPartIcon kind="hair" value={id} pet={pet} />} />
-            </Section>
-            <Section title="Color del pelo">
-              <Swatches colors={HAIR_COLORS} value={pet.hairColor} onPick={(c) => change({ hairColor: c })} />
-            </Section>
-            <Section title="Mechas">
-              <View style={styles.chipRow}>
-                <PressableScale hapticKind="select" onPress={() => change({ hairHighlight: undefined })} style={[styles.chip, !pet.hairHighlight && styles.chipActive]}>
-                  <Text style={[styles.chipText, !pet.hairHighlight && { color: '#FFFFFF' }]}>Sin mechas</Text>
-                </PressableScale>
-              </View>
-              <Swatches colors={HAIR_COLORS} value={pet.hairHighlight} onPick={(c) => change({ hairHighlight: c })} />
-            </Section>
-          </>
-        ) : null}
-
-        {activeCat === 'brows' ? (
-          <>
-            <Section title="Tipo de cejas">
-              <PartGrid items={BROW_STYLES} value={pet.browStyle ?? 'soft'} onPick={(id) => change({ browStyle: id })} icon={(id) => <MiiPartIcon kind="brows" value={id} pet={pet} />} />
-            </Section>
-            <Stepper label="Tamaño" value={tune.browSize ?? 0} onChange={(v) => setTune('browSize', v)} minLabel="Finas" maxLabel="Gruesas" />
-            <Stepper label="Largo" value={tune.browStretch ?? 0} onChange={(v) => setTune('browStretch', v)} minLabel="Cortas" maxLabel="Largas" />
-            <Stepper label="Inclinación" value={tune.browRotation ?? 0} onChange={(v) => setTune('browRotation', v)} minLabel="Tristes" maxLabel="Decididas" />
-            <Stepper label="Separación" value={tune.browSpacing ?? 0} onChange={(v) => setTune('browSpacing', v)} minLabel="Juntas" maxLabel="Separadas" />
-            <Stepper label="Altura" value={tune.browHeight ?? 0} onChange={(v) => setTune('browHeight', v)} minLabel="Abajo" maxLabel="Arriba" />
+            <Stepper label="Tamaño" value={Math.round(((pet.height ?? 0.5) - 0.5) * 6)} onChange={(v) => change({ height: 0.5 + v / 6 })} minLabel="Chiquito" maxLabel="Alto" />
+            <Stepper label="Forma" value={Math.round(((pet.weight ?? 0.5) - 0.5) * 6)} onChange={(v) => change({ weight: 0.5 + v / 6 })} minLabel="Delgadito" maxLabel="Redondito" />
           </>
         ) : null}
 
         {activeCat === 'eyes' ? (
           <>
             <Section title="Tipo de ojos">
-              <PartGrid
-                items={humanoid ? EYE_STYLES : [...EYE_STYLES.slice(6), ...EYE_STYLES.slice(0, 6)]}
-                value={pet.eyeStyle} onPick={(id) => change({ eyeStyle: id })} icon={(id) => <MiiPartIcon kind="eyes" value={id} pet={pet} />} />
+              <PartGrid items={EYE_STYLES} value={pet.eyeStyle} onPick={(id) => change({ eyeStyle: id })} icon={(id) => <MiiPartIcon kind="eyes" value={id} pet={pet} />} />
             </Section>
             <Section title="Color de ojos">
               <Swatches colors={EYE_COLORS} value={pet.eyeColor} onPick={(c) => change({ eyeColor: c })} />
@@ -1475,26 +1205,10 @@ export function MiiCreator({
           </>
         ) : null}
 
-        {activeCat === 'nose' ? (
-          <>
-            <Section title="Tipo de nariz">
-              <PartGrid items={NOSE_STYLES} value={pet.noseStyle ?? (isHuman ? 'button' : 'none')} onPick={(id) => change({ noseStyle: id })} icon={(id) => <MiiPartIcon kind="nose" value={id} pet={pet} />} />
-            </Section>
-            {!isHuman && pet.species !== 'puff' && pet.species !== 'meeseeks' ? (
-              <Text style={styles.hint}>Esta especie ya tiene su propio hocico; la nariz se ve en Persona, Chibi y Muñeco.</Text>
-            ) : null}
-            <Stepper label="Tamaño" value={tune.noseSize ?? 0} onChange={(v) => setTune('noseSize', v)} minLabel="Pequeña" maxLabel="Grande" />
-            <Stepper label="Altura" value={tune.noseHeight ?? 0} onChange={(v) => setTune('noseHeight', v)} minLabel="Abajo" maxLabel="Arriba" />
-          </>
-        ) : null}
-
         {activeCat === 'mouth' ? (
           <>
             <Section title="Tipo de boca">
               <PartGrid items={MOUTH_STYLES} value={pet.mouthStyle ?? 'smile'} onPick={(id) => change({ mouthStyle: id })} icon={(id) => <MiiPartIcon kind="mouth" value={id} pet={pet} />} />
-            </Section>
-            <Section title="Color de labios">
-              <Swatches colors={LIP_COLORS} value={pet.lipColor} onPick={(c) => change({ lipColor: c })} />
             </Section>
             <Stepper label="Tamaño" value={tune.mouthSize ?? 0} onChange={(v) => setTune('mouthSize', v)} minLabel="Pequeña" maxLabel="Grande" />
             <Stepper label="Ancho" value={tune.mouthStretch ?? 0} onChange={(v) => setTune('mouthStretch', v)} minLabel="Estrecha" maxLabel="Ancha" />
@@ -1502,18 +1216,49 @@ export function MiiCreator({
           </>
         ) : null}
 
-        {activeCat === 'beard' ? (
+        {activeCat === 'brows' ? (
           <>
-            <Section title="Barba y bigote">
-              <PartGrid items={FACIAL_HAIR} value={pet.facialHair ?? 'none'} onPick={(id) => change({ facialHair: id })} icon={(id) => <MiiPartIcon kind="beard" value={id} pet={pet} />} />
+            <Section title="Cejas">
+              <PartGrid items={BROW_STYLES} value={pet.browStyle ?? 'none'} onPick={(id) => change({ browStyle: id })} icon={(id) => <MiiPartIcon kind="brows" value={id} pet={pet} />} />
             </Section>
-            <Section title="Color de barba y bigote">
-              <Swatches colors={HAIR_COLORS} value={pet.beardColor ?? pet.hairColor} onPick={(c) => change({ beardColor: c })} />
-            </Section>
-            <Stepper label="Tamaño del bigote" value={tune.mustacheSize ?? 0} onChange={(v) => setTune('mustacheSize', v)} minLabel="Pequeño" maxLabel="Grande" />
-            <Stepper label="Ancho del bigote" value={tune.mustacheStretch ?? 0} onChange={(v) => setTune('mustacheStretch', v)} minLabel="Estrecho" maxLabel="Ancho" />
-            <Stepper label="Altura del bigote" value={tune.mustacheHeight ?? 0} onChange={(v) => setTune('mustacheHeight', v)} minLabel="Abajo" maxLabel="Arriba" />
+            <Stepper label="Tamaño" value={tune.browSize ?? 0} onChange={(v) => setTune('browSize', v)} minLabel="Finas" maxLabel="Gruesas" />
+            <Stepper label="Inclinación" value={tune.browRotation ?? 0} onChange={(v) => setTune('browRotation', v)} minLabel="Tristes" maxLabel="Decididas" />
+            <Stepper label="Altura" value={tune.browHeight ?? 0} onChange={(v) => setTune('browHeight', v)} minLabel="Abajo" maxLabel="Arriba" />
           </>
+        ) : null}
+
+        {activeCat === 'cheeks' ? (
+          <Section title="Mejillas y pecas">
+            <PartGrid items={BLUSH_STYLES} value={pet.blushStyle ?? 'pink'} onPick={(id) => change({ blushStyle: id })} icon={(id) => <MiiPartIcon kind="cheeks" value={id} pet={pet} />} />
+          </Section>
+        ) : null}
+
+        {activeCat === 'pattern' ? (
+          <>
+            <Section title="Dibujo del cuerpo">
+              <PartGrid
+                items={PATTERNS}
+                value={pet.pattern ?? 'none'}
+                onPick={(id) => change({ pattern: id })}
+                icon={(id) => <PropIcon kind="pattern" id={id} color={pet.patternColor ?? '#FFFFFF'} />}
+              />
+            </Section>
+            <Section title="Color del dibujo">
+              <Swatches colors={PATTERN_COLORS} value={pet.patternColor ?? '#FFFFFF'} onPick={(c) => change({ patternColor: c, pattern: pet.pattern && pet.pattern !== 'none' ? pet.pattern : 'spots' })} />
+            </Section>
+          </>
+        ) : null}
+
+        {activeCat === 'hats' ? (
+          <Section title="Gorros y accesorios">
+            <PartGrid
+              items={ACCESSORIES.filter((a) => a.id !== 'glasses').map((a) => ({ id: a.id, label: a.label }))}
+              value={pet.accessory === 'glasses' ? 'none' : pet.accessory}
+              locked={(id) => levelLock(ACCESSORIES.find((x) => x.id === id)?.unlockLevel ?? 1)}
+              onPick={(id) => change({ accessory: id })}
+              icon={(id) => <MiiPartIcon kind="hat" value={id} pet={pet} />}
+            />
+          </Section>
         ) : null}
 
         {activeCat === 'glasses' ? (
@@ -1533,6 +1278,42 @@ export function MiiCreator({
           </>
         ) : null}
 
+        {activeCat === 'neck' ? (
+          <Section title="Al cuello (usa tu color favorito)">
+            <PartGrid
+              items={NECK_ITEMS}
+              value={pet.neckItem ?? 'none'}
+              locked={(id) => levelLock(NECK_ITEMS.find((x) => x.id === id)?.unlockLevel ?? 1)}
+              onPick={(id) => change({ neckItem: id })}
+              icon={(id) => <PropIcon kind="neck" id={id} color={accent} />}
+            />
+          </Section>
+        ) : null}
+
+        {activeCat === 'hand' ? (
+          <Section title="En la mano">
+            <PartGrid
+              items={HELD_ITEMS}
+              value={pet.heldItem ?? 'none'}
+              locked={(id) => levelLock(HELD_ITEMS.find((x) => x.id === id)?.unlockLevel ?? 1)}
+              onPick={(id) => change({ heldItem: id })}
+              icon={(id) => <PropIcon kind="hand" id={id} color={accent} />}
+            />
+          </Section>
+        ) : null}
+
+        {activeCat === 'back' ? (
+          <Section title="A la espalda">
+            <PartGrid
+              items={BACK_ITEMS}
+              value={pet.backItem ?? 'none'}
+              locked={(id) => levelLock(BACK_ITEMS.find((x) => x.id === id)?.unlockLevel ?? 1)}
+              onPick={(id) => change({ backItem: id })}
+              icon={(id) => <PropIcon kind="back" id={id} color={accent} />}
+            />
+          </Section>
+        ) : null}
+
         {activeCat === 'clothes' ? (
           <>
             <Section title="Ropa (usa tu color favorito)">
@@ -1546,49 +1327,9 @@ export function MiiCreator({
             <Section title="Color favorito">
               <Swatches colors={FAVORITE_COLORS} value={pet.bellyColor} onPick={(c) => change({ bellyColor: c })} />
             </Section>
-            {isHuman ? (
-              <Section title="Parte de abajo">
-                <View style={styles.chipRow}>
-                  {PANTS_STYLES.map((ps) => {
-                    const active = (pet.pantsStyle ?? 'jeans') === ps.id;
-                    return (
-                      <PressableScale key={ps.id} hapticKind="select" onPress={() => change({ pantsStyle: ps.id })} style={[styles.chip, active && styles.chipActive]}>
-                        <Text style={[styles.chipText, active && { color: '#FFFFFF' }]}>{ps.label}</Text>
-                      </PressableScale>
-                    );
-                  })}
-                </View>
-              </Section>
-            ) : null}
-            {isHuman ? (
-              <Section title="Color del pantalón y zapatos">
-                <Swatches colors={PANTS_COLORS} value={pet.pantsColor} onPick={(c) => change({ pantsColor: c })} />
-              </Section>
-            ) : (
-              <Section title="Zapatos y detalles">
-                <Swatches colors={BELLY_COLORS} value={pet.bellyColor} onPick={(c) => change({ bellyColor: c })} />
-              </Section>
-            )}
             <Text style={styles.hint}>Los trajes especiales (pirata, capitán, montaña…) se consiguen con monedas en la tienda de tu mascota.</Text>
           </>
         ) : null}
-
-        {activeCat === 'hats' ? (
-          <Section title="Gorros y accesorios">
-            <PartGrid
-              items={ACCESSORIES.filter((a) => a.id !== 'glasses').map((a) => ({ id: a.id, label: a.label }))}
-              value={pet.accessory === 'glasses' ? 'none' : pet.accessory}
-              locked={(id) => {
-                const a = ACCESSORIES.find((x) => x.id === id);
-                return a && playerLevel < a.unlockLevel ? `Nivel ${a.unlockLevel}` : null;
-              }}
-              onPick={(id) => change({ accessory: id })}
-              icon={(id) => <MiiPartIcon kind="hat" value={id} pet={pet} />}
-            />
-          </Section>
-        ) : null}
-
-        {activeCat === 'paint' ? <FacePaintPad pet={pet} onChange={change} /> : null}
 
         {activeCat === 'voice' ? (
           <>

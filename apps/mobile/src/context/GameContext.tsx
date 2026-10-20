@@ -52,6 +52,7 @@ import {
   type PetStage,
   type PetStats,
   type StreakSurpriseGift,
+  normalizePet,
 } from '../game/pet';
 
 export type ActivityKind = 'speaking' | 'listening' | 'reading' | 'writing' | 'daily' | 'lesson';
@@ -386,7 +387,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       loadJson<PetStats>(userKey(accountId, 'petStats'), DEFAULT_STATS),
     ]);
     setProgress({ ...p, onboarded: true });
-    setPet({ ...DEFAULT_PET, ...c });
+    setPet(normalizePet({ ...DEFAULT_PET, ...c }));
     setStats(applyDecay(s));
     setEmotionOverride(null);
     setTab('home');

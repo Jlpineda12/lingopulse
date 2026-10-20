@@ -36,7 +36,6 @@ import {
   DEFAULT_PET,
   levelFromXp,
   randomizeTomodachiPet,
-  SKIN_TONES,
   SPECIES,
   SPECIES_PRESET_COLORS,
   type PetConfig,
@@ -215,26 +214,16 @@ export function AuthScreen() {
 
   // Paso 2: Mascota 3D estilo Tomodachi Life
   const [petName, setPetName] = useState(DEFAULT_PET.name);
-  // Lo que nacerá del huevo: por defecto una persona estilo Mii que el jugador arma pieza a pieza.
+  // Lo que nacerá del huevo: por defecto el chibi redondito, que el jugador viste a su gusto.
   const [draft, setDraft] = useState<PetConfig>(() => ({
     ...DEFAULT_PET,
-    species: 'human',
-    bodyColor: SKIN_TONES[3]!,
-    bellyColor: '#2563EB',
-    hairStyle: 'short',
-    hairColor: '#4A2E1B',
-    eyeStyle: 'round',
-    eyeColor: '#5B3A1E',
-    browStyle: 'soft',
+    species: 'puff',
+    eyeStyle: 'sparkle',
+    blushStyle: 'pink',
+    browStyle: 'none',
     mouthStyle: 'smile',
-    blushStyle: 'none',
-    noseStyle: 'button',
-    outfit: 'tshirt',
+    outfit: 'none',
     accessory: 'none',
-    personality: 'sweet',
-    voicePitch: 1.05,
-    voiceRate: 0.98,
-    catchphrase: 'Let’s learn!',
     height: 0.5,
     weight: 0.5,
   }));
@@ -267,7 +256,7 @@ export function AuthScreen() {
     setDraft((d) => ({
       ...d,
       species: spId,
-      bodyColor: spId === 'human' ? SKIN_TONES[3]! : preset.bodyColor,
+      bodyColor: preset.bodyColor,
       bellyColor: preset.bellyColor,
     }));
     setReactKey((k) => k + 1);

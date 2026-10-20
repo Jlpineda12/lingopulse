@@ -1,19 +1,16 @@
 import * as THREE from 'three';
 import type { PetConfig, PetMood, PetStage } from '../game/pet';
-import { box, createSkinRamp, createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon as toonMaterial } from './toonKit';
+import { box, createToonRamp, cylinder, ellipsoid, OUTLINE_MAT, toon as toonMaterial } from './toonKit';
 import type { PetSceneAction, SceneNpc, UnitSceneTheme } from '../game/unitScenes';
 import { buildNpc, buildUnitSceneProps } from './unitSceneProps';
-import { buildHumanHair } from './humanHair';
+import { BALL, buildBuddySpecies, onBall, type SpeciesBuild } from './buddySpecies';
+import { buildBuddyProps } from './buddyProps';
 import { buildFaceDecals, type FaceLayout, type MouthPose } from './faceDecals';
 import {
   drawMiiFace,
-  FACE_LAYOUT,
-  FACE_TEX_W,
   FACE_PHI_SPAN,
   FACE_THETA_SPAN,
   FACE_THETA_START,
-  type FaceEyes,
-  type FaceMouth,
 } from './faceTexture';
 import { buildHouseDiorama, buildIslandFurniture, type HouseDiorama, type HouseSceneOptions } from './petHouse';
 
@@ -33,8 +30,6 @@ import { buildHouseDiorama, buildIslandFurniture, type HouseDiorama, type HouseS
 export interface PetSceneHandle {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
-  /** true si la escena usa sombras proyectadas (el renderer debe activar shadowMap). */
-  shadows: boolean;
   update: (dt: number, t: number) => void;
   setMood: (mood: PetMood) => void;
   setSpeaking: (speaking: boolean) => void;
@@ -310,39 +305,16 @@ export function createPetScene(
 ): PetSceneHandle {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, aspect, 0.1, 100);
-  if (config.species === 'human') {
-    // Las personas son más altas que los chibis: cámara un poco más cerca y alta.
-    camera.position.set(0, 0.55, 6.8);
-    camera.lookAt(0, 0.2, 0);
-  } else {
-    camera.position.set(0, 0.45, 7.55);
-    camera.lookAt(0, 0.1, 0);
-  }
+  camera.position.set(0, 0.45, 7.55);
+  camera.lookAt(0, 0.1, 0);
 
   const toonRamp = createToonRamp();
 
-  // Las personas usan menos luz ambiente y más luz principal: así se ve el volumen de la cara.
-  const personLight = config.species === 'human';
-  scene.add(new THREE.AmbientLight(0xffffff, personLight ? 0.42 : 0.7));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
   // Relleno de cielo/suelo para un sombreado limpio y suave.
-  scene.add(new THREE.HemisphereLight(0xfff7ee, 0xc9d6ff, personLight ? 0.38 : 0.55));
-  const key = new THREE.DirectionalLight(0xfff6e5, personLight ? 2.1 : 1.85);
+  scene.add(new THREE.HemisphereLight(0xfff7ee, 0xc9d6ff, 0.55));
+  const key = new THREE.DirectionalLight(0xfff6e5, 1.85);
   key.position.set(3.2, 4.8, 5.0);
-  if (personLight) {
-    // Sombra suave: la cabeza sombrea los hombros y el torso, y se lee mejor la silueta.
-    key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    const sc = key.shadow.camera;
-    sc.left = -1.4;
-    sc.right = 1.4;
-    sc.top = 1.9;
-    sc.bottom = -1.4;
-    sc.near = 2;
-    sc.far = 14;
-    key.shadow.bias = -0.0015;
-    key.shadow.normalBias = 0.025;
-    key.shadow.radius = 5;
-  }
   scene.add(key);
   const rim = new THREE.DirectionalLight(0xa8d0ff, 0.9);
   rim.position.set(-3.5, 2.2, -2.8);
@@ -411,92 +383,21 @@ export function createPetScene(
     scene.add(propsRoot);
   }
 
-  const isMeeseeks = config.species === 'meeseeks';
-  const isHuman = config.species === 'human';
-  /** Siluetas con cabeza pequeña sobre torso (muñeco esbelto y persona). */
-  const isSlim = isMeeseeks || isHuman;
-  /**
-   * Material de cada pieza: las personas usan un acabado de juguete de vinilo mate
-   * (sombreado suave con volumen, como los Mii); chibi y animales mantienen el toon.
-   */
-  const skinRamp = isHuman ? createSkinRamp() : null;
   const toon = (color: THREE.ColorRepresentation, ramp: THREE.DataTexture): THREE.MeshToonMaterial =>
-    toonMaterial(color, skinRamp ?? ramp);
+    toonMaterial(color, ramp);
   const petStage = options.stage ?? 'adult';
   const tune = config.tuning ?? {};
   const tstep = (v?: number) => Math.max(-3, Math.min(3, Math.round(v ?? 0)));
-  // Las personas llevan ojos algo más pequeños, como los Mii.
   const eyeK =
-    (config.species === 'human' ? 0.82 : 1) *
     (petStage === 'baby' ? 1.2 : 1) *
     (1 + tstep(tune.eyeSize) * 0.09);
   const eyeDY = tstep(tune.eyeHeight) * 0.025;
   const eyeDX = tstep(tune.eyeSpacing) * 0.022;
-  const browK = 1 + tstep(tune.browSize) * 0.12;
-  const browDY = tstep(tune.browHeight) * 0.022;
-  const noseK = 1 + tstep(tune.noseSize) * 0.12;
-  const noseDY = tstep(tune.noseHeight) * 0.022;
-  const mouthK = 1 + tstep(tune.mouthSize) * 0.1;
-  const mouthDY = tstep(tune.mouthHeight) * 0.022;
-  const eyeSY = 1 + tstep(tune.eyeStretch) * 0.1;
-  const eyeSX = 1 - tstep(tune.eyeStretch) * 0.04;
-  const eyeRot = tstep(tune.eyeRotation) * 0.09;
-  const browSX = 1 + tstep(tune.browStretch) * 0.13;
-  const browRot = tstep(tune.browRotation) * 0.09;
-  const browDX = tstep(tune.browSpacing) * 0.022;
-  const mouthSX = 1 + tstep(tune.mouthStretch) * 0.12;
-  const mustK = 1 + tstep(tune.mustacheSize) * 0.12;
-  const mustSX = 1 + tstep(tune.mustacheStretch) * 0.12;
-  const mustDY = tstep(tune.mustacheHeight) * 0.02;
   const glassK = 1 + tstep(tune.glassesSize) * 0.07;
   const glassDY = tstep(tune.glassesHeight) * 0.02;
-  /** Forma de la cara (solo personas): ancho, alto y fondo de la cabeza. */
-  const faceShape = config.faceShape ?? 'round';
-  const humanHead =
-    faceShape === 'oval'
-      ? { w: 0.64, h: 0.76, d: 0.64 }
-      : faceShape === 'square'
-        ? { w: 0.72, h: 0.7, d: 0.66 }
-        : faceShape === 'long'
-          ? { w: 0.62, h: 0.82, d: 0.62 }
-          : faceShape === 'wide'
-            ? { w: 0.8, h: 0.66, d: 0.68 }
-            : faceShape === 'heart'
-              ? { w: 0.72, h: 0.72, d: 0.66 }
-              : { w: 0.7, h: 0.72, d: 0.66 };
-  /**
-   * Proporciones de persona: la cara se modela a escala "chibi" (centro en y = 0.42) y luego
-   * toda la cabeza se reduce y se sube sobre un cuerpo más largo, como un Mii.
-   */
-  const HUMAN_HEAD_K = 0.8;
-  const HUMAN_HEAD_Y = 0.9;
-  /** Profundidad relativa del torso de persona (algo aplanado, como un muñeco). */
-  const HUMAN_TORSO_Z = 0.78;
-  let humanTorsoProfile: THREE.Vector2[] | null = null;
-  let humanArms: THREE.Group[] | null = null;
-  let humanHeadRig: THREE.Group | null = null;
-  /** Cuánto sobresale el pelo de persona por encima de la coronilla (para encajar gorros). */
-  let humanHairTop = 0;
-  const rigY = isHuman ? 0.42 : 0;
-  const humanHeadParts: THREE.Object3D[] = [];
   /** Parches de barriga: se ocultan cuando la ropa cubre el torso. */
   const bellyParts: THREE.Object3D[] = [];
-  const humanSleeves: THREE.Mesh[] = [];
-  let faceMat: THREE.MeshToonMaterial | null = null;
   const faceCache = new Map<string, THREE.DataTexture>();
-  const faceTex = (e: FaceEyes, m: FaceMouth) => {
-    const k = `${e}|${m}`;
-    let tex = faceCache.get(k);
-    if (!tex) {
-      tex = drawMiiFace(config, e, m);
-      faceCache.set(k, tex);
-    }
-    return tex;
-  };
-  /** Altura (relativa al centro de la cabeza) de cada fila de la cara dibujada. */
-  const faceRowY = (row: number) => Math.cos(FACE_THETA_START + row * FACE_THETA_SPAN) * humanHead.h;
-  const faceRowZ = (row: number) => Math.sin(FACE_THETA_START + row * FACE_THETA_SPAN) * humanHead.d;
-  const isCat = config.species === 'cat';
   const isDragon = config.species === 'dragon';
   const isBear = config.species === 'bear';
   const isBunny = config.species === 'bunny';
@@ -515,229 +416,21 @@ export function createPetScene(
   const feetMat = toon(feetColor, toonRamp);
   const creamBellyMat = toon(0xfff7eb, toonRamp);
   const goldMat = toon(0xf4b942, toonRamp);
-  const customHairColor = new THREE.Color(config.hairColor ?? '#4A2E1B');
-  const hairMat = toon(customHairColor, toonRamp);
+  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const pinkNoseMat = toon(0xff6b9d, toonRamp);
   const darkNoseMat = toon(0x28243d, toonRamp);
-  const whiskerMat = new THREE.MeshBasicMaterial({ color: 0x1e2436 });
 
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x151a3d });
-  const irisMat = new THREE.MeshBasicMaterial({
-    color: config.eyeColor ? new THREE.Color(config.eyeColor) : isMeeseeks ? 0x151a3d : 0x3b7bff,
-  });
-  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const mouthMat = new THREE.MeshBasicMaterial({
-    color: config.lipColor ? new THREE.Color(config.lipColor).multiplyScalar(0.7) : 0x2b1020,
-  });
-  const tongueMat = new THREE.MeshBasicMaterial({ color: 0xff6b8b });
 
-  const headY = isHuman ? 0.42 : isSlim ? 0.36 : isCat ? 0.24 : isDragon ? 0.16 : 0.0;
-  const faceZ = isSlim ? 0.66 : isCat ? 0.82 : isDragon ? 0.88 : 0.95;
+  const headY = isDragon ? 0.16 : 0.0;
+  const faceZ = isDragon ? 0.88 : 0.95;
 
   let tailGroup: THREE.Group | null = null;
   let wingL: THREE.Group | null = null;
   let wingR: THREE.Group | null = null;
   const bunnyEars: THREE.Object3D[] = [];
+  let buddy: SpeciesBuild | null = null;
 
-  if (isHuman) {
-    // Persona estilo Mii: cabeza redonda, torso con camiseta, pantalón, piernas y zapatos.
-    // Con camisa y corbata u overol, la camiseta de base es blanca.
-    const shirtMat = toon(
-      config.outfit === 'shirttie' || config.outfit === 'overalls' || config.outfit === 'stripes'
-        ? 0xffffff
-        : config.outfit === 'tank'
-          ? baseBodyColor
-          : accent,
-      toonRamp
-    );
-    const pantsMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B'), toonRamp);
-    const headMesh = ellipsoid(humanHead.w, humanHead.h, humanHead.d, bodyMat, 28, true, 0.045);
-    headMesh.position.set(0, 0.42, 0);
-    humanHeadParts.push(headMesh);
-    if (faceShape === 'square') {
-      // Mandíbula marcada
-      const jaw = ellipsoid(humanHead.w * 0.95, 0.36, humanHead.d * 0.9, bodyMat, 24, true, 0.04);
-      jaw.position.set(0, 0.12, 0.02);
-      humanHeadParts.push(jaw);
-    } else if (faceShape === 'heart') {
-      // Barbilla en punta suave
-      const chin = ellipsoid(0.28, 0.24, 0.36, bodyMat, 18, true, 0.035);
-      chin.position.set(0, -0.12, 0.28);
-      humanHeadParts.push(chin);
-    }
-    const earStyle = config.earStyle ?? 'normal';
-    if (earStyle !== 'none') {
-      [-1, 1].forEach((side) => {
-        let ear: THREE.Mesh;
-        if (earStyle === 'pointy') {
-          const geo = new THREE.ConeGeometry(0.1, 0.3, 12);
-          ear = new THREE.Mesh(geo, bodyMat);
-          const out = new THREE.Mesh(geo, OUTLINE_MAT);
-          out.scale.setScalar(1.06);
-          ear.add(out);
-          ear.rotation.z = -side * 1.1;
-          ear.scale.z = 0.6;
-          ear.position.set(side * (humanHead.w + 0.06), 0.44, 0.0);
-        } else {
-          const dims =
-            earStyle === 'small' ? [0.08, 0.11, 0.06]
-            : earStyle === 'big' ? [0.15, 0.2, 0.09]
-            : earStyle === 'round' ? [0.13, 0.13, 0.08]
-            : [0.11, 0.15, 0.08];
-          ear = ellipsoid(dims[0]!, dims[1]!, dims[2]!, bodyMat, 14, true, 0.022);
-          ear.position.set(side * (humanHead.w - 0.01 + (earStyle === 'big' ? 0.03 : 0)), 0.38, 0.02);
-          // Hueco interior de la oreja
-          const inner = ellipsoid(0.5, 0.55, 0.4, toon(baseBodyColor.clone().offsetHSL(0, 0.05, -0.1), toonRamp), 10, false);
-          inner.position.set(side * 0.25, 0, 0.35);
-          ear.add(inner);
-        }
-        ear.userData.ear = true;
-        humanHeadParts.push(ear);
-      });
-    }
-    body.add(...humanHeadParts);
-    // Cuerpo de figura de vinilo: cabeza grande (≈45 % de la altura) apoyada en los hombros,
-    // torso de barril con hombros redondeados, brazos cortos con mano redonda a la altura de
-    // la cadera, piernas cortas y gruesas y zapatos redondeados.
-    humanTorsoProfile = [
-      [0.0, 0.4], [0.12, 0.395], [0.24, 0.372], [0.31, 0.335], [0.34, 0.27], [0.345, 0.14],
-      [0.336, -0.04], [0.338, -0.22], [0.348, -0.36], [0.33, -0.43], [0.0, -0.45],
-    ]
-      .reverse() // de abajo hacia arriba: normales hacia afuera
-      .map(([r, y]) => new THREE.Vector2(r!, y!));
-    const torsoGeo = new THREE.LatheGeometry(humanTorsoProfile, 32);
-    const shirt = new THREE.Mesh(torsoGeo, shirtMat);
-    shirt.scale.z = HUMAN_TORSO_Z;
-    const shirtOut = new THREE.Mesh(torsoGeo, OUTLINE_MAT);
-    shirtOut.scale.setScalar(1.025);
-    shirt.add(shirtOut);
-    const hips = ellipsoid(0.33, 0.1, 0.25, pantsMat, 22, true, 0.03);
-    hips.position.set(0, -0.44, 0);
-    body.add(shirt, hips);
-    const pantsStyle = config.pantsStyle ?? 'jeans';
-    const cuffMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').offsetHSL(0, -0.05, 0.12), toonRamp);
-    [-1, 1].forEach((side) => {
-      const lx = side * 0.155;
-      if (pantsStyle === 'jeans') {
-        const leg = cylinder(0.135, 0.125, 0.38, pantsMat, 16);
-        leg.position.set(lx, -0.64, 0.0);
-        const cuff = cylinder(0.138, 0.138, 0.05, cuffMat, 16);
-        cuff.position.set(lx, -0.81, 0.0);
-        body.add(leg, cuff);
-      } else {
-        // Shorts o falda: pierna de piel con calcetín
-        const legSkin = cylinder(0.1, 0.095, 0.36, bodyMat, 14);
-        legSkin.position.set(lx, -0.65, 0.0);
-        const sock = cylinder(0.104, 0.104, 0.08, toon(0xffffff, toonRamp), 14);
-        sock.position.set(lx, -0.8, 0.0);
-        body.add(legSkin, sock);
-        if (pantsStyle === 'shorts') {
-          const short = cylinder(0.145, 0.14, 0.16, pantsMat, 16);
-          short.position.set(lx, -0.54, 0.0);
-          body.add(short);
-        }
-      }
-    });
-    if (pantsStyle === 'skirt') {
-      const skirtGeo = new THREE.CylinderGeometry(0.34, 0.44, 0.24, 28, 1, true);
-      const skirtMat = toon(new THREE.Color(config.pantsColor ?? '#3B4A6B'), toonRamp);
-      (skirtMat as THREE.Material).side = THREE.DoubleSide;
-      const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-      skirt.position.y = -0.52;
-      skirt.scale.z = 0.82;
-      const skirtOut = new THREE.Mesh(skirtGeo, OUTLINE_MAT);
-      skirtOut.scale.set(1.02, 1, 1.02);
-      skirt.add(skirtOut);
-      body.add(skirt);
-    }
-    // Brazos cortos con pivote en el hombro: manga, antebrazo y mano redonda.
-    humanArms = [-1, 1].map((side) => {
-      const pivot = new THREE.Group();
-      pivot.position.set(side * 0.3, 0.25, 0.0);
-      const sleeveMat = toon(accent, toonRamp);
-      const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.12, 6, 16), sleeveMat);
-      sleeve.position.y = -0.09;
-      humanSleeves.push(sleeve);
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.078, 0.26, 6, 14), bodyMat);
-      arm.position.y = -0.24;
-      const longSleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.24, 6, 14), sleeveMat);
-      longSleeve.position.y = -0.22;
-      longSleeve.userData.longSleeve = true;
-      longSleeve.visible = false;
-      humanSleeves.push(longSleeve);
-      const hand = ellipsoid(0.1, 0.105, 0.095, bodyMat, 18, true, 0.02);
-      hand.position.y = -0.44;
-      pivot.add(arm, longSleeve, sleeve, hand);
-      body.add(pivot);
-      return pivot;
-    });
-  } else if (isMeeseeks) {
-    const headMesh = ellipsoid(0.68, 0.76, 0.64, bodyMat, 28, true, 0.045);
-    headMesh.position.set(0, 0.36, 0);
-    const neckTorso = ellipsoid(0.52, 0.78, 0.46, bodyMat, 28, true, 0.045);
-    neckTorso.position.set(0, -0.28, 0);
-    body.add(headMesh, neckTorso);
-  } else if (isCat) {
-    const catHead = ellipsoid(0.86, 0.74, 0.80, bodyMat, 28, true, 0.045);
-    catHead.position.set(0, 0.24, 0);
-    [-1, 1].forEach((side) => {
-      const puffCheek = ellipsoid(0.35, 0.28, 0.32, bodyMat, 18, false);
-      puffCheek.position.set(side * 0.52, 0.12, 0.32);
-      body.add(puffCheek);
-    });
-    const catTorso = ellipsoid(0.72, 0.66, 0.68, bodyMat, 28, true, 0.045);
-    catTorso.position.set(0, -0.36, -0.02);
-    const bellyPatch = ellipsoid(0.48, 0.44, 0.22, creamBellyMat, 20, false);
-    bellyPatch.position.set(0, -0.36, 0.5);
-    bellyParts.push(bellyPatch);
-    body.add(catHead, catTorso, bellyPatch);
-
-    [-1, 1].forEach((side) => {
-      const earGeo = new THREE.ConeGeometry(0.26, 0.48, 16);
-      const ear = new THREE.Mesh(earGeo, limbMat);
-      ear.position.set(side * 0.48, 0.88, 0.02);
-      ear.rotation.z = -side * 0.36;
-      const earOut = new THREE.Mesh(earGeo, OUTLINE_MAT);
-      earOut.scale.set(1.077, 1.044, 1.077);
-      ear.add(earOut);
-      const inner = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.28, 12), pinkNoseMat);
-      inner.position.set(0, -0.03, 0.11);
-      ear.add(inner);
-      body.add(ear);
-    });
-
-    const nose = ellipsoid(0.065, 0.048, 0.045, pinkNoseMat, 12, false);
-    nose.position.set(0, 0.22, 0.82);
-    body.add(nose);
-
-    [-1, 1].forEach((side) => {
-      [-0.08, 0, 0.08].forEach((angleOffset, idx) => {
-        const w = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.01, 0.007, 0.38, 6),
-          whiskerMat
-        );
-        w.rotation.z = Math.PI / 2 + side * (0.12 + angleOffset);
-        w.rotation.y = -side * 0.28;
-        w.position.set(side * 0.66, 0.16 + (idx - 1) * 0.055, 0.66);
-        body.add(w);
-      });
-    });
-
-    tailGroup = new THREE.Group();
-    tailGroup.position.set(0, -0.52, -0.58);
-    const tailCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0.18, 0.18, -0.28),
-      new THREE.Vector3(0.38, 0.55, -0.32),
-      new THREE.Vector3(0.26, 0.88, -0.18),
-    ]);
-    const tailGeo = new THREE.TubeGeometry(tailCurve, 20, 0.095, 10, false);
-    const tailMesh = new THREE.Mesh(tailGeo, feetMat);
-    const tailTip = ellipsoid(0.11, 0.11, 0.11, creamBellyMat, 12, true, 0.03);
-    tailTip.position.set(0.26, 0.88, -0.18);
-    tailGroup.add(tailMesh, tailTip);
-    body.add(tailGroup);
-  } else if (isDragon) {
+  if (isDragon) {
     const dracoHead = ellipsoid(0.88, 0.78, 0.84, bodyMat, 28, true, 0.045);
     dracoHead.position.set(0, 0.2, 0);
     const dracoTorso = ellipsoid(0.78, 0.68, 0.74, bodyMat, 28, true, 0.045);
@@ -796,6 +489,21 @@ export function createPetScene(
   } else {
     const torso = ellipsoid(1.0, 0.95, 0.96, bodyMat, 36, true, 0.045);
     body.add(torso);
+    // Amigos redonditos con rasgos propios (gato, pingüino, rana, panda, pollito, hámster, ajolote)
+    buddy = buildBuddySpecies(config.species, {
+      body,
+      bodyColor: baseBodyColor,
+      accent,
+      bodyMat,
+      limbMat,
+      toon: (c) => toon(c, toonRamp),
+    });
+    if (buddy) {
+      bellyParts.push(...buddy.bellyParts);
+      if (buddy.tail) tailGroup = buddy.tail;
+      if (buddy.limbColor !== undefined) limbMat.color.set(buddy.limbColor);
+      if (buddy.feetColor !== undefined) feetMat.color.set(buddy.feetColor);
+    }
 
     if (isBear) {
       const bearBelly = ellipsoid(0.46, 0.36, 0.2, creamBellyMat, 22, false);
@@ -916,648 +624,37 @@ export function createPetScene(
   }
 
   // A partir de aquí y hasta los brazos, todo lo que se añade es parte de la cabeza.
-  const headStartIdx = body.children.length;
-  // --- 10 MODELOS DE CABELLO 3D ESTILO TOMODACHI LIFE ---
-  // Solo las siluetas humanas llevan pelo: el chibi y los animales conservan su forma.
-  const hairStyle = isSlim ? config.hairStyle ?? (isHuman ? 'short' : 'spiky') : 'none';
-  if (hairStyle !== 'none') {
-    const hairGroup = new THREE.Group();
-    const hairCrownY = isHuman ? 1.0 : isSlim ? 1.02 : isCat ? 0.9 : isDragon ? 0.92 : 0.88;
-    const hairScale = isHuman ? 0.96 : isMeeseeks ? 0.88 : 1.05;
-    hairGroup.position.set(0, hairCrownY, 0.04);
-    hairGroup.scale.setScalar(hairScale);
-
-    if (isHuman) {
-      // Pelo esculpido: una cáscara que abraza la cabeza (como el pelo de una figura de vinilo),
-      // con línea de nacimiento, flequillo y volumen propios de cada peinado.
-      hairGroup.position.set(0, 0.42, 0);
-      hairGroup.scale.setScalar(1);
-      const built = buildHumanHair(hairGroup, hairStyle, humanHead, hairMat, feetMat, goldMat, config.hairHighlight);
-      humanHairTop = built.top;
-      // Las melenas tapan las orejas
-      if (built.coversEars) humanHeadParts.forEach((o) => o.userData.ear && (o.visible = false));
-    } else if (hairStyle === 'spiky') {
-      const spikes = [
-        { rx: 0.15, rz: 0, sx: 0.15, sy: 0.38, x: 0, z: 0.04 },
-        { rx: 0.24, rz: 0.44, sx: 0.13, sy: 0.34, x: -0.14, z: 0.06 },
-        { rx: 0.24, rz: -0.44, sx: 0.13, sy: 0.34, x: 0.14, z: 0.06 },
-        { rx: -0.18, rz: 0.68, sx: 0.11, sy: 0.28, x: -0.24, z: -0.02 },
-        { rx: -0.18, rz: -0.68, sx: 0.11, sy: 0.28, x: 0.24, z: -0.02 },
-        { rx: 0.42, rz: 0.18, sx: 0.11, sy: 0.29, x: -0.06, z: 0.16 },
-        { rx: 0.42, rz: -0.18, sx: 0.11, sy: 0.29, x: 0.06, z: 0.16 },
-      ];
-      spikes.forEach((h) => {
-        const coneGeo = new THREE.ConeGeometry(h.sx, h.sy, 8);
-        const spike = new THREE.Mesh(coneGeo, hairMat);
-        spike.position.set(h.x, h.sy * 0.35, h.z);
-        spike.rotation.set(h.rx, 0, h.rz);
-        const out = new THREE.Mesh(coneGeo, OUTLINE_MAT);
-        out.scale.set(1.088, 1.044, 1.088);
-        spike.add(out);
-        hairGroup.add(spike);
-      });
-    } else if (hairStyle === 'bob') {
-      const cap = ellipsoid(0.72, 0.34, 0.68, hairMat, 22, true, 0.032);
-      cap.position.set(0, -0.02, -0.04);
-      hairGroup.add(cap);
-      // Flequillo frontal esculpido
-      [-0.22, -0.07, 0.08, 0.22].forEach((bx, idx) => {
-        const bang = ellipsoid(0.11, 0.16, 0.08, hairMat, 12, true, 0.02);
-        bang.position.set(bx, -0.12, 0.56 - Math.abs(bx) * 0.25);
-        bang.rotation.z = (idx - 1.5) * 0.08;
-        hairGroup.add(bang);
-      });
-      // Mechones laterales Bob
-      [-1, 1].forEach((side) => {
-        const lock = ellipsoid(0.16, 0.42, 0.22, hairMat, 16, true, 0.028);
-        lock.position.set(side * 0.68, -0.34, 0.12);
-        lock.rotation.z = side * 0.12;
-        hairGroup.add(lock);
-      });
-    } else if (hairStyle === 'afro') {
-      const puffs = [
-        { x: 0, y: 0.18, z: 0, r: 0.42 },
-        { x: -0.34, y: 0.08, z: 0.08, r: 0.32 },
-        { x: 0.34, y: 0.08, z: 0.08, r: 0.32 },
-        { x: 0, y: 0.1, z: 0.32, r: 0.3 },
-        { x: 0, y: 0.08, z: -0.3, r: 0.32 },
-        { x: -0.24, y: 0.24, z: -0.16, r: 0.28 },
-        { x: 0.24, y: 0.24, z: -0.16, r: 0.28 },
-      ];
-      puffs.forEach((p) => {
-        const orb = ellipsoid(p.r, p.r * 0.92, p.r, hairMat, 18, true, 0.032);
-        orb.position.set(p.x, p.y, p.z);
-        hairGroup.add(orb);
-      });
-    } else if (hairStyle === 'ponytail') {
-      const baseCap = ellipsoid(0.62, 0.24, 0.58, hairMat, 18, true, 0.028);
-      baseCap.position.set(0, -0.02, 0);
-      const tie = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.04, 10, 18), feetMat);
-      tie.position.set(0, 0.18, -0.38);
-      tie.rotation.x = 0.6;
-      const tail = ellipsoid(0.22, 0.46, 0.2, hairMat, 18, true, 0.03);
-      tail.position.set(0, 0.28, -0.62);
-      tail.rotation.x = -0.65;
-      hairGroup.add(baseCap, tie, tail);
-    } else if (hairStyle === 'twintails') {
-      const bangs = ellipsoid(0.54, 0.2, 0.48, hairMat, 18, true, 0.025);
-      bangs.position.set(0, -0.02, 0.08);
-      hairGroup.add(bangs);
-      [-1, 1].forEach((side) => {
-        const ribbon = ellipsoid(0.11, 0.11, 0.11, feetMat, 12, true, 0.02);
-        ribbon.position.set(side * 0.62, -0.02, -0.04);
-        const tailCone = new THREE.ConeGeometry(0.2, 0.58, 12);
-        const tailMesh = new THREE.Mesh(tailCone, hairMat);
-        tailMesh.position.set(side * 0.82, -0.24, -0.04);
-        tailMesh.rotation.z = side * 2.45;
-        const out = new THREE.Mesh(tailCone, OUTLINE_MAT);
-        out.scale.set(1.083, 1.044, 1.083);
-        tailMesh.add(out);
-        hairGroup.add(ribbon, tailMesh);
-      });
-    } else if (hairStyle === 'pompadour') {
-      const wave = ellipsoid(0.36, 0.28, 0.54, hairMat, 20, true, 0.032);
-      wave.position.set(0, 0.14, 0.24);
-      wave.rotation.x = -0.25;
-      const sideSlick = ellipsoid(0.56, 0.2, 0.48, hairMat, 16, true, 0.026);
-      sideSlick.position.set(0, -0.02, -0.05);
-      hairGroup.add(sideSlick, wave);
-    } else if (hairStyle === 'curly') {
-      const curlCoords = [
-        [-0.38, -0.04, 0.34],
-        [-0.18, 0.06, 0.46],
-        [0.0, 0.1, 0.48],
-        [0.18, 0.06, 0.46],
-        [0.38, -0.04, 0.34],
-        [-0.48, -0.1, 0.1],
-        [0.48, -0.1, 0.1],
-        [0, 0.16, 0.16],
-      ] as const;
-      curlCoords.forEach(([cx, cy, cz]) => {
-        const c = ellipsoid(0.18, 0.17, 0.18, hairMat, 14, true, 0.025);
-        c.position.set(cx, cy, cz);
-        hairGroup.add(c);
-      });
-    } else if (hairStyle === 'mohawk') {
-      for (let i = 0; i < 5; i++) {
-        const coneGeo = new THREE.ConeGeometry(0.12, 0.38 - i * 0.03, 8);
-        const mSpike = new THREE.Mesh(coneGeo, hairMat);
-        const zOff = 0.36 - i * 0.2;
-        mSpike.position.set(0, 0.16 - Math.abs(i - 1.5) * 0.03, zOff);
-        mSpike.rotation.x = (1.5 - i) * 0.22;
-        const out = new THREE.Mesh(coneGeo, OUTLINE_MAT);
-        out.scale.set(1.088, 1.044, 1.088);
-        mSpike.add(out);
-        hairGroup.add(mSpike);
-      }
-    } else if (hairStyle === 'bun') {
-      const base = ellipsoid(0.58, 0.22, 0.54, hairMat, 18, true, 0.026);
-      base.position.set(0, -0.04, 0);
-      const bunBall = ellipsoid(0.28, 0.26, 0.28, hairMat, 18, true, 0.03);
-      bunBall.position.set(0, 0.28, -0.08);
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 8, 18), goldMat);
-      band.rotation.x = Math.PI / 2;
-      band.position.set(0, 0.14, -0.08);
-      hairGroup.add(base, bunBall, band);
-    } else if (hairStyle === 'short') {
-      const cap = ellipsoid(0.7, 0.3, 0.66, hairMat, 22, true, 0.03);
-      cap.position.set(0, -0.04, -0.04);
-      const fringe = ellipsoid(0.46, 0.13, 0.16, hairMat, 16, true, 0.022);
-      fringe.position.set(0.06, -0.08, 0.5);
-      fringe.rotation.z = -0.12;
-      hairGroup.add(cap, fringe);
-      [-1, 1].forEach((side) => {
-        const side_ = ellipsoid(0.12, 0.24, 0.3, hairMat, 14, true, 0.02);
-        side_.position.set(side * 0.64, -0.24, -0.04);
-        hairGroup.add(side_);
-      });
-    } else if (hairStyle === 'long') {
-      const cap = ellipsoid(0.72, 0.32, 0.68, hairMat, 22, true, 0.03);
-      cap.position.set(0, -0.02, -0.04);
-      const back = ellipsoid(0.7, 0.78, 0.3, hairMat, 22, true, 0.03);
-      back.position.set(0, -0.62, -0.36);
-      hairGroup.add(cap, back);
-      [-0.24, -0.08, 0.08, 0.24].forEach((bx, idx) => {
-        const bang = ellipsoid(0.11, 0.15, 0.08, hairMat, 12, true, 0.02);
-        bang.position.set(bx, -0.12, 0.56 - Math.abs(bx) * 0.25);
-        bang.rotation.z = (idx - 1.5) * 0.08;
-        hairGroup.add(bang);
-      });
-      [-1, 1].forEach((side) => {
-        const lock = ellipsoid(0.15, 0.62, 0.2, hairMat, 16, true, 0.026);
-        lock.position.set(side * 0.68, -0.56, 0.08);
-        lock.rotation.z = side * 0.06;
-        hairGroup.add(lock);
-      });
-    } else if (hairStyle === 'buzz') {
-      // Pelo al ras: casquete que sigue la forma de la cabeza
-      const hd = isHuman ? humanHead : { w: 0.68, h: 0.76, d: 0.64 };
-      const hcY = isHuman ? 0.42 : 0.36;
-      const buzz = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI * 0.4),
-        hairMat
-      );
-      buzz.scale.set((hd.w * 1.03) / hairScale, (hd.h * 1.03) / hairScale, (hd.d * 1.03) / hairScale);
-      buzz.position.set(0, (hcY - hairCrownY) / hairScale, -0.04 / hairScale);
-      buzz.rotation.x = -0.18;
-      const out = new THREE.Mesh(buzz.geometry, OUTLINE_MAT);
-      out.scale.setScalar(1.011);
-      buzz.add(out);
-      hairGroup.add(buzz);
-    } else if (hairStyle === 'sidepart') {
-      const cap = ellipsoid(0.7, 0.3, 0.66, hairMat, 22, true, 0.03);
-      cap.position.set(0, -0.04, -0.04);
-      const swoop = ellipsoid(0.42, 0.17, 0.3, hairMat, 18, true, 0.025);
-      swoop.position.set(0.16, 0.02, 0.38);
-      swoop.rotation.z = -0.3;
-      const part = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.5), toon(customHairColor.clone().offsetHSL(0, 0, -0.12), toonRamp));
-      part.position.set(-0.22, 0.25, 0.05);
-      hairGroup.add(cap, swoop, part);
-      [-1, 1].forEach((side) => {
-        const sd = ellipsoid(0.12, 0.24, 0.3, hairMat, 14, true, 0.02);
-        sd.position.set(side * 0.64, -0.24, -0.04);
-        hairGroup.add(sd);
-      });
-    } else if (hairStyle === 'wavy') {
-      const cap = ellipsoid(0.72, 0.32, 0.68, hairMat, 22, true, 0.03);
-      cap.position.set(0, -0.02, -0.04);
-      hairGroup.add(cap);
-      [-1, 1].forEach((side) => {
-        for (let i = 0; i < 3; i++) {
-          const wave = ellipsoid(0.17, 0.17, 0.2, hairMat, 14, true, 0.022);
-          wave.position.set(side * (0.66 + (i % 2) * 0.05), -0.28 - i * 0.2, 0.06 - i * 0.04);
-          hairGroup.add(wave);
-        }
-      });
-      const back = ellipsoid(0.68, 0.55, 0.28, hairMat, 20, true, 0.03);
-      back.position.set(0, -0.45, -0.36);
-      hairGroup.add(back);
-      const fringe = ellipsoid(0.5, 0.14, 0.18, hairMat, 16, true, 0.022);
-      fringe.position.set(-0.08, -0.07, 0.48);
-      fringe.rotation.z = 0.15;
-      hairGroup.add(fringe);
-    } else if (hairStyle === 'braids') {
-      const cap = ellipsoid(0.7, 0.3, 0.66, hairMat, 22, true, 0.03);
-      cap.position.set(0, -0.03, -0.02);
-      const part = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.6), toon(customHairColor.clone().offsetHSL(0, 0, -0.12), toonRamp));
-      part.position.set(0, 0.27, 0.02);
-      hairGroup.add(cap, part);
-      [-1, 1].forEach((side) => {
-        for (let i = 0; i < 5; i++) {
-          const knot = ellipsoid(0.12 - i * 0.008, 0.11, 0.12 - i * 0.008, hairMat, 12, true, 0.02);
-          knot.position.set(side * (0.62 + i * 0.02), -0.3 - i * 0.17, 0.04);
-          hairGroup.add(knot);
-        }
-        const tie = ellipsoid(0.06, 0.05, 0.06, feetMat, 10, true, 0.015);
-        tie.position.set(side * 0.72, -1.15, 0.04);
-        hairGroup.add(tie);
-      });
-    }
-
-    if (isSlim && !isHuman && config.hairHighlight && hairStyle !== 'buzz') {
-      // Mechas de color sobre el pelo (como las de Tomodachi Life)
-      const hlMat = toon(new THREE.Color(config.hairHighlight), toonRamp);
-      // Franjas que siguen la curva del casquete de pelo (no sobresalen)
-      [-0.75, -0.28, 0.18, 0.62, 2.4, 3.9].forEach((dphi) => {
-        const strip = new THREE.Mesh(
-          new THREE.SphereGeometry(1, 4, 12, Math.PI / 2 + dphi - 0.07, 0.14, Math.PI * 0.08, Math.PI * 0.42),
-          hlMat
-        );
-        strip.scale.set(0.735, 0.345, 0.695);
-        strip.position.set(0, -0.03, -0.04);
-        hairGroup.add(strip);
-      });
-    }
-    body.add(hairGroup);
-  }
-
-  // --- 10 MODELOS DE OJOS 3D ESTILO TOMODACHI LIFE ---
-  const eyes = new THREE.Group();
-  eyes.position.set(0, 0.2 + headY + eyeDY, 0);
-  body.add(eyes);
-  const eyeParts: THREE.Group[] = [];
-  const makeEye = (side: number) => {
-    const g = new THREE.Group();
-    const eyeSpread = (isSlim ? 0.2 : 0.25) + eyeDX;
-    g.position.set(side * eyeSpread, 0, faceZ - 0.04);
-    // Inclinación tipo Mii: rasgos positivos suben la esquina exterior.
-    g.rotation.set(-0.14, side * 0.25, -side * eyeRot);
-
-    const isWinkRightEye = config.eyeStyle === 'wink' && side === 1;
-
-    if (config.eyeStyle === 'happy' || isWinkRightEye) {
-      const arc = new THREE.Mesh(
-        new THREE.TorusGeometry(0.1, 0.028, 10, 20, Math.PI),
-        eyeMat
-      );
-      arc.position.z = 0.03;
-      g.add(arc);
-    } else if (config.eyeStyle === 'cool') {
-      const sclera = ellipsoid(0.13, 0.075, 0.045, whiteMat, 16, true, 0.018);
-      const pupil = ellipsoid(0.055, 0.055, 0.035, eyeMat, 14, false);
-      pupil.position.set(0, -0.005, 0.035);
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.04, 0.08), eyeMat);
-      lid.position.set(0, 0.055, 0.03);
-      g.add(sclera, pupil, lid);
-    } else if (config.eyeStyle === 'sleepy') {
-      const eye = ellipsoid(0.1, 0.16, 0.06, eyeMat, 18, false);
-      const lid = ellipsoid(0.115, 0.095, 0.07, limbMat, 16, true, 0.018);
-      lid.position.set(0, 0.065, 0.01);
-      const shine = ellipsoid(0.028, 0.035, 0.02, whiteMat, 10, false);
-      shine.position.set(-0.02, -0.02, 0.05);
-      g.add(eye, lid, shine);
-    } else if (config.eyeStyle === 'heart') {
-      const eye = ellipsoid(0.115, 0.195, 0.065, eyeMat, 20, false);
-      const heartPupil = createHeartMesh(toon(0xff4d79, toonRamp));
-      heartPupil.scale.setScalar(0.55);
-      heartPupil.position.set(0, -0.01, 0.055);
-      const shine = ellipsoid(0.03, 0.04, 0.02, whiteMat, 10, false);
-      shine.position.set(-0.035, 0.08, 0.05);
-      g.add(eye, heartPupil, shine);
-    } else if (config.eyeStyle === 'starry') {
-      const eye = ellipsoid(0.11, 0.19, 0.065, eyeMat, 20, false);
-      const starPupil = new THREE.Mesh(new THREE.OctahedronGeometry(0.052, 0), goldMat);
-      starPupil.scale.set(1, 1, 0.45);
-      starPupil.position.set(0, -0.01, 0.05);
-      const shine = ellipsoid(0.028, 0.04, 0.02, whiteMat, 10, false);
-      shine.position.set(-0.03, 0.08, 0.055);
-      g.add(eye, starPupil, shine);
-    } else if (
-      config.eyeStyle === 'almond' ||
-      config.eyeStyle === 'lashes' ||
-      config.eyeStyle === 'narrow' ||
-      config.eyeStyle === 'droopy' ||
-      config.eyeStyle === 'bright' ||
-      config.eyeStyle === 'calm'
-    ) {
-      // Ojos "de persona": esclerótica, iris del color elegido, pupila y brillo.
-      const st = config.eyeStyle;
-      const dims =
-        st === 'almond' ? { w: 0.14, h: 0.09, ir: 0.062 }
-        : st === 'narrow' ? { w: 0.13, h: 0.055, ir: 0.048 }
-        : st === 'bright' ? { w: 0.125, h: 0.145, ir: 0.085 }
-        : { w: 0.12, h: 0.125, ir: 0.068 };
-      const sclera = ellipsoid(dims.w, dims.h, 0.05, whiteMat, 18, true, 0.018);
-      const iris = ellipsoid(dims.ir, Math.min(dims.ir * 1.12, dims.h * 0.95), 0.035, irisMat, 16, false);
-      iris.position.set(0, -0.004, 0.032);
-      const pupil = ellipsoid(dims.ir * 0.5, Math.min(dims.ir * 0.56, dims.h * 0.5), 0.03, eyeMat, 12, false);
-      pupil.position.set(0, -0.004, 0.048);
-      const shine = ellipsoid(0.02, 0.024, 0.012, whiteMat, 8, false);
-      shine.position.set(-dims.ir * 0.35, dims.h * 0.25, 0.062);
-      g.add(sclera, iris, pupil, shine);
-      if (st === 'bright') {
-        const s2 = ellipsoid(0.012, 0.012, 0.01, whiteMat, 8, false);
-        s2.position.set(dims.ir * 0.35, -dims.h * 0.25, 0.062);
-        g.add(s2);
-      }
-      if (st === 'almond') sclera.rotation.z = side * 0.12;
-      if (st === 'lashes') {
-        [0, 1, 2].forEach((i) => {
-          const lash = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.04, 4, 6), eyeMat);
-          const a = 0.5 + i * 0.35;
-          lash.position.set(side * Math.cos(a) * dims.w * 0.95, Math.sin(a) * dims.h * 0.95, 0.03);
-          lash.rotation.z = side * (a - Math.PI / 2);
-          g.add(lash);
-        });
-      }
-      if (st === 'droopy' || st === 'calm') {
-        // Párpado superior del color de la piel
-        const lid = ellipsoid(dims.w * 1.06, dims.h * 0.62, 0.06, limbMat, 16, true, 0.016);
-        lid.position.set(0, dims.h * (st === 'calm' ? 0.5 : 0.62), 0.012);
-        if (st === 'droopy') lid.rotation.z = side * -0.35;
-        g.add(lid);
-      }
-    } else if (isSlim && config.eyeStyle === 'round') {
-      const sclera = ellipsoid(0.135, 0.165, 0.06, whiteMat, 18, true, 0.02);
-      if (isHuman) {
-        const ring = ellipsoid(0.08, 0.095, 0.035, irisMat, 16, false);
-        ring.position.set(0, -0.005, 0.04);
-        g.add(ring);
-      }
-      const pupil = ellipsoid(0.055, 0.065, 0.04, eyeMat, 14, false);
-      pupil.position.set(0, 0, 0.045);
-      const shine = ellipsoid(0.022, 0.028, 0.02, whiteMat, 10, false);
-      shine.position.set(-0.02, 0.03, 0.075);
-      g.add(sclera, pupil, shine);
-    } else {
-      const big =
-        config.eyeStyle === 'anime'
-          ? 1.26
-          : config.eyeStyle === 'sparkle'
-            ? 1.15
-            : config.eyeStyle === 'fierce'
-              ? 0.95
-              : 1;
-      const eye = ellipsoid(0.1 * big, 0.19 * big, 0.065, eyeMat, 20, false);
-      const iris = ellipsoid(0.074 * big, 0.09 * big, 0.05, irisMat, 18, false);
-      iris.position.set(0, -0.072 * big, 0.022);
-      const shine = ellipsoid(0.037 * big, 0.06 * big, 0.025, whiteMat, 14, false);
-      shine.position.set(-0.028 * big, 0.08 * big, 0.05);
-      g.add(eye, iris, shine);
-      if (config.eyeStyle === 'sparkle' || config.eyeStyle === 'anime') {
-        const s2 = ellipsoid(0.022, 0.022, 0.012, whiteMat, 10, false);
-        s2.position.set(0.036, -0.09, 0.055);
-        const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.024), whiteMat);
-        star.position.set(0.036, 0.05, 0.055);
-        g.add(s2, star);
-      }
-    }
-    eyeParts.push(g);
-    return g;
-  };
-  eyes.add(makeEye(-1), makeEye(1));
-
-  // --- 10 MODELOS DE CEJAS 3D ESTILO TOMODACHI LIFE ---
-  const browStyle = config.browStyle ?? 'soft';
-  const browSpread = (isSlim ? 0.21 : 0.26) + eyeDX + browDX;
-  const browBaseY = headY + (isSlim ? 0.34 : 0.43) + eyeDY + browDY;
-  const browThickness =
-    browStyle === 'bold' || browStyle === 'unibrow'
-      ? 0.038
-      : browStyle === 'short'
-        ? 0.018
-        : 0.022;
-  const browWidth =
-    browStyle === 'bold'
-      ? 0.13
-      : browStyle === 'short'
-        ? 0.065
-        : browStyle === 'unibrow'
-          ? 0.16
-          : 0.11;
-
-  const makeBrow = (side: number) => {
-    const bg = new THREE.Group();
-    bg.position.set(side * browSpread, browBaseY, faceZ - 0.03);
-    bg.rotation.y = side * 0.25;
-    if (browStyle === 'none') {
-      return bg;
-    }
-    if (browStyle === 'dot') {
-      const dot = ellipsoid(0.048, 0.038, 0.025, eyeMat, 12, false);
-      bg.add(dot);
-      return bg;
-    }
-    if (browStyle === 'slit' && side === 1) {
-      const mainSeg = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.022, 0.065, 8, 12),
-        eyeMat
-      );
-      mainSeg.rotation.z = Math.PI / 2;
-      mainSeg.position.x = -0.025;
-      const tipSeg = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.022, 0.02, 8, 12),
-        eyeMat
-      );
-      tipSeg.rotation.z = Math.PI / 2;
-      tipSeg.position.x = 0.055;
-      bg.add(mainSeg, tipSeg);
-      return bg;
-    }
-    const mesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(browThickness, browWidth, 8, 12),
-      eyeMat
-    );
-    mesh.rotation.z = Math.PI / 2;
-    bg.add(mesh);
-    return bg;
-  };
-  const browL = makeBrow(-1);
-  const browR = makeBrow(1);
-  browL.scale.set(browK * browSX, browK, browK);
-  browR.scale.set(browK * browSX, browK, browK);
-  body.add(browL, browR);
-
-  const baseBrowAngle =
-    browStyle === 'hero' || config.eyeStyle === 'fierce'
-      ? -0.26
-      : browStyle === 'worried'
-        ? 0.24
-        : browStyle === 'raised'
-          ? 0.14
-          : 0.04;
-
-  // --- 10 MODELOS DE MEJILLAS Y RASGOS FACIALES 3D ---
-  const blushStyle = config.blushStyle ?? 'pink';
-  const cheekX = isSlim ? 0.36 : 0.45;
-  // --- 10 MODELOS DE BOCA 3D PERSONALIZABLES ---
-  const mouth = new THREE.Group();
-  mouth.position.set(0, headY + (isSlim ? -0.04 : 0.02) + mouthDY, faceZ + 0.01);
-  mouth.scale.set(mouthK * mouthSX, mouthK, mouthK);
-  mouth.rotation.x = -0.05;
-  body.add(mouth);
-
-  const mouthStyle = config.mouthStyle ?? 'smile';
-  const smileGroup = new THREE.Group();
-
-  if (mouthStyle === 'cat' || mouthStyle === 'wavy') {
-    [-1, 1].forEach((side) => {
-      const lobe = new THREE.Mesh(
-        new THREE.TorusGeometry(0.044, 0.016, 10, 18, Math.PI),
-        mouthMat
-      );
-      lobe.rotation.z = mouthStyle === 'wavy' && side === 1 ? 0 : Math.PI;
-      lobe.position.x = side * 0.042;
-      smileGroup.add(lobe);
-    });
-  } else if (mouthStyle === 'o') {
-    const oRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.048, 0.016, 10, 20),
-      mouthMat
-    );
-    smileGroup.add(oRing);
-  } else if (mouthStyle === 'kiss') {
-    [-1, 1].forEach((sy) => {
-      const lip = new THREE.Mesh(
-        new THREE.TorusGeometry(0.032, 0.014, 8, 16, Math.PI),
-        mouthMat
-      );
-      lip.rotation.z = -Math.PI / 2;
-      lip.position.y = sy * 0.024;
-      smileGroup.add(lip);
-    });
-  } else if (mouthStyle === 'line') {
-    const line = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.09, 4, 8), mouthMat);
-    line.rotation.z = Math.PI / 2;
-    smileGroup.add(line);
-  } else if (mouthStyle === 'small') {
-    const arc = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.015, 8, 16, Math.PI), mouthMat);
-    arc.rotation.z = Math.PI;
-    smileGroup.add(arc);
-  } else if (mouthStyle === 'lips') {
-    const lipMat = toon(new THREE.Color(config.lipColor ?? '#D9606E'), toonRamp);
-    const upper = ellipsoid(0.075, 0.022, 0.025, lipMat, 12, true, 0.008);
-    upper.position.y = 0.014;
-    const lower = ellipsoid(0.068, 0.03, 0.025, lipMat, 12, true, 0.008);
-    lower.position.y = -0.02;
-    const seam = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.11, 4, 8), mouthMat);
-    seam.rotation.z = Math.PI / 2;
-    seam.position.z = 0.02;
-    smileGroup.add(upper, lower, seam);
-  } else if (mouthStyle === 'teeth' || mouthStyle === 'laugh') {
-    const big = mouthStyle === 'laugh';
-    const cav = ellipsoid(big ? 0.09 : 0.08, big ? 0.07 : 0.042, 0.02, mouthMat, 16, false);
-    cav.position.y = big ? -0.03 : -0.018;
-    const teeth = ellipsoid(big ? 0.074 : 0.072, 0.022, 0.02, whiteMat, 12, false);
-    teeth.position.set(0, big ? 0.012 : -0.006, 0.012);
-    smileGroup.add(cav, teeth);
-    if (big) {
-      const tng = ellipsoid(0.045, 0.024, 0.016, tongueMat, 12, false);
-      tng.position.set(0, -0.07, 0.014);
-      smileGroup.add(tng);
-    }
-  } else if (mouthStyle === 'pout') {
-    const poutArc = new THREE.Mesh(
-      new THREE.TorusGeometry(0.056, 0.017, 10, 20, Math.PI),
-      mouthMat
-    );
-    poutArc.position.y = -0.04;
-    smileGroup.add(poutArc);
-  } else {
-    const smileRadius =
-      isMeeseeks ? 0.18 : mouthStyle === 'grin' ? 0.098 : 0.066;
-    const smileTube = isMeeseeks ? 0.02 : 0.018;
-    const smileArc = new THREE.Mesh(
-      new THREE.TorusGeometry(smileRadius, smileTube, 10, 24, Math.PI),
-      mouthMat
-    );
-    smileArc.rotation.z =
-      Math.PI + (mouthStyle === 'smirk' ? 0.24 : 0);
-    smileGroup.add(smileArc);
-
-    if (mouthStyle === 'grin') {
-      const teeth = ellipsoid(smileRadius * 0.78, 0.032, 0.016, whiteMat, 14, false);
-      teeth.position.set(0, -0.028, 0.005);
-      smileGroup.add(teeth);
-    } else if (mouthStyle === 'tongue') {
-      const outTongue = ellipsoid(0.038, 0.048, 0.02, tongueMat, 12, true, 0.012);
-      outTongue.position.set(0.015, -0.068, 0.012);
-      smileGroup.add(outTongue);
-    } else if (mouthStyle === 'fangs') {
-      [-1, 1].forEach((side) => {
-        const fang = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.042, 8), whiteMat);
-        fang.rotation.x = Math.PI;
-        fang.position.set(side * 0.042, -0.045, 0.012);
-        smileGroup.add(fang);
-      });
-    }
-  }
-
-  const open = new THREE.Group();
-  const cavity = ellipsoid(
-    isMeeseeks ? 0.15 : 0.08,
-    isMeeseeks ? 0.095 : 0.068,
-    0.028,
-    mouthMat,
-    16,
-    false
-  );
-  const tongue = ellipsoid(
-    isMeeseeks ? 0.09 : 0.048,
-    0.026,
-    0.02,
-    tongueMat,
-    14,
-    false
-  );
-  tongue.position.set(0, -0.028, 0.01);
-  open.add(cavity, tongue);
-
-  const frown = new THREE.Mesh(
-    new THREE.TorusGeometry(isMeeseeks ? 0.14 : 0.065, 0.02, 10, 20, Math.PI),
-    mouthMat
-  );
-  frown.position.y = -0.055;
-  mouth.add(smileGroup, open, frown);
-
   // Medidas aproximadas de la cabeza de cada silueta (para barba y gafas de nieve).
-  const headInfo = isHuman
-    ? { w: humanHead.w, h: humanHead.h, d: humanHead.d, y: 0.42 }
-    : isMeeseeks
-      ? { w: 0.68, h: 0.76, d: 0.64, y: 0.36 }
-      : isCat
-        ? { w: 0.86, h: 0.74, d: 0.8, y: 0.24 }
-        : isDragon
-          ? { w: 0.88, h: 0.78, d: 0.84, y: 0.2 }
-          : { w: 1.0, h: 0.95, d: 0.96, y: 0 };
+  const headInfo = isDragon ? { w: 0.88, h: 0.78, d: 0.84, y: 0.2 } : { w: 1.0, h: 0.95, d: 0.96, y: 0 };
 
   // --- CARA DE CALCOMANÍAS (todas las especies) ---
   const elevOf = (y: number) => Math.asin(Math.max(-0.95, Math.min(0.95, (y - headInfo.y) / headInfo.h)));
   const rowOf = (elev: number) => (Math.PI / 2 - elev - FACE_THETA_START) / FACE_THETA_SPAN;
-  const decalSize = isHuman ? 1 : isMeeseeks ? 1.12 : isCat || isDragon ? 1.25 : 1.38;
-  const faceLayout: FaceLayout = isHuman
-    ? {
-        eyeElev: Math.PI / 2 - (FACE_THETA_START + FACE_LAYOUT.eyes * FACE_THETA_SPAN),
-        eyeAz: (74 / FACE_TEX_W) * FACE_PHI_SPAN,
-        browElev: Math.PI / 2 - (FACE_THETA_START + FACE_LAYOUT.brows * FACE_THETA_SPAN),
-        mouthElev: Math.PI / 2 - (FACE_THETA_START + FACE_LAYOUT.mouth * FACE_THETA_SPAN),
-        eyeSize: 0.3,
-        browSize: 0.3,
-        mouthSize: 0.32,
-      }
-    : {
-        eyeElev: elevOf(headY + 0.2),
-        eyeAz: Math.asin(Math.min(0.9, (isSlim ? 0.2 : 0.25) / headInfo.w)),
-        browElev: elevOf(headY + (isSlim ? 0.38 : 0.45)),
-        mouthElev: elevOf(headY + (isSlim ? -0.06 : 0.0)),
-        eyeSize: 0.3 * decalSize,
-        browSize: 0.24 * decalSize,
-        mouthSize: (isMeeseeks ? 0.46 : 0.2) * decalSize,
-        // Hocicos: la boca va sobre el morro
-        mouthAnchor: isBear
-          ? { p: new THREE.Vector3(0, -0.06, 1.05), n: new THREE.Vector3(0, -0.25, 1).normalize() }
-          : config.species === 'fox'
-            ? { p: new THREE.Vector3(0, -0.14, 1.05), n: new THREE.Vector3(0, -0.2, 1).normalize() }
-            : isDragon
-              ? { p: new THREE.Vector3(0, 0.06, 0.97), n: new THREE.Vector3(0, -0.3, 1).normalize() }
-              : undefined,
-      };
+  const decalSize = isDragon ? 1.25 : 1.38;
+  const faceLayout: FaceLayout = {
+    eyeElev: elevOf(headY + 0.2),
+    eyeAz: Math.asin(Math.min(0.9, 0.25 / headInfo.w)),
+    browElev: elevOf(headY + 0.45),
+    mouthElev: elevOf(headY),
+    eyeSize: buddy?.eyeSize ?? 0.3 * decalSize,
+    browSize: 0.24 * decalSize,
+    mouthSize: buddy?.mouthSize ?? 0.2 * decalSize,
+    eyeAnchors: buddy?.eyeAnchors,
+    // Hocicos: la boca va sobre el morro
+    mouthAnchor: buddy?.mouthAnchor ?? (isBear
+      ? { p: new THREE.Vector3(0, -0.06, 1.05), n: new THREE.Vector3(0, -0.25, 1).normalize() }
+      : config.species === 'fox'
+        ? { p: new THREE.Vector3(0, -0.14, 1.05), n: new THREE.Vector3(0, -0.2, 1).normalize() }
+        : isDragon
+          ? { p: new THREE.Vector3(0, 0.06, 0.97), n: new THREE.Vector3(0, -0.3, 1).normalize() }
+          : undefined),
+  };
   const face = buildFaceDecals(
     config,
     { w: headInfo.w, h: headInfo.h, d: headInfo.d, cy: headInfo.y },
     faceLayout,
     {
-      humanoid: isSlim,
+      humanoid: false,
       material: (map) =>
         Object.assign(toon(0xffffff, toonRamp), {
           map,
@@ -1572,16 +669,14 @@ export function createPetScene(
   // Rubor, maquillaje, nariz de trazo, lunar y pintura facial: una textura fija sobre la cara.
   const staticFaceTex = drawMiiFace(config, 'open', 'normal', {
     parts: { eyes: false, brows: false, mouth: false },
-    nose: isSlim,
-    layout: isHuman
-      ? FACE_LAYOUT
-      : {
-          brows: rowOf(faceLayout.browElev),
-          eyes: rowOf(faceLayout.eyeElev),
-          nose: rowOf((faceLayout.eyeElev + faceLayout.mouthElev) / 2),
-          mouth: rowOf(faceLayout.mouthElev),
-          cheeks: rowOf(elevOf(headY + 0.05)),
-        },
+    nose: false,
+    layout: {
+      brows: rowOf(faceLayout.browElev),
+      eyes: rowOf(faceLayout.eyeElev),
+      nose: rowOf((faceLayout.eyeElev + faceLayout.mouthElev) / 2),
+      mouth: rowOf(faceLayout.mouthElev),
+      cheeks: rowOf(elevOf(headY + 0.05)),
+    },
   });
   faceCache.set('static', staticFaceTex);
   const staticFace = new THREE.Mesh(
@@ -1598,88 +693,7 @@ export function createPetScene(
   staticFace.position.y = headInfo.y;
   staticFace.renderOrder = 2;
   body.add(staticFace);
-  // La cara 3D antigua se mantiene solo como ancla (bigote) y queda oculta.
-  eyes.visible = false;
-  browL.visible = false;
-  browR.visible = false;
-  mouth.visible = false;
-  mouth.position.copy(face.mouthPoint);
 
-  // --- NARIZ (personas, chibi y muñeco esbelto) ---
-  const noseStyle = config.noseStyle ?? (isHuman ? 'button' : 'none');
-  // --- BARBA Y BIGOTE (mismo color que el cabello) ---
-  // Barba y bigote solo en siluetas humanas: los animales y el chibi conservan su cara.
-  const facialHair = isSlim ? config.facialHair ?? 'none' : 'none';
-  const fhColor = config.beardColor ? new THREE.Color(config.beardColor) : customHairColor;
-  const fhMat = config.beardColor ? toon(fhColor, toonRamp) : hairMat;
-  if (facialHair !== 'none') {
-    const fh = new THREE.Group();
-    fh.position.copy(mouth.position);
-    fh.position.y += mustDY;
-    fh.scale.set(mustK * mustSX * (isSlim ? 1 : 1.1), mustK * (isSlim ? 1 : 1.1), mustK);
-    const addMustache = () => {
-      [-1, 1].forEach((side) => {
-        const half = ellipsoid(0.085, 0.035, 0.03, fhMat, 12, true, 0.012);
-        half.position.set(side * 0.06, 0.06, 0.02);
-        half.rotation.z = side * 0.25;
-        fh.add(half);
-        if (facialHair === 'curly') {
-          const curl = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.012, 6, 14, Math.PI * 1.5), fhMat);
-          curl.position.set(side * 0.155, 0.075, 0.015);
-          curl.rotation.z = side > 0 ? -Math.PI / 2 : Math.PI;
-          fh.add(curl);
-        }
-      });
-    };
-    if (facialHair === 'mustache' || facialHair === 'curly') addMustache();
-    if (facialHair === 'goatee') {
-      const g = ellipsoid(0.06, 0.08, 0.04, fhMat, 12, true, 0.012);
-      g.position.set(0, -0.11, -0.01);
-      fh.add(g);
-    }
-    if (facialHair === 'beard') {
-      addMustache();
-    }
-    body.add(fh);
-    if (facialHair === 'beard') {
-      // Barba completa: casquete que abraza la mandíbula por debajo de la boca.
-      // Empieza justo debajo de la boca (en personas la boca está dibujada más abajo)
-      const beardStart = isHuman ? (FACE_THETA_START + (FACE_LAYOUT.mouth + 0.07) * FACE_THETA_SPAN) / Math.PI : 0.58;
-      const beardGeo = new THREE.SphereGeometry(1, 30, 10, Math.PI / 2 - 1.3, 2.6, Math.PI * beardStart, Math.PI * (0.92 - beardStart));
-      const beardMat = toon(fhColor, toonRamp);
-      (beardMat as THREE.Material).side = THREE.DoubleSide;
-      const beard = new THREE.Mesh(beardGeo, beardMat);
-      beard.scale.set(headInfo.w * 1.06, headInfo.h * 1.08, headInfo.d * 1.1);
-      beard.position.y = headInfo.y + mouthDY;
-      const out = new THREE.Mesh(beardGeo, OUTLINE_MAT);
-      out.scale.setScalar(1.016);
-      beard.add(out);
-      body.add(beard);
-      // Patillas que unen la barba con el pelo
-      [-1, 1].forEach((side) => {
-        const burn = ellipsoid(0.06, 0.2, 0.13, fhMat, 12, true, 0.015);
-        burn.position.set(side * (headInfo.w - 0.04), headInfo.y - 0.08, headInfo.d * 0.3);
-        burn.rotation.y = side * 0.5;
-        body.add(burn);
-      });
-    } else if (facialHair === 'stubble') {
-      const stubbleMat = new THREE.MeshBasicMaterial({
-        color: fhColor,
-        transparent: true,
-        opacity: 0.16,
-        depthWrite: false,
-      });
-      const shadow = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 28, 10, Math.PI / 2 - 1.1, 2.2, Math.PI * 0.62, Math.PI * 0.28),
-        stubbleMat
-      );
-      shadow.scale.set(headInfo.w * 1.012, headInfo.h * 1.012, headInfo.d * 1.012);
-      shadow.position.y = headInfo.y;
-      body.add(shadow);
-    }
-  }
-
-  // --- LUNAR ---
   // --- GAFAS (independientes del gorro) ---
   const glassesId =
     config.glasses && config.glasses !== 'none'
@@ -1763,21 +777,20 @@ export function createPetScene(
     body.add(gl);
   }
 
-  const headEndIdx = body.children.length;
 
   // --- BRAZOS Y PIES TOON ---
   // (En personas son pivotes invisibles: su ángulo mueve las manos flotantes.)
-  const armL = isHuman ? new THREE.Mesh() : ellipsoid(
-    isHuman ? 0.11 : isSlim ? 0.13 : 0.17,
-    isHuman ? 0.25 : isSlim ? 0.42 : 0.27,
-    isHuman ? 0.11 : isSlim ? 0.13 : 0.17,
+  const armL = ellipsoid(
+    0.17,
+    0.27,
+    0.17,
     limbMat,
     20,
     true,
     0.032
   );
-  const armX = isHuman ? 0.52 : isSlim ? 0.62 : isCat || isDragon ? 0.78 : 0.94;
-  const armY = isHuman ? -0.4 : isSlim ? -0.18 : -0.12;
+  const armX = isDragon ? 0.78 : 0.94;
+  const armY = -0.12;
   armL.position.set(-armX, armY, 0.14);
   const armR = armL.clone();
   armR.position.x = armX;
@@ -1787,60 +800,26 @@ export function createPetScene(
   const footMeshes: THREE.Mesh[] = [];
   [-1, 1].forEach((side) => {
     const f = ellipsoid(
-      isHuman ? 0.15 : isSlim ? 0.22 : 0.31,
-      isHuman ? 0.1 : isSlim ? 0.15 : 0.17,
-      isHuman ? 0.22 : isSlim ? 0.36 : 0.43,
-      isHuman
-        ? toon(new THREE.Color(config.pantsColor ?? '#3B4A6B').multiplyScalar(0.5), toonRamp)
-        : feetMat,
+      0.31,
+      0.17,
+      0.43,
+      feetMat,
       20,
       true,
       0.035
     );
-    f.position.set(side * (isHuman ? 0.155 : isSlim ? 0.28 : 0.42), -0.88, isHuman ? 0.05 : 0.08);
-    f.rotation.y = side * (isHuman ? 0.08 : 0.22);
-    if (isHuman) {
-      // Zapatillas: suela blanca
-      const sole = ellipsoid(1.06, 0.32, 1.04, toon(0xffffff, toonRamp), 14, false);
-      sole.position.y = -0.62;
-      f.add(sole);
-    }
+    f.position.set(side * (0.42), -0.88, 0.08);
+    f.rotation.y = side * (0.22);
     body.add(f);
     footMeshes.push(f);
   });
 
-  // --- ANTENA CON CRISTAL LOW-POLY DE VOZ ---
-  const antenna = new THREE.Group();
-  antenna.position.set(0.02, isMeeseeks ? 1.08 : 0.9, -0.14);
-  const stalkCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0.02, 0.22, -0.04),
-    new THREE.Vector3(0.12, 0.42, 0.0),
-    new THREE.Vector3(0.24, 0.5, 0.1),
-  ]);
-  const stalk = new THREE.Mesh(
-    new THREE.TubeGeometry(stalkCurve, 16, 0.026, 8, false),
-    limbMat
-  );
-  const orbMat = new THREE.MeshBasicMaterial({ color: 0xffc94d });
-  const haloMat = new THREE.MeshBasicMaterial({
-    color: 0xffb800,
-    transparent: true,
-    opacity: 0.22,
-    depthWrite: false,
-  });
-  const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), orbMat);
-  orb.position.set(0.25, 0.52, 0.11);
-  const halo = new THREE.Mesh(new THREE.OctahedronGeometry(0.21, 0), haloMat);
-  halo.position.copy(orb.position);
-  antenna.add(stalk, orb, halo);
-  // Solo el muñeco esbelto lleva antena de voz; personas, chibi y animales hablan con la boca.
-  antenna.visible = isMeeseeks;
-  body.add(antenna);
-
   // --- 10 ACCESORIOS / SOMBREROS 3D TOON ---
   const acc = new THREE.Group();
   acc.position.y = headY * 0.65;
+  /** Piezas animadas de algunos gorros (hélice que gira, pompón/brote que se mece). */
+  let hatSpinner: THREE.Group | null = null;
+  let hatWobble: THREE.Object3D | null = null;
   const royalIndigo = toon(0x3b4cca, toonRamp);
   const coral = toon(0xff4d6d, toonRamp);
   const gold = toon(0xf4c44e, toonRamp);
@@ -2150,6 +1129,123 @@ export function createPetScene(
       acc.add(brim, crownC, dent, band);
       break;
     }
+    case 'propeller': {
+      // Gorra de gajos de colores con hélice que gira (más rápido cuando está feliz)
+      const colors = [accent, new THREE.Color(0xffd43b), new THREE.Color(0x38bdf8), new THREE.Color(0xff5c8a)];
+      for (let i = 0; i < 4; i++) {
+        const gajo = new THREE.Mesh(
+          new THREE.SphereGeometry(0.5, 12, 10, (i * Math.PI) / 2, Math.PI / 2, 0, Math.PI / 2),
+          toon(colors[i]!, toonRamp)
+        );
+        gajo.position.y = 0.78;
+        gajo.scale.y = 0.62;
+        acc.add(gajo);
+      }
+      const visor = ellipsoid(0.3, 0.03, 0.2, toon(accent, toonRamp), 16, true, 0.02);
+      visor.position.set(0, 0.8, 0.5);
+      const stem = cylinder(0.025, 0.025, 0.14, gold, 8, 0);
+      stem.position.y = 1.15;
+      hatSpinner = new THREE.Group();
+      hatSpinner.position.y = 1.23;
+      [0, 1].forEach((k) => {
+        const blade = ellipsoid(0.26, 0.02, 0.07, toon(k ? 0xff5c8a : 0x38bdf8, toonRamp), 12, true, 0.015);
+        blade.position.x = k ? 0.24 : -0.24;
+        blade.rotation.x = k ? 0.3 : -0.3;
+        hatSpinner!.add(blade);
+      });
+      acc.add(visor, stem, hatSpinner);
+      break;
+    }
+    case 'party': {
+      const coneMat = toon(accent, toonRamp);
+      const party = new THREE.Mesh(new THREE.ConeGeometry(0.27, 0.62, 20), coneMat);
+      party.position.set(0.14, 1.18, 0.05);
+      party.rotation.z = -0.22;
+      const dotMat = toon(0xffffff, toonRamp);
+      for (let i = 0; i < 6; i++) {
+        const a = i * 2.1;
+        const yy = -0.2 + (i % 3) * 0.14;
+        const rr = 0.27 * (0.5 - yy / 0.62) * 0.98;
+        const dot = ellipsoid(0.035, 0.035, 0.02, dotMat, 8, false);
+        dot.position.set(Math.sin(a) * rr, yy, Math.cos(a) * rr);
+        dot.lookAt(dot.position.clone().multiplyScalar(2));
+        party.add(dot);
+      }
+      const pom = ellipsoid(0.09, 0.09, 0.09, toon(0xffd43b, toonRamp), 12, true, 0.02);
+      pom.position.y = 0.34;
+      party.add(pom);
+      acc.add(party);
+      hatWobble = party;
+      break;
+    }
+    case 'sprout': {
+      const leafMat = toon(0x4cc96b, toonRamp);
+      const sprout = new THREE.Group();
+      sprout.position.y = 0.92;
+      const stemS = cylinder(0.025, 0.03, 0.22, toon(0x3fae5c, toonRamp), 8, 0);
+      stemS.position.y = 0.1;
+      sprout.add(stemS);
+      [-1, 1].forEach((side) => {
+        const leaf = ellipsoid(0.16, 0.05, 0.09, leafMat, 14, true, 0.02);
+        leaf.position.set(side * 0.13, 0.22, 0);
+        leaf.rotation.z = side * 0.45;
+        sprout.add(leaf);
+      });
+      acc.add(sprout);
+      hatWobble = sprout;
+      break;
+    }
+    case 'tiara': {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.03, 8, 30, Math.PI), gold);
+      band.position.set(0, 0.74, 0.12);
+      band.rotation.x = -0.55;
+      band.scale.set(1, 1, 1);
+      const gems = [0x7dd3fc, 0xff5c8a, 0x7dd3fc];
+      [-0.6, 0, 0.6].forEach((a, i) => {
+        const peak = new THREE.Mesh(new THREE.ConeGeometry(0.06, i === 1 ? 0.2 : 0.13, 6), gold);
+        peak.position.set(Math.sin(a) * 0.5, Math.cos(a) * 0.5 + 0.05, 0);
+        peak.rotation.z = -a;
+        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(i === 1 ? 0.07 : 0.05), new THREE.MeshBasicMaterial({ color: gems[i]! }));
+        gem.position.set(Math.sin(a) * 0.5, Math.cos(a) * 0.5, 0.03);
+        band.add(peak, gem);
+      });
+      acc.add(band);
+      break;
+    }
+    case 'santa': {
+      const red = toon(0xe11d48, toonRamp);
+      const white = toon(0xffffff, toonRamp);
+      const capS = new THREE.Mesh(new THREE.ConeGeometry(0.52, 0.8, 22), red);
+      capS.position.set(0.08, 1.18, -0.02);
+      capS.rotation.z = -0.5;
+      const brim = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.1, 10, 28), white);
+      brim.rotation.x = Math.PI / 2;
+      brim.position.set(0, 0.84, 0);
+      const pom = ellipsoid(0.12, 0.12, 0.12, white, 12, true, 0.02);
+      pom.position.set(0.5, 1.35, -0.02);
+      acc.add(capS, brim, pom);
+      break;
+    }
+    case 'mushroom': {
+      const red = toon(0xef4444, toonRamp);
+      const capM = new THREE.Mesh(new THREE.SphereGeometry(0.72, 26, 16, 0, Math.PI * 2, 0, Math.PI / 2), red);
+      capM.position.y = 0.8;
+      capM.scale.y = 0.62;
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 8, 32), toon(0xfff2dc, toonRamp));
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = 0.8;
+      acc.add(capM, rim);
+      [[0, 1.2], [0.8, 0.6], [-0.9, 0.7], [2.2, 0.75], [-2.4, 0.65], [3.1, 0.9]].forEach(([a, e]) => {
+        const spot = ellipsoid(0.11, 0.11, 0.03, toon(0xffffff, toonRamp), 10, false);
+        const x = Math.sin(a!) * Math.cos(e!) * 0.72;
+        const z = Math.cos(a!) * Math.cos(e!) * 0.72;
+        const y = 0.8 + Math.sin(e!) * 0.72 * 0.62;
+        spot.position.set(x, y, z);
+        spot.lookAt(new THREE.Vector3(x * 2, 0.8 + (y - 0.8) * 3, z * 2));
+        acc.add(spot);
+      });
+      break;
+    }
     default:
       break;
   }
@@ -2157,46 +1253,19 @@ export function createPetScene(
   if (accessoryId !== 'eyepatch' && accessoryId !== 'none') {
     // Los gorros se modelaron sobre la cabeza del chibi (ancho 1, cima en 0.95):
     // se ajustan al ancho, fondo y altura de la cabeza de cada especie para que asienten bien.
-    // El pelo da volumen: el gorro se apoya encima y algo más ancho.
-    const hairLift: Record<string, number> = {
-      none: 0, short: 0.15, bob: 0.15, long: 0.15, braids: 0.14, ponytail: 0.13, twintails: 0.13,
-      spiky: 0.2, curly: 0.2, bun: 0.16, pompadour: 0.22, mohawk: 0.24, afro: 0.38,
-    };
-    const lift = isHuman ? (hairStyle === 'none' ? 0 : humanHairTop) : hairLift[hairStyle] ?? 0.15;
-    const widen = 1 + lift * 0.6;
-    const kx = (headInfo.w / 1.0) * widen;
-    const kz = (headInfo.d / 0.96) * widen;
+    const kx = headInfo.w;
+    const kz = headInfo.d / 0.96;
     const ky = (kx + kz) / 2;
     acc.scale.set(kx * 1.03, ky, kz * 1.04);
-    acc.position.y = headInfo.y + headInfo.h + lift - 0.95 * ky;
+    acc.position.y = headInfo.y + headInfo.h - 0.95 * ky;
   }
-  if (isHuman) {
-    // Reunimos la cabeza (cara, pelo, gafas, gorro…) y la ponemos a escala Mii sobre el cuerpo.
-    const headRig = new THREE.Group();
-    const parts = [...humanHeadParts, ...body.children.slice(headStartIdx, headEndIdx), acc];
-    parts.forEach((o) => {
-      body.remove(o);
-      o.position.y -= rigY;
-      headRig.add(o);
-    });
-    humanHeadRig = headRig;
-    headRig.scale.setScalar(HUMAN_HEAD_K);
-    headRig.position.y = HUMAN_HEAD_Y;
-    body.add(headRig);
-  }
+
 
   // --- ROPA DEL TORSO (chaleco pirata, marinero, abrigo, sudadera, bufanda) ---
   const outfitId = config.outfit ?? 'none';
-  const torso =
-      isHuman
-        ? { y: -0.02, sx: 0.35, sy: 0.43, sz: 0.28, from: 0.2 }
-        : isMeeseeks
-        ? { y: -0.28, sx: 0.52, sy: 0.78, sz: 0.46, from: 0.3 }
-        : isCat
-          ? { y: -0.36, sx: 0.72, sy: 0.66, sz: 0.68, from: 0.3 }
-          : isDragon
-            ? { y: -0.34, sx: 0.78, sy: 0.68, sz: 0.74, from: 0.3 }
-            : { y: 0, sx: 1.0, sy: 0.95, sz: 0.96, from: 0.6 };
+  const torso = isDragon
+    ? { y: -0.34, sx: 0.78, sy: 0.68, sz: 0.74, from: 0.3 }
+    : { y: 0, sx: 1.0, sy: 0.95, sz: 0.96, from: 0.6 };
   /** Color de las mangas de cada prenda (null = prenda sin mangas). */
   const sleeveColorFor = (id: string): THREE.ColorRepresentation | null => {
     switch (id) {
@@ -2224,17 +1293,10 @@ export function createPetScene(
     }
   };
   const sleeveColor = sleeveColorFor(outfitId);
-  const LONG_SLEEVES = ['sweater', 'jacket', 'blazer', 'labcoat', 'raincoat', 'hero', 'jester', 'chef', 'coat', 'hoodie', 'stripes'];
-  if (isHuman) {
-    humanSleeves.forEach((sl) => {
-      if (sl.userData.longSleeve) sl.visible = LONG_SLEEVES.includes(outfitId);
-      if (outfitId === 'tank') sl.visible = false;
-      (sl.material as THREE.MeshToonMaterial).color.set(sleeveColor ?? accent);
-    });
-  } else if (sleeveColor !== null) {
+  if (sleeveColor !== null) {
     // Mangas sobre los brazos de cualquier especie: así la ropa se lee como ropa.
-    const ax = isSlim ? 0.13 : 0.17;
-    const ay = isSlim ? 0.42 : 0.27;
+    const ax = 0.17;
+    const ay = 0.27;
     [armL, armR].forEach((arm) => {
       const sl = ellipsoid(ax * 1.14, ay * 0.58, ax * 1.14, toon(sleeveColor, toonRamp), 16, true, 0.025);
       sl.position.y = ay * 0.45;
@@ -2251,34 +1313,6 @@ export function createPetScene(
     ) => {
       const gap = opts.gap ?? 0;
       const grow = opts.grow ?? 1.05;
-      if (humanTorsoProfile) {
-        // Personas: la prenda copia el perfil del torso, un poco más ancha y con el bajo suelto.
-        const cutY = torso.y + torso.sy * Math.cos(Math.PI * (opts.from ?? torso.from)) * 1.03;
-        const prof: THREE.Vector2[] = [];
-        humanTorsoProfile.forEach((pt, i) => {
-          const prev = humanTorsoProfile![i - 1];
-          if (pt.y <= cutY) prof.push(pt.clone());
-          else if (prev && prev.y < cutY) {
-            const k = (cutY - prev.y) / (pt.y - prev.y);
-            prof.push(new THREE.Vector2(prev.x + (pt.x - prev.x) * k, cutY));
-          }
-        });
-        prof[0]!.set(0.3, prof[0]!.y - 0.03);
-        prof.forEach((pt) => {
-          const flare = 1 + Math.max(0, -0.12 - pt.y) * 0.3;
-          pt.x *= grow * flare;
-        });
-        const geo = new THREE.LatheGeometry(prof, 36, gap / 2, Math.PI * 2 - gap);
-        const mat = toon(color, toonRamp);
-        (mat as THREE.Material).side = THREE.DoubleSide;
-        const m = new THREE.Mesh(geo, mat);
-        m.scale.z = HUMAN_TORSO_Z * (1 + (grow - 1) * 0.6);
-        const out = new THREE.Mesh(geo, OUTLINE_MAT);
-        out.scale.setScalar(1.014);
-        m.add(out);
-        body.add(m);
-        return m;
-      }
       const geo = new THREE.SphereGeometry(
         1,
         32,
@@ -2605,9 +1639,34 @@ export function createPetScene(
       body.add(ring, hang);
     }
   }
-  if (['cap', 'wizard', 'crown', 'beret', 'halo', 'strawhat', 'captain', 'bandana', 'beanie', 'grad', 'tophat', 'cowboy'].includes(accessoryId)) {
-    antenna.rotation.z = -0.35;
-  }
+
+  // --- ACCESORIOS DEL AMIGO: CUELLO, MANO, ESPALDA Y DIBUJO ---
+  const torsoDims = isDragon ? { w: 0.78, h: 0.68, d: 0.74 } : BALL;
+  const torsoCy = isDragon ? -0.34 : 0;
+  const neckElev = isDragon ? 0.5 : Math.asin(-0.32 / BALL.h);
+  const buddyProps = buildBuddyProps(
+    body,
+    {
+      neck: {
+        y: torsoCy + torsoDims.h * Math.sin(neckElev),
+        rx: torsoDims.w * Math.cos(neckElev),
+        rz: torsoDims.d * Math.cos(neckElev),
+        front: onBall(0, neckElev, torsoDims, torsoCy),
+      },
+      back: onBall(Math.PI, isDragon ? 0.1 : 0.05, torsoDims, torsoCy),
+      width: torsoDims.w,
+      ball: !isDragon,
+    },
+    {
+      neck: config.neckItem ?? 'none',
+      held: config.heldItem ?? 'none',
+      back: config.backItem ?? 'none',
+      pattern: config.pattern ?? 'none',
+      patternColor: config.patternColor ?? '#FFFFFF',
+      accent,
+      toon: (c) => toon(c, toonRamp),
+    }
+  );
 
   // --- VFX 1: ESTRELLAS DE CELEBRACIÓN Y ALEGRÍA ---
   const sparkles = new THREE.Group();
@@ -2701,27 +1760,10 @@ export function createPetScene(
     shine.position.set(-0.025, 0.02, 0.055);
     sweat.add(ink, inkTip, ball, tip, shine);
   }
-  const sweatBase = isHuman
-    ? new THREE.Vector3(
-        humanHead.w * HUMAN_HEAD_K * 0.86,
-        HUMAN_HEAD_Y + humanHead.h * HUMAN_HEAD_K * 0.4,
-        humanHead.d * HUMAN_HEAD_K * 0.45
-      )
-    : new THREE.Vector3(headInfo.w * 0.82, headInfo.y + headInfo.h * 0.42, headInfo.d * 0.45);
+  const sweatBase = new THREE.Vector3(headInfo.w * 0.82, headInfo.y + headInfo.h * 0.42, headInfo.d * 0.45);
   sweat.position.copy(sweatBase);
   sweat.visible = false;
   body.add(sweat);
-
-  if (isHuman) {
-    // Personas: cara dibujada y acabado limpio de juguete, sin contorno de tinta.
-    eyes.visible = false;
-    browL.visible = false;
-    browR.visible = false;
-    mouth.visible = false;
-    root.traverse((o) => {
-      if ((o as THREE.Mesh).material === OUTLINE_MAT) o.visible = false;
-    });
-  }
 
   // --- CRECIMIENTO: HUEVO → BEBÉ → NIÑO → JOVEN → ADULTO ---
   const growth = Math.max(0, Math.min(1, options.growth ?? 0));
@@ -2729,7 +1771,7 @@ export function createPetScene(
   /** Baja al personaje escalado para que siga pisando la roca. */
   const stageLift = -0.98 * (1 - stageScale);
   root.scale.setScalar(stageScale);
-  const headTop = isHuman ? HUMAN_HEAD_Y + humanHead.h * HUMAN_HEAD_K : isSlim ? 1.12 : isCat || isDragon ? 0.98 : 0.95;
+  const headTop = isDragon ? 0.98 : 0.95;
   const eggTint = new THREE.Color(0xfff8ec).lerp(baseBodyColor, 0.3);
   const eggMat = toon(eggTint, toonRamp);
   let eggGroup: THREE.Group | null = null;
@@ -2842,8 +1884,8 @@ export function createPetScene(
     spot.position.set(0.18, 0.4, 0.22);
     spot.lookAt(spot.position.clone().multiplyScalar(2));
     capGroup.add(spot);
-    capGroup.scale.setScalar(isSlim ? 0.8 : 1);
-    const hasHair = (config.hairStyle ?? (isHuman ? 'short' : isMeeseeks ? 'spiky' : 'none')) !== 'none';
+    capGroup.scale.setScalar(1);
+    const hasHair = (config.hairStyle ?? ('none')) !== 'none';
     capGroup.position.set(0, headTop - (hasHair ? 0.16 : 0.32), -0.02);
     capGroup.rotation.z = 0.22;
     body.add(capGroup);
@@ -2872,14 +1914,14 @@ export function createPetScene(
     pages.position.set(0, 0.02, 0.01);
     pages.rotation.x = -0.5;
     book.add(cover, pages);
-    book.position.set(0, isHuman ? -0.05 : -0.18, (isHuman ? 0.26 : torso.sz) + 0.16);
+    book.position.set(0, -0.18, (torso.sz) + 0.16);
     body.add(book);
   }
 
   if (options.focus === 'face' && !inHouse && !options.house) {
     // Primer plano de la cara, como al editar rasgos en el Mii Maker.
-    const fy = isHuman ? HUMAN_HEAD_Y : headY;
-    camera.position.set(0, fy + 0.3, isHuman ? 3.4 : 4.1);
+    const fy = headY;
+    camera.position.set(0, fy + 0.3, 4.1);
     camera.lookAt(0, fy + 0.18, 0);
   }
 
@@ -2916,9 +1958,6 @@ export function createPetScene(
     lookAt: 1.5,
     look: new THREE.Vector2(),
     lookTarget: new THREE.Vector2(),
-    antennaAngle: 0,
-    antennaVel: 0,
-    lastRootY: 0,
     hopAt: 4,
     syllable: 0,
     syllableAt: 0,
@@ -3160,12 +2199,14 @@ export function createPetScene(
       }
     }
 
-    if (humanArms) {
-      // Brazos colgando desde el hombro (el ángulo base de la animación es para brazos-bolita).
-      humanArms[0]!.rotation.z = -armL.rotation.z + 0.42 - 0.1;
-      humanArms[1]!.rotation.z = -armR.rotation.z - 0.42 + 0.1;
-    }
-
+    if (hatSpinner) hatSpinner.rotation.y += dt * (happy || s.jumpY > 0 ? 18 : 5);
+    if (hatWobble) hatWobble.rotation.z = (hatWobble.userData.baseZ ??= hatWobble.rotation.z) + Math.sin(t * 3.4) * 0.08;
+    buddyProps.animate(t, armR, happy || talking ? 1 : 0);
+    // Orejas, branquias y copetes que se mecen solos (más rápido si está contento)
+    buddy?.wobble.forEach((w) => {
+      const k = happy || talking ? 1.6 : 1;
+      w.obj.rotation[w.axis] = w.base + Math.sin(t * w.speed * k + w.phase) * w.amp * k;
+    });
     if (tailGroup) {
       tailGroup.rotation.z =
         Math.sin(t * (rage ? 10 : happy ? 4.8 : 2.8)) * 0.26;
@@ -3182,28 +2223,6 @@ export function createPetScene(
       bunnyEars[0]!.rotation.z = 0.14 + Math.sin(t * 3.2) * 0.06;
       bunnyEars[1]!.rotation.z = -0.14 - Math.sin(t * 3.2) * 0.06;
     }
-
-    const rootVel = (root.position.y - s.lastRootY) / Math.max(dt, 0.001);
-    s.lastRootY = root.position.y;
-    const targetAngle =
-      Math.sin(t * 1.6) * 0.06 +
-      (s.joy > 0 ? Math.sin(t * 18) * 0.15 : 0) +
-      (sleepy ? 0.25 : 0);
-    s.antennaVel +=
-      ((targetAngle - s.antennaAngle) * 60 - s.antennaVel * 7 - rootVel * 1.2) *
-      dt;
-    s.antennaAngle += s.antennaVel * dt;
-    antenna.rotation.x = s.antennaAngle;
-    orb.rotation.y = t * 1.8;
-
-    const base = 0.35 + s.energy * 0.65;
-    const pulse = talking
-      ? 0.35 + Math.abs(Math.sin(t * 10)) * 0.65
-      : Math.sin(t * 2) * 0.08;
-    const glow = Math.min(1.4, base + pulse * 0.6);
-    orbMat.color.setRGB(1, 0.68 + glow * 0.14, 0.15 + glow * 0.22);
-    haloMat.opacity = 0.08 + glow * 0.16;
-    halo.scale.setScalar(0.8 + glow * 0.4);
 
     // --- VFX: Estrellas de celebración ---
     s.joy = Math.max(0, s.joy - dt * 0.8);
@@ -3274,24 +2293,9 @@ export function createPetScene(
     }
   };
 
-  if (personLight) {
-    // Las piezas opacas proyectan sombra; todo (incluidas las calcomanías) la recibe.
-    root.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh || m.material === OUTLINE_MAT) return;
-      const mat = m.material as THREE.Material;
-      m.receiveShadow = true;
-      m.castShadow = !mat.transparent;
-    });
-    islandPedestal.traverse((o) => ((o as THREE.Mesh).receiveShadow = true));
-    // La cara no recibe sombras (se verían como manchas): solo el cuerpo queda sombreado por la cabeza.
-    humanHeadRig?.traverse((o) => ((o as THREE.Mesh).receiveShadow = false));
-  }
-
   return {
     scene,
     camera,
-    shadows: personLight,
     update,
     setMood: (mood) => {
       const prev = s.mood;
@@ -3331,7 +2335,6 @@ export function createPetScene(
     },
     dispose: () => {
       toonRamp.dispose();
-      skinRamp?.dispose();
       faceCache.forEach((tx) => tx.dispose());
       scene.traverse((obj) => {
         const m = obj as THREE.Mesh;

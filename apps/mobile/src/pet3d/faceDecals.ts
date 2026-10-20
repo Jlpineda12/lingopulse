@@ -30,6 +30,8 @@ export interface FaceLayout {
   mouthSize: number;
   /** Ancla de la boca cuando va sobre un hocico (oso, zorro, dragón). */
   mouthAnchor?: { p: THREE.Vector3; n: THREE.Vector3 };
+  /** Anclas propias de cada ojo (izquierdo, derecho), p. ej. sobre las cúpulas de la rana. */
+  eyeAnchors?: Array<{ p: THREE.Vector3; n: THREE.Vector3 }>;
 }
 
 export type MouthPose = 'rest' | 'half' | 'open' | 'happy' | 'frown' | 'wavy' | 'zigzag';
@@ -320,7 +322,13 @@ export function buildFaceDecals(
   }
   const eyes: EyeParts[] = [-1, 1].map((side) => {
     const root = new THREE.Group();
-    stick(root, side * eyeAz, eyeElev);
+    const own = layout.eyeAnchors?.[side < 0 ? 0 : 1];
+    if (own) {
+      root.position.copy(own.p).addScaledVector(own.n, 0.006);
+      root.lookAt(root.position.clone().add(own.n));
+    } else {
+      stick(root, side * eyeAz, eyeElev);
+    }
     const inner = new THREE.Group();
     inner.rotation.z = side * eyeRot;
     inner.scale.set(eyeK * eyeSX, eyeK * eyeSY, 1);

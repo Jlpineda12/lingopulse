@@ -7,7 +7,25 @@
  *   eating (al alimentar) y celebrate (al acertar).
  */
 
-export type PetSpecies = 'human' | 'puff' | 'cat' | 'meeseeks' | 'dragon' | 'bear' | 'bunny' | 'fox' | 'shark';
+export type PetSpecies =
+  | 'puff'
+  | 'cat'
+  | 'dragon'
+  | 'bear'
+  | 'bunny'
+  | 'fox'
+  | 'shark'
+  | 'penguin'
+  | 'frog'
+  | 'panda'
+  | 'chick'
+  | 'hamster'
+  | 'axolotl';
+
+/** Especies disponibles (las guardadas que ya no existen se convierten en chibi). */
+export const PET_SPECIES_IDS: PetSpecies[] = [
+  'puff', 'cat', 'dragon', 'bear', 'bunny', 'fox', 'shark', 'penguin', 'frog', 'panda', 'chick', 'hamster', 'axolotl',
+];
 
 export type HairStyleId =
   | 'spiky'
@@ -109,7 +127,22 @@ export type AccessoryId =
   | 'grad'
   | 'cowboy'
   | 'jester'
-  | 'chefhat';
+  | 'chefhat'
+  | 'propeller'
+  | 'party'
+  | 'sprout'
+  | 'tiara'
+  | 'santa'
+  | 'mushroom';
+
+/** Lo que lleva al cuello (se ajusta a la silueta de cada especie). */
+export type NeckItemId = 'none' | 'bow' | 'bell' | 'bandana' | 'bowtie' | 'medal' | 'lei' | 'pearls';
+/** Lo que sujeta en la mano. */
+export type HeldItemId = 'none' | 'balloon' | 'lollipop' | 'wand' | 'flower' | 'icecream' | 'microphone' | 'flag' | 'teddy' | 'umbrella';
+/** Lo que lleva a la espalda (alas que aletean, mochila, capa…). */
+export type BackItemId = 'none' | 'angel' | 'bat' | 'butterfly' | 'fairy' | 'backpack' | 'cape' | 'jetpack' | 'shell';
+/** Dibujo sobre el cuerpo. */
+export type PatternId = 'none' | 'spots' | 'hearts' | 'stars' | 'stripes' | 'patch';
 
 export type OutfitId =
   | 'none'
@@ -246,6 +279,11 @@ export interface PetConfig {
   height?: number;
   weight?: number;
   tuning?: FaceTuning;
+  neckItem?: NeckItemId;
+  heldItem?: HeldItemId;
+  backItem?: BackItemId;
+  pattern?: PatternId;
+  patternColor?: string;
 }
 
 export interface PetStats {
@@ -363,34 +401,8 @@ export const BELLY_COLORS = [
 ];
 
 /** 12 Colores para el Cabello 3D. */
-export const HAIR_COLORS = [
-  '#4A2E1B', // Castaño Oscuro
-  '#7C4A27', // Castaño Avellana
-  '#F4B942', // Rubio Dorado
-  '#E85D2A', // Pelirrojo Cobrizo
-  '#FF6B9D', // Rosa Sakura
-  '#38BDF8', // Azul Celeste
-  '#8B5CF6', // Lavanda Anime
-  '#22C55E', // Menta Esmeralda
-  '#E2E8F0', // Plata / Blanco Nieve
-  '#FB7185', // Coral Fresa
-  '#FACC15', // Amarillo Eléctrico
-  '#312E81', // Azul Medianoche (sin negro)
-];
 
 /** 10 tonos de piel realistas para humanos (de muy claro a muy oscuro). */
-export const SKIN_TONES = [
-  '#FFE7D6',
-  '#FFDCC2',
-  '#F7CBA4',
-  '#EDB98A',
-  '#D99E6E',
-  '#C1844F',
-  '#A86B3C',
-  '#8D5524',
-  '#6B4020',
-  '#4E2E17',
-];
 
 /** 10 colores de iris. */
 export const EYE_COLORS = [
@@ -407,18 +419,6 @@ export const EYE_COLORS = [
 ];
 
 /** 10 colores de pantalón. */
-export const PANTS_COLORS = [
-  '#3B4A6B', // Mezclilla
-  '#1F2A44', // Azul marino
-  '#6B7280', // Gris
-  '#A16207', // Caqui
-  '#7C2D12', // Café
-  '#166534', // Verde oliva
-  '#F5F5F4', // Blanco
-  '#BE185D', // Frambuesa
-  '#4C1D95', // Morado
-  '#0F766E', // Petróleo
-];
 
 export const GLASSES: Array<{ id: GlassesId; label: string; glyph: string }> = [
   { id: 'none', label: 'Sin gafas', glyph: 'clear' },
@@ -430,44 +430,7 @@ export const GLASSES: Array<{ id: GlassesId; label: string; glyph: string }> = [
   { id: 'goggles', label: 'Gafas de nieve', glyph: 'glasses' },
 ];
 
-export const FACE_SHAPES: Array<{ id: FaceShape; label: string }> = [
-  { id: 'round', label: 'Redonda' },
-  { id: 'oval', label: 'Ovalada' },
-  { id: 'square', label: 'Cuadrada' },
-  { id: 'long', label: 'Alargada' },
-  { id: 'heart', label: 'Corazón' },
-  { id: 'wide', label: 'Ancha' },
-];
-
-export const EAR_STYLES: Array<{ id: EarStyle; label: string }> = [
-  { id: 'normal', label: 'Normales' },
-  { id: 'small', label: 'Pequeñas' },
-  { id: 'big', label: 'Grandes' },
-  { id: 'round', label: 'Redondas' },
-  { id: 'pointy', label: 'De elfo' },
-  { id: 'none', label: 'Ocultas' },
-];
-
-export const PANTS_STYLES: Array<{ id: PantsStyle; label: string }> = [
-  { id: 'jeans', label: 'Pantalón' },
-  { id: 'shorts', label: 'Shorts' },
-  { id: 'skirt', label: 'Falda' },
-];
-
-export const FACIAL_HAIR: Array<{ id: FacialHair; label: string }> = [
-  { id: 'none', label: 'Ninguno' },
-  { id: 'stubble', label: 'Barba de 3 días' },
-  { id: 'mustache', label: 'Bigote' },
-  { id: 'curly', label: 'Bigote rizado' },
-  { id: 'goatee', label: 'Perilla' },
-  { id: 'beard', label: 'Barba completa' },
-];
-
 export const GLASSES_COLORS = ['#1E2436', '#7C4A27', '#B91C1C', '#2563EB', '#16A34A', '#F4B942', '#9B5DE5', '#E2E8F0'];
-
-export const PAINT_COLORS = ['#1E2436', '#FFFFFF', '#E11D48', '#FF7A1A', '#FACC15', '#22B567', '#2563EB', '#9B5DE5', '#FF8FB1', '#8B5A2B'];
-
-export const LIP_COLORS = ['#B23A48', '#E07A8B', '#C2593F', '#8C3B2E', '#F29EAE', '#7A2E3A'];
 
 /** Color favorito (como en el Mii Maker): tiñe la ropa base. */
 export const FAVORITE_COLORS = [
@@ -483,15 +446,6 @@ export const FAVORITE_COLORS = [
   '#8B5A2B', // Café
   '#F8FAFC', // Blanco
   '#334155', // Gris oscuro
-];
-
-export const NOSE_STYLES: Array<{ id: NoseStyle; label: string }> = [
-  { id: 'none', label: 'Sin nariz' },
-  { id: 'button', label: 'Botón' },
-  { id: 'round', label: 'Redonda' },
-  { id: 'pointy', label: 'Puntiaguda' },
-  { id: 'wide', label: 'Ancha' },
-  { id: 'snub', label: 'Respingada' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -528,14 +482,6 @@ export const SPECIES_PRESET_COLORS: Record<
     defaultPitch: number;
   }
 > = {
-  human: {
-    bodyColor: '#EDB98A',
-    bellyColor: '#2563EB',
-    taglineEs: 'Persona estilo Mii: tú decides cara, piel, pelo y ropa',
-    defaultPersonality: 'sweet',
-    defaultCatchphrase: 'Let’s learn!',
-    defaultPitch: 1.05,
-  },
   puff: {
     bodyColor: '#FFE0C8',
     bellyColor: '#FF4F79',
@@ -543,14 +489,6 @@ export const SPECIES_PRESET_COLORS: Record<
     defaultPersonality: 'energetic',
     defaultCatchphrase: 'Let’s go!',
     defaultPitch: 1.2,
-  },
-  meeseeks: {
-    bodyColor: '#F5C396',
-    bellyColor: '#2563EB',
-    taglineEs: 'Silueta Esbelta Tomodachi con cabeza y torso articulados',
-    defaultPersonality: 'sassy',
-    defaultCatchphrase: 'Easy peasy!',
-    defaultPitch: 1.08,
   },
   cat: {
     bodyColor: '#FFD59A',
@@ -600,6 +538,54 @@ export const SPECIES_PRESET_COLORS: Record<
     defaultCatchphrase: 'Hop into action!',
     defaultPitch: 1.24,
   },
+  penguin: {
+    bodyColor: '#4B5D7A',
+    bellyColor: '#38BDF8',
+    taglineEs: 'Pingüino redondito con pico naranja y aletas que aplauden',
+    defaultPersonality: 'chill',
+    defaultCatchphrase: 'Cool as ice!',
+    defaultPitch: 1.06,
+  },
+  frog: {
+    bodyColor: '#8BD17C',
+    bellyColor: '#F59E0B',
+    taglineEs: 'Ranita saltarina con ojos saltones y sonrisa ancha',
+    defaultPersonality: 'energetic',
+    defaultCatchphrase: 'Ribbit, let’s go!',
+    defaultPitch: 1.15,
+  },
+  panda: {
+    bodyColor: '#F7F5EE',
+    bellyColor: '#16A34A',
+    taglineEs: 'Panda dormilón con antifaz negro y orejitas redondas',
+    defaultPersonality: 'chill',
+    defaultCatchphrase: 'Bamboo and English!',
+    defaultPitch: 0.95,
+  },
+  chick: {
+    bodyColor: '#FFE066',
+    bellyColor: '#FB923C',
+    taglineEs: 'Pollito con copete, piquito y alitas que aletean',
+    defaultPersonality: 'sweet',
+    defaultCatchphrase: 'Tweet tweet!',
+    defaultPitch: 1.3,
+  },
+  hamster: {
+    bodyColor: '#F2B880',
+    bellyColor: '#E11D48',
+    taglineEs: 'Hámster de mofletes gorditos y orejitas redondas',
+    defaultPersonality: 'energetic',
+    defaultCatchphrase: 'Snack time!',
+    defaultPitch: 1.26,
+  },
+  axolotl: {
+    bodyColor: '#FFB3D1',
+    bellyColor: '#7C3AED',
+    taglineEs: 'Ajolote sonriente con branquias de colores y colita',
+    defaultPersonality: 'sweet',
+    defaultCatchphrase: 'Splash into English!',
+    defaultPitch: 1.18,
+  },
 };
 
 export const SPECIES: Array<{
@@ -609,36 +595,22 @@ export const SPECIES: Array<{
   glyph: string;
   unlockLevel: number;
 }> = [
-  { id: 'human', label: 'Persona', subtitleEs: 'Estilo Mii', glyph: 'species-meeseeks', unlockLevel: 1 },
   { id: 'puff', label: 'Chibi Redondo', subtitleEs: 'Clásico compacto', glyph: 'species-puff', unlockLevel: 1 },
-  { id: 'meeseeks', label: 'Muñeco Esbelto', subtitleEs: 'Torso y cuello 3D', glyph: 'species-meeseeks', unlockLevel: 1 },
   { id: 'cat', label: 'Orejitas Felinas', subtitleEs: 'Con cola 3D', glyph: 'species-cat', unlockLevel: 1 },
   { id: 'dragon', label: 'Guardián Alado', subtitleEs: 'Con alas y cuernos', glyph: 'species-dragon', unlockLevel: 1 },
   { id: 'bear', label: 'Montañero', subtitleEs: 'Orejas redondas', glyph: 'species-bear', unlockLevel: 1 },
   { id: 'bunny', label: 'Viajero Lunar', subtitleEs: 'Orejas largas', glyph: 'species-bunny', unlockLevel: 1 },
   { id: 'fox', label: 'Zorro Explorador', subtitleEs: 'Cola esponjosa', glyph: 'species-fox', unlockLevel: 2 },
   { id: 'shark', label: 'Tiburón Grumete', subtitleEs: 'Aleta y colmillitos', glyph: 'species-shark', unlockLevel: 3 },
+  { id: 'penguin', label: 'Pingüino', subtitleEs: 'Aletas y pico', glyph: 'species-penguin', unlockLevel: 1 },
+  { id: 'frog', label: 'Ranita', subtitleEs: 'Ojos saltones', glyph: 'species-frog', unlockLevel: 1 },
+  { id: 'panda', label: 'Panda', subtitleEs: 'Antifaz negro', glyph: 'species-panda', unlockLevel: 1 },
+  { id: 'chick', label: 'Pollito', subtitleEs: 'Copete y alitas', glyph: 'species-chick', unlockLevel: 1 },
+  { id: 'hamster', label: 'Hámster', subtitleEs: 'Mofletes gorditos', glyph: 'species-hamster', unlockLevel: 1 },
+  { id: 'axolotl', label: 'Ajolote', subtitleEs: 'Branquias de colores', glyph: 'species-axolotl', unlockLevel: 2 },
 ];
 
 /** 10 Modelos 3D de Cabello para el Creador Tomodachi Life. */
-export const HAIR_STYLES: Array<{ id: HairStyleId; label: string }> = [
-  { id: 'spiky', label: 'Puntas Anime' },
-  { id: 'bob', label: 'Melena Bob' },
-  { id: 'afro', label: 'Afro 3D' },
-  { id: 'ponytail', label: 'Coleta Alta' },
-  { id: 'twintails', label: 'Dos Coletas' },
-  { id: 'pompadour', label: 'Copete Tupé' },
-  { id: 'curly', label: 'Rizos Suaves' },
-  { id: 'mohawk', label: 'Cresta Punk' },
-  { id: 'bun', label: 'Chongo Alto' },
-  { id: 'long', label: 'Pelo Largo' },
-  { id: 'short', label: 'Corto Clásico' },
-  { id: 'braids', label: 'Trenzas' },
-  { id: 'buzz', label: 'Rapado' },
-  { id: 'sidepart', label: 'Raya al lado' },
-  { id: 'wavy', label: 'Ondulado' },
-  { id: 'none', label: 'Sin Cabello' },
-];
 
 /** 10 Modelos 3D de Ojos para el Creador Tomodachi Life. */
 export const EYE_STYLES: Array<{ id: EyeStyle; label: string }> = [
@@ -803,7 +775,60 @@ export const ACCESSORIES: Array<{
   { id: 'cowboy', label: 'Sombrero Vaquero', glyph: 'strawhat', unlockLevel: 2 },
   { id: 'jester', label: 'Gorro de Bufón', glyph: 'wizard', unlockLevel: 1 },
   { id: 'chefhat', label: 'Gorro de Chef', glyph: 'cap', unlockLevel: 1 },
+  { id: 'propeller', label: 'Gorra con Hélice', glyph: 'cap', unlockLevel: 1 },
+  { id: 'party', label: 'Gorro de Fiesta', glyph: 'wizard', unlockLevel: 1 },
+  { id: 'sprout', label: 'Brotecito', glyph: 'flower', unlockLevel: 1 },
+  { id: 'tiara', label: 'Tiara Brillante', glyph: 'crown', unlockLevel: 2 },
+  { id: 'santa', label: 'Gorro Navideño', glyph: 'wizard', unlockLevel: 2 },
+  { id: 'mushroom', label: 'Sombrero Seta', glyph: 'strawhat', unlockLevel: 3 },
 ];
+
+export const NECK_ITEMS: Array<{ id: NeckItemId; label: string; unlockLevel: number }> = [
+  { id: 'none', label: 'Nada', unlockLevel: 1 },
+  { id: 'bow', label: 'Lazo', unlockLevel: 1 },
+  { id: 'bell', label: 'Cascabel', unlockLevel: 1 },
+  { id: 'bandana', label: 'Pañoleta', unlockLevel: 1 },
+  { id: 'bowtie', label: 'Pajarita', unlockLevel: 1 },
+  { id: 'lei', label: 'Collar de flores', unlockLevel: 2 },
+  { id: 'pearls', label: 'Perlas', unlockLevel: 2 },
+  { id: 'medal', label: 'Medalla', unlockLevel: 3 },
+];
+
+export const HELD_ITEMS: Array<{ id: HeldItemId; label: string; unlockLevel: number }> = [
+  { id: 'none', label: 'Nada', unlockLevel: 1 },
+  { id: 'balloon', label: 'Globo', unlockLevel: 1 },
+  { id: 'lollipop', label: 'Piruleta', unlockLevel: 1 },
+  { id: 'flower', label: 'Flor', unlockLevel: 1 },
+  { id: 'icecream', label: 'Helado', unlockLevel: 1 },
+  { id: 'teddy', label: 'Osito', unlockLevel: 2 },
+  { id: 'wand', label: 'Varita', unlockLevel: 2 },
+  { id: 'microphone', label: 'Micrófono', unlockLevel: 2 },
+  { id: 'flag', label: 'Banderín', unlockLevel: 3 },
+  { id: 'umbrella', label: 'Paraguas', unlockLevel: 3 },
+];
+
+export const BACK_ITEMS: Array<{ id: BackItemId; label: string; unlockLevel: number }> = [
+  { id: 'none', label: 'Nada', unlockLevel: 1 },
+  { id: 'angel', label: 'Alas de ángel', unlockLevel: 1 },
+  { id: 'butterfly', label: 'Alas de mariposa', unlockLevel: 1 },
+  { id: 'backpack', label: 'Mochila', unlockLevel: 1 },
+  { id: 'cape', label: 'Capa', unlockLevel: 1 },
+  { id: 'bat', label: 'Alas de murciélago', unlockLevel: 2 },
+  { id: 'fairy', label: 'Alas de hada', unlockLevel: 2 },
+  { id: 'shell', label: 'Caparazón', unlockLevel: 3 },
+  { id: 'jetpack', label: 'Mochila cohete', unlockLevel: 4 },
+];
+
+export const PATTERNS: Array<{ id: PatternId; label: string }> = [
+  { id: 'none', label: 'Liso' },
+  { id: 'spots', label: 'Manchas' },
+  { id: 'hearts', label: 'Corazones' },
+  { id: 'stars', label: 'Estrellas' },
+  { id: 'stripes', label: 'Rayas' },
+  { id: 'patch', label: 'Parche' },
+];
+
+export const PATTERN_COLORS = ['#FFFFFF', '#3B2A20', '#FF7AA8', '#FFD43B', '#7C5CFF', '#38BDF8', '#22C55E', '#F97316'];
 
 export interface FoodItem {
   id: string;
@@ -928,6 +953,16 @@ export function moodMessage(
   }
 }
 
+/**
+ * Normaliza una mascota guardada: las siluetas humanas que existían antes se convierten en chibi
+ * (conservando nombre, personalidad, voz y prendas).
+ */
+export function normalizePet(c: PetConfig): PetConfig {
+  if (PET_SPECIES_IDS.includes(c.species)) return c;
+  const preset = SPECIES_PRESET_COLORS.puff;
+  return { ...c, species: 'puff', bodyColor: preset.bodyColor, bellyColor: c.bellyColor || preset.bellyColor };
+}
+
 /** Genera una combinación aleatoria súper expresiva al estilo Tomodachi Life (conserva el nombre del usuario). */
 export function randomizeTomodachiPet(keepName?: string): PetConfig {
   const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)]!;
@@ -937,10 +972,8 @@ export function randomizeTomodachiPet(keepName?: string): PetConfig {
     name: keepName ?? '',
     customNamed: Boolean(keepName && keepName.trim().length > 0),
     species: sp,
-    bodyColor: pick(BODY_COLORS),
+    bodyColor: Math.random() < 0.5 ? SPECIES_PRESET_COLORS[sp].bodyColor : pick(BODY_COLORS),
     bellyColor: pick(BELLY_COLORS),
-    hairStyle: pick(HAIR_STYLES).id,
-    hairColor: pick(HAIR_COLORS),
     eyeStyle: pick(EYE_STYLES).id,
     browStyle: pick(BROW_STYLES).id,
     mouthStyle: pick(MOUTH_STYLES).id,
@@ -954,10 +987,7 @@ export function randomizeTomodachiPet(keepName?: string): PetConfig {
     habitatProp: 'campfire',
     outfit: pick(OUTFITS.filter((o) => o.cost === 0)).id,
     glasses: Math.random() < 0.3 ? pick(GLASSES).id : 'none',
-    noseStyle: pick(NOSE_STYLES).id,
     eyeColor: pick(EYE_COLORS),
-    pantsColor: pick(PANTS_COLORS),
-    ...(sp === 'human' ? { bodyColor: pick(SKIN_TONES) } : {}),
   };
 }
 

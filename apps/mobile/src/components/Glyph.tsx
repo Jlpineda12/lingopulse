@@ -29,7 +29,7 @@ const Shine = ({ x, y, rx = 3.2, ry = 2 }: { x: number; y: number; rx?: number; 
 /* Caritas paramétricas                                                */
 /* ------------------------------------------------------------------ */
 
-type Ears = 'none' | 'cat' | 'bear' | 'bunny' | 'dragon' | 'fox' | 'shark' | 'slim';
+type Ears = 'none' | 'cat' | 'bear' | 'bunny' | 'dragon' | 'fox' | 'shark' | 'slim' | 'penguin' | 'frog' | 'panda' | 'chick' | 'hamster' | 'axolotl';
 type Eyes = 'dot' | 'happy' | 'closed' | 'angry' | 'heart' | 'star' | 'wink' | 'big' | 'cool' | 'x';
 type Brow = 'none' | 'soft' | 'bold' | 'hero' | 'worried' | 'raised' | 'dot' | 'unibrow' | 'slit' | 'short';
 type Mouth = 'smile' | 'cat' | 'grin' | 'smirk' | 'o' | 'tongue' | 'fangs' | 'pout' | 'wavy' | 'kiss' | 'flat' | 'frown' | 'chew' | 'open';
@@ -96,6 +96,56 @@ function FaceGlyph({ skin = '#FFD9B8', ears = 'none', eyes = 'dot', brow = 'none
         );
       case 'shark':
         return <Path d="M24 14 L30 2 Q33 9 32 15 Z" fill="#5B8DEF" {...P} />;
+      case 'frog':
+        return (
+          <>
+            <Circle cx={15} cy={14} r={7} fill={skin} {...P} />
+            <Circle cx={33} cy={14} r={7} fill={skin} {...P} />
+          </>
+        );
+      case 'panda':
+        return (
+          <>
+            <Circle cx={11} cy={14} r={6} fill="#2B2B33" {...P} />
+            <Circle cx={37} cy={14} r={6} fill="#2B2B33" {...P} />
+          </>
+        );
+      case 'hamster':
+        return (
+          <>
+            <Circle cx={12} cy={15} r={5} fill={skin} {...P} />
+            <Circle cx={36} cy={15} r={5} fill={skin} {...P} />
+            <Circle cx={12} cy={15} r={2.2} fill="#FF9EBB" />
+            <Circle cx={36} cy={15} r={2.2} fill="#FF9EBB" />
+          </>
+        );
+      case 'chick':
+        return (
+          <>
+            <Ellipse cx={22} cy={9} rx={2.2} ry={5} fill={skin} {...P} transform="rotate(-25 22 9)" />
+            <Ellipse cx={26} cy={9} rx={2.2} ry={5} fill={skin} {...P} transform="rotate(25 26 9)" />
+          </>
+        );
+      case 'axolotl':
+        return (
+          <>
+            {[-1, 1].map((sd) =>
+              [0, 1, 2].map((i) => (
+                <Ellipse
+                  key={`${sd}${i}`}
+                  cx={24 + sd * (17 + i * 1.5)}
+                  cy={17 + i * 6}
+                  rx={5}
+                  ry={1.8}
+                  fill="#FF6FA8"
+                  stroke={INK}
+                  strokeWidth={1.4}
+                  transform={`rotate(${sd * (-30 + i * 30)} ${24 + sd * (17 + i * 1.5)} ${17 + i * 6})`}
+                />
+              ))
+            )}
+          </>
+        );
       default:
         return null;
     }
@@ -436,11 +486,27 @@ function FaceGlyph({ skin = '#FFD9B8', ears = 'none', eyes = 'dot', brow = 'none
       <Ellipse cx={24} cy={cy} rx={ears === 'slim' ? 13 : 16.5} ry={headRy} fill={skin} {...P} />
       {ears === 'fox' ? <Path d={`M24 ${cy + 1} Q16 ${cy + 4} 15 ${cy + 11} Q24 ${cy + 16} 33 ${cy + 11} Q32 ${cy + 4} 24 ${cy + 1}Z`} fill="#FFF3E0" /> : null}
       {ears === 'shark' ? <Path d={`M12 ${cy + 4} Q24 ${cy + 16} 36 ${cy + 4}`} fill="#EAF4FF" /> : null}
+      {ears === 'penguin' ? (
+        <Path d={`M24 ${cy - 6} C20 ${cy - 11} 11 ${cy - 8} 12 ${cy + 1} C12 ${cy + 10} 18 ${cy + 15} 24 ${cy + 15} C30 ${cy + 15} 36 ${cy + 10} 36 ${cy + 1} C37 ${cy - 8} 28 ${cy - 11} 24 ${cy - 6}Z`} fill="#FBFBF7" />
+      ) : null}
+      {ears === 'panda' ? (
+        <>
+          <Ellipse cx={18.5} cy={cy - 1} rx={4.6} ry={5.6} fill="#2B2B33" transform={`rotate(25 18.5 ${cy - 1})`} />
+          <Ellipse cx={29.5} cy={cy - 1} rx={4.6} ry={5.6} fill="#2B2B33" transform={`rotate(-25 29.5 ${cy - 1})`} />
+        </>
+      ) : null}
+      {ears === 'hamster' ? <Ellipse cx={24} cy={cy + 8} rx={11} ry={6.5} fill="#FFF6EA" /> : null}
+      {ears === 'cat' ? (
+        <Path d={`M24 ${cy - 15} v5 M20 ${cy - 14} l1 4 M28 ${cy - 14} l-1 4`} stroke="#C27A2C" strokeWidth={1.8} strokeLinecap="round" />
+      ) : null}
       <Shine x={16} y={cy - 9} rx={4} ry={2.2} />
       {cheeksEl}
       {browEl}
       {eyesEl}
       {mouthEl}
+      {ears === 'penguin' || ears === 'chick' ? (
+        <Polygon points={`21,${cy + 3} 27,${cy + 3} 24,${cy + 7}`} fill="#FFA52E" stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
+      ) : null}
       {extraEl}
     </>
   );
@@ -1247,13 +1313,18 @@ const FACES: Record<string, FaceSpec> = {
   'face-eating': { eyes: 'happy', mouth: 'chew', cheeks: 'peach' },
   'face-celebrate': { eyes: 'star', mouth: 'grin', extra: 'confetti' },
   'species-puff': { skin: '#FFB7CE', eyes: 'big' },
-  'species-meeseeks': { skin: '#7FD3FF', ears: 'slim', eyes: 'dot', mouth: 'grin' },
   'species-cat': { skin: '#FFD59A', ears: 'cat', mouth: 'cat', cheeks: 'whiskers' },
   'species-dragon': { skin: '#9EE6C4', ears: 'dragon', mouth: 'fangs' },
   'species-bear': { skin: '#C9A07A', ears: 'bear' },
   'species-bunny': { skin: '#E6DCFF', ears: 'bunny' },
   'species-fox': { skin: '#FF8A3D', ears: 'fox', mouth: 'smirk', cheeks: 'none' },
   'species-shark': { skin: '#7FA8F5', ears: 'shark', mouth: 'fangs', cheeks: 'none' },
+  'species-penguin': { skin: '#4B5D7A', ears: 'penguin', eyes: 'big', mouth: 'flat', cheeks: 'pink' },
+  'species-frog': { skin: '#8BD17C', ears: 'frog', mouth: 'grin' },
+  'species-panda': { skin: '#F7F5EE', ears: 'panda', eyes: 'big' },
+  'species-chick': { skin: '#FFE066', ears: 'chick', mouth: 'flat' },
+  'species-hamster': { skin: '#F2B880', ears: 'hamster', mouth: 'cat' },
+  'species-axolotl': { skin: '#FFB3D1', ears: 'axolotl', mouth: 'grin' },
 };
 
 /* ------------------------------------------------------------------ */

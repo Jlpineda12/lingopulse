@@ -179,8 +179,6 @@ export function Pet3D({
 
     const h = createPetScene(config, size / height, { house, stage, growth: growthStep / 8, focus, scenario });
     attach(h);
-    renderer.shadowMap.enabled = h.shadows;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     let dragging = false;
     let lastX = 0;
@@ -302,8 +300,6 @@ export function Pet3D({
 
     const h = createPetScene(config, w / hgt, { house, stage, growth: growthStep / 8, focus, scenario });
     attach(h);
-    renderer.shadowMap.enabled = h.shadows;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     let raf = 0;
     let last = Date.now();
