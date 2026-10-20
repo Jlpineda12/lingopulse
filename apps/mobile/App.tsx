@@ -14,6 +14,7 @@ import { GameProvider, useGame } from './src/context/GameContext';
 import { CompanionTraveler, RewardToast, TabBar, TopBar } from './src/components/AppChrome';
 import { SplashScreen } from './src/components/SplashScreen';
 import { GrowthCelebration } from './src/components/GrowthCelebration';
+import { TutorialOverlay } from './src/components/TutorialOverlay';
 import { StreakCelebration } from './src/components/FireStreakCard';
 import { scheduleReminders } from './src/services/reminders';
 import { preloadSfx } from './src/services/sfx';
@@ -186,6 +187,7 @@ function Shell() {
       <RewardToast />
       <StreakCelebration />
       <GrowthCelebration />
+      <TutorialOverlay />
     </View>
   );
 }

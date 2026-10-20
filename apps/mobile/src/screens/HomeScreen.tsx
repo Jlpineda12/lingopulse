@@ -67,6 +67,7 @@ export function HomeScreen() {
     triggerPetEmotion,
     eventState,
     league,
+    replayTutorial,
   } = useGame();
 
   const [trapIdx, setTrapIdx] = useState(0);
@@ -385,6 +386,10 @@ export function HomeScreen() {
           </Card>
         </Reveal>
       ) : null}
+
+      <PressableScale onPress={replayTutorial} hapticKind="select" style={{ alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 }}>
+        <Text style={{ color: THEME.blue, fontWeight: '700', fontSize: 14 }}>¿Cómo funciona LingoPulse? Ver tutorial</Text>
+      </PressableScale>
 
       <TomodachiDreamModal visible={dreamModalVisible} onClose={() => setDreamModalVisible(false)} />
     </View>

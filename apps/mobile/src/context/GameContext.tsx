@@ -101,6 +101,8 @@ export interface Progress {
   units?: Record<string, UnitProgress>;
   /** Última etapa de crecimiento de la mascota que el jugador ya celebró (índice en PET_STAGES). */
   petStageSeen?: number;
+  /** Tutorial interactivo de bienvenida (false = pendiente; undefined = cuentas antiguas). */
+  tutorialDone?: boolean;
 }
 
 export interface PlayerAccount {
@@ -228,6 +230,8 @@ interface GameContextValue {
   /** La mascota acaba de eclosionar o crecer y falta celebrarlo. */
   pendingGrowth: { from: PetStage; to: PetStage } | null;
   dismissGrowth: () => void;
+  finishTutorial: () => void;
+  replayTutorial: () => void;
   todayKey: string;
   todayActivities: ActivityEntry[];
   tab: TabId;
@@ -560,6 +564,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         level: input.level,
         onboarded: true,
         petStageSeen: 0,
+        tutorialDone: false,
       };
       const newStats: PetStats = {
         ...DEFAULT_STATS,
@@ -807,6 +812,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       petStage,
       pendingGrowth,
       dismissGrowth,
+      finishTutorial: () => setProgress((p) => ({ ...p, tutorialDone: true })),
+      replayTutorial: () => setProgress((p) => ({ ...p, tutorialDone: false })),
       todayKey,
       todayActivities,
       tab,
