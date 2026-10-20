@@ -199,7 +199,6 @@ export function PetScreen() {
             }}
             backgroundColor={tint}
           />
-          <View style={styles.islandPedestal} />
 
           {/* Crecimiento: huevo → bebé → niño → joven → adulto */}
           <View style={styles.growthCard}>
@@ -779,14 +778,6 @@ const styles = StyleSheet.create({
     color: '#6D28D9',
   },
   hint: { fontSize: 12, color: THEME.ink2, fontWeight: '700' },
-  islandPedestal: {
-    marginTop: -22,
-    marginBottom: 8,
-    width: 170,
-    height: 16,
-    borderRadius: 999,
-    backgroundColor: 'rgba(34, 181, 103, 0.35)',
-  },
   emotionDeck: {
     alignSelf: 'stretch',
     marginHorizontal: 14,

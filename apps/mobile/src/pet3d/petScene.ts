@@ -37,6 +37,16 @@ export interface PetSceneHandle {
   joy: () => void;
   /** Mira hacia el dedo/cursor del jugador (coordenadas -1..1, +y arriba). */
   lookAt: (x: number, y: number) => void;
+  /** Toque en un punto (-1..1, +y arriba): cabeza = caricia, barriga = cosquillas, lado = giro. */
+  poke: (x: number, y: number) => void;
+  /** Doble toque: voltereta. */
+  flip: () => void;
+  /** Mantener pulsado: abrazo. */
+  hug: () => void;
+  /** Frotar de un lado a otro: mimos. */
+  rub: () => void;
+  /** Agitar rápido: se marea. */
+  dizzy: () => void;
   drag: (dx: number, dy: number) => void;
   release: () => void;
   dispose: () => void;
@@ -294,6 +304,8 @@ export interface PetSceneOptions {
   growth?: number;
   /** 'face' acerca la cámara a la cara (editor de rasgos estilo Mii Maker). */
   focus?: 'face' | 'body';
+  /** Reproduce la eclosión: el huevo tiembla, se agrieta, estalla y sale la mascota bebé. */
+  hatching?: boolean;
   /** Isla temática: decorado, personaje invitado y acción de la mascota. */
   scenario?: { theme: UnitSceneTheme; action: PetSceneAction; npc: SceneNpc };
 }
@@ -340,10 +352,9 @@ export function createPetScene(
     if (options.house) {
       houseDiorama = buildIslandFurniture(options.house.placed, toonRamp);
       islandPedestal.add(houseDiorama.group);
-      // Plano un poco más abierto para ver el campamento completo.
-      camera.position.set(0, 1.25, 9.0);
-      camera.lookAt(0, -0.05, -0.2);
     }
+    // Isla con espacio de sobra para la mascota y sus cosas (el encuadre se ajusta solo).
+    if (!scenario) islandPedestal.scale.set(1.45, 1, 1.32);
     scene.add(islandPedestal);
   }
 
@@ -1775,10 +1786,12 @@ export function createPetScene(
   const eggTint = new THREE.Color(0xfff8ec).lerp(baseBodyColor, 0.3);
   const eggMat = toon(eggTint, toonRamp);
   let eggGroup: THREE.Group | null = null;
+  let eggTop: THREE.Group | null = null;
   const eggCracks: THREE.Object3D[] = [];
+  const hatching = Boolean(options.hatching);
 
-  if (petStage === 'egg') {
-    body.visible = false;
+  if (petStage === 'egg' || hatching) {
+    if (!hatching) body.visible = false;
     eggGroup = new THREE.Group();
     // Silueta de huevo (más estrecha arriba) con contorno toon
     const profile: THREE.Vector2[] = [];
@@ -1788,12 +1801,19 @@ export function createPetScene(
       const r = Math.sin(a) * 0.66 * (y > 0 ? 1 - 0.2 * (y / 0.86) : 1);
       profile.push(new THREE.Vector2(Math.max(0.001, r), y));
     }
-    const eggGeo = new THREE.LatheGeometry(profile, 36);
-    const shellMesh = new THREE.Mesh(eggGeo, eggMat);
-    const shellOut = new THREE.Mesh(eggGeo, OUTLINE_MAT);
-    shellOut.scale.setScalar(1.025);
-    shellMesh.add(shellOut);
-    eggGroup.add(shellMesh);
+    // Cascarón en dos piezas (tapa y base) para poder romperlo al eclosionar
+    const CUT = 0.04;
+    eggTop = new THREE.Group();
+    eggGroup.add(eggTop);
+    [profile.filter((v) => v.y <= CUT + 0.04), profile.filter((v) => v.y >= CUT - 0.04)].forEach((part, i) => {
+      const geo = new THREE.LatheGeometry(part, 36);
+      const mesh = new THREE.Mesh(geo, eggMat);
+      (eggMat as THREE.Material).side = THREE.DoubleSide;
+      const out = new THREE.Mesh(geo, OUTLINE_MAT);
+      out.scale.setScalar(1.025);
+      mesh.add(out);
+      (i === 0 ? eggGroup! : eggTop!).add(mesh);
+    });
     const radiusAt = (y: number) => {
       const a = Math.acos(Math.max(-1, Math.min(1, -y / 0.86)));
       return Math.sin(a) * 0.66 * (y > 0 ? 1 - 0.2 * (y / 0.86) : 1);
@@ -1807,7 +1827,7 @@ export function createPetScene(
       const spot = ellipsoid(0.1, 0.085, 0.03, spotMat, 12, false);
       spot.position.set(Math.sin(th!) * r, y!, Math.cos(th!) * r);
       spot.lookAt(spot.position.clone().multiplyScalar(2));
-      eggGroup!.add(spot);
+      (y! > 0.04 ? eggTop! : eggGroup!).add(spot);
     });
     // Franja en zigzag del color principal
     const zigMat = toon(baseBodyColor, toonRamp);
@@ -1837,7 +1857,7 @@ export function createPetScene(
       seg.lookAt(new THREE.Vector3(x! * 2, y!, z * 2));
       seg.rotateZ(rot!);
       seg.visible = growth > 0.25 + i * 0.12;
-      eggGroup!.add(seg);
+      eggTop!.add(seg);
       eggCracks.push(seg);
     });
     // Nido de paja
@@ -1857,8 +1877,10 @@ export function createPetScene(
       eggGroup.add(twig);
     }
     eggGroup.position.y = -0.08;
-    root.add(eggGroup);
-  } else if (petStage === 'baby') {
+    if (hatching) stage.add(eggGroup);
+    else root.add(eggGroup);
+  }
+  if (petStage === 'baby') {
     // Recién nacido: lleva la mitad del cascarón como gorrito.
     acc.visible = false;
     const capGroup = new THREE.Group();
@@ -1925,6 +1947,62 @@ export function createPetScene(
     camera.lookAt(0, fy + 0.18, 0);
   }
 
+  // --- VFX 6: ESTRELLAS DE MAREO ---
+  const dizzyStars = new THREE.Group();
+  dizzyStars.position.y = headInfo.y + headInfo.h + 0.08;
+  [0xffd43b, 0x7dd3fc, 0xff7aa8].forEach((c) => {
+    const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.09, 0), new THREE.MeshBasicMaterial({ color: c }));
+    st.scale.set(1, 1, 0.4);
+    dizzyStars.add(st);
+  });
+  dizzyStars.visible = false;
+  body.add(dizzyStars);
+
+  // --- VFX 7: DESTELLO Y CONFETI DE LA ECLOSIÓN ---
+  const hatchFx = (() => {
+    const g = new THREE.Group();
+    g.visible = false;
+    stage.add(g);
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xfffbe6, transparent: true, opacity: 0, depthWrite: false });
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(0.6, 20, 14), flashMat);
+    g.add(flash);
+    const bits: Array<{ m: THREE.Mesh; v: THREE.Vector3 }> = [];
+    const colors = [0xffd54a, 0xff6b9d, 0x47c2ff, 0x7be495, 0xb18cff, 0xff9f43];
+    for (let i = 0; i < 18; i++) {
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), new THREE.MeshBasicMaterial({ color: colors[i % colors.length]! }));
+      g.add(m);
+      bits.push({ m, v: new THREE.Vector3() });
+    }
+    let life = -1;
+    return {
+      start: () => {
+        g.visible = true;
+        life = 0;
+        bits.forEach((b, i) => {
+          const a = (i / bits.length) * Math.PI * 2;
+          b.m.position.set(0, 0, 0);
+          b.v.set(Math.cos(a) * (1.6 + (i % 3) * 0.5), 2.4 + (i % 4) * 0.5, Math.sin(a) * 1.2);
+        });
+      },
+      update: (dt: number) => {
+        if (life < 0) return;
+        life += dt;
+        flash.scale.setScalar(1 + life * 7);
+        flashMat.opacity = Math.max(0, 0.9 - life * 2.2);
+        bits.forEach((b) => {
+          b.v.y -= 6 * dt;
+          b.m.position.addScaledVector(b.v, dt);
+          b.m.rotation.x += dt * 8;
+          b.m.rotation.y += dt * 6;
+        });
+        if (life > 1.6) {
+          g.visible = false;
+          life = -1;
+        }
+      },
+    };
+  })();
+
   // Multiplicadores de complexión física (bodyScale)
   const scaleConfig = config.bodyScale ?? 'normal';
   // Altura y peso estilo Mii Maker (si existen) o la complexión clásica.
@@ -1964,6 +2042,19 @@ export function createPetScene(
     pointer: new THREE.Vector2(),
     pointerAt: -10,
     eyeLook: new THREE.Vector2(),
+    /** Emoción breve provocada por un gesto (caricia, abrazo…), por encima de la del juego. */
+    reactMood: 'ok' as PetMood,
+    reactUntil: -1,
+    /** Gesto o acción espontánea en curso. */
+    act: '' as '' | 'pat' | 'tickle' | 'flip' | 'hug' | 'rub' | 'dizzy' | 'yawn' | 'look' | 'wave' | 'wiggle' | 'sneeze',
+    actT0: 0,
+    actUntil: -1,
+    lastInput: 0,
+    nextIdle: 7,
+    hatchT0: -1,
+    hatched: false,
+    hatchScale: hatching ? 0 : 1,
+    hatchV: 0,
     now: 0,
     launchAt: -1,
     launchV: 0,
@@ -1971,16 +2062,76 @@ export function createPetScene(
     oopsK: 0,
   };
 
+  const startAct = (a: Exclude<typeof s.act, ''>, dur: number) => {
+    s.act = a;
+    s.actT0 = s.now;
+    s.actUntil = s.now + dur;
+  };
+  const react = (m: PetMood, dur: number) => {
+    s.reactMood = m;
+    s.reactUntil = s.now + dur;
+  };
+
   const update = (dt: number, t: number) => {
     s.now = t;
-    const sleepy = s.mood === 'sleepy';
-    const sad = s.mood === 'sad';
-    const angry = s.mood === 'angry';
-    const rage = s.mood === 'rage';
-    const love = s.mood === 'love';
-    const eating = s.mood === 'eating';
-    const celebrate = s.mood === 'celebrate';
-    const happy = s.mood === 'happy' || celebrate || love || s.joy > 0;
+    const mood: PetMood = t < s.reactUntil ? s.reactMood : s.mood;
+    const act = t < s.actUntil ? s.act : '';
+    const actK = act ? (t - s.actT0) / Math.max(0.001, s.actUntil - s.actT0) : 0;
+    const sleepy = mood === 'sleepy' || act === 'yawn';
+    const sad = mood === 'sad';
+    const angry = mood === 'angry';
+    const rage = mood === 'rage';
+    const love = mood === 'love';
+    const eating = mood === 'eating';
+    const celebrate = mood === 'celebrate';
+    const happy = mood === 'happy' || celebrate || love || s.joy > 0;
+
+    // Acciones espontáneas cuando nadie lo toca (bostezo, saludo, saltito, bailecito…)
+    if (!act && !s.speaking && t > s.nextIdle && t - s.lastInput > 4 && (mood === 'ok' || mood === 'happy')) {
+      const pool = ['yawn', 'look', 'wave', 'wiggle', 'sneeze', 'hop'] as const;
+      const pick = pool[Math.floor(Math.random() * pool.length)]!;
+      if (pick === 'hop') {
+        if (s.jumpY === 0) s.jumpV = 2.4;
+      } else {
+        startAct(pick, pick === 'yawn' ? 1.8 : pick === 'sneeze' ? 1.1 : 1.8);
+      }
+      s.nextIdle = t + 7 + Math.random() * 6;
+    }
+    // Eclosión: el huevo tiembla cada vez más, se agrieta y estalla
+    if (hatching && eggGroup) {
+      if (s.hatchT0 < 0) s.hatchT0 = t;
+      const ht = t - s.hatchT0;
+      if (ht < 1.6) {
+        body.visible = false;
+        const amp = 0.05 + ht * 0.14;
+        eggGroup.rotation.z = Math.sin(t * (4 + ht * 9)) * amp;
+        eggGroup.position.y = -0.08 + Math.abs(Math.sin(t * (4 + ht * 9))) * ht * 0.04;
+        eggCracks.forEach((c, i) => (c.visible = ht > 0.3 + i * 0.22));
+      } else {
+        if (!s.hatched) {
+          s.hatched = true;
+          body.visible = true;
+          s.hatchScale = 0.05;
+          s.jumpV = 3.4;
+          s.spin = 1;
+          s.joy = 1.4;
+          s.reactMood = 'celebrate';
+          s.reactUntil = t + 2.6;
+          hatchFx.start();
+        }
+        const k = ht - 1.6;
+        eggGroup.rotation.z *= 0.85;
+        if (eggTop) {
+          eggTop.position.set(k * 0.9, k * 3.2 - k * k * 4.2, k * 0.3);
+          eggTop.rotation.set(k * 5, 0, -k * 7);
+          eggTop.visible = k < 1.1;
+        }
+        const fade = Math.max(0, 1 - k / 1.0);
+        eggGroup.scale.setScalar(Math.max(0.001, fade));
+        if (k > 1.2) eggGroup.visible = false;
+      }
+    }
+    hatchFx.update(dt);
     const breath = sleepy ? 1.0 : rage ? 6.5 : angry ? 4.2 : 2.2;
 
     // Color del cuerpo según enojo / ira
@@ -1997,7 +2148,7 @@ export function createPetScene(
     }
 
     // Saltos automáticos según estado
-    if ((s.mood === 'happy' || celebrate) && t > s.hopAt && s.jumpY === 0) {
+    if ((mood === 'happy' || celebrate) && t > s.hopAt && s.jumpY === 0) {
       s.jumpV = celebrate ? 3.2 : 2.4;
       s.hopAt = t + (celebrate ? 1.4 : 3 + Math.random() * 4);
     }
@@ -2030,11 +2181,15 @@ export function createPetScene(
     s.squash += s.squashV * sdt;
     const stretch = s.jumpV > 0 ? 1 + Math.min(0.18, s.jumpV * 0.06) : 1;
     const b = Math.sin(t * breath) * 0.018;
-    s.oopsK += ((s.mood === 'oops' ? 1 : 0) - s.oopsK) * Math.min(1, dt * 6);
+    s.oopsK += ((mood === 'oops' ? 1 : 0) - s.oopsK) * Math.min(1, dt * 6);
     const shrink = 1 - s.oopsK * 0.12;
     const sy = baseScaleY * (1 + b) * s.squash * stretch * shrink;
     const sxz = ((baseScaleX * (1 - b * 0.6)) / Math.sqrt(s.squash * stretch)) * (1 - s.oopsK * 0.06);
-    body.scale.set(sxz, sy, sxz);
+    // Al nacer crece desde cero con rebote de gelatina
+    s.hatchV += ((1 - s.hatchScale) * 140 - s.hatchV * 10) * Math.min(dt, 0.05);
+    s.hatchScale += s.hatchV * Math.min(dt, 0.05);
+    const hs = hatching && !s.hatched ? 0.001 : Math.max(0.001, s.hatchScale);
+    body.scale.set(sxz * hs, sy * hs, sxz * hs);
     body.position.y = -(1 - s.squash) * 0.35;
 
     // Temblor horizontal cuando está enojado o con ira
@@ -2049,7 +2204,7 @@ export function createPetScene(
     root.position.x = rageJitterX;
     root.position.y =
       stageLift + s.jumpY + Math.sin(t * breath) * 0.03 - (sad || sleepy ? 0.04 : 0);
-    if (eggGroup) {
+    if (eggGroup && !hatching) {
       // El huevo se mece; más fuerte cuanto más cerca está de eclosionar o al tocarlo.
       const shake = 0.05 * (1 + growth * 2.2) + s.joy * 0.12 + (s.speaking ? 0.05 : 0);
       eggGroup.rotation.z = Math.sin(t * (2.2 + growth * 3)) * shake;
@@ -2113,7 +2268,7 @@ export function createPetScene(
     }
     s.look.lerp(s.lookTarget, Math.min(1, dt * 6));
     const talking = s.speaking;
-    const oops = s.mood === 'oops';
+    const oops = mood === 'oops';
     // Lip-sync cómico: sílabas irregulares mientras habla
     if (talking && t > s.syllableAt) {
       s.syllable = (s.syllable + 1 + Math.floor(Math.random() * 2)) % 3;
@@ -2129,7 +2284,7 @@ export function createPetScene(
             ? 'zigzag'
             : oops
               ? 'wavy'
-              : sad || s.mood === 'hungry'
+              : sad || mood === 'hungry'
                 ? 'frown'
                 : sleepy
                   ? 'half'
@@ -2141,12 +2296,24 @@ export function createPetScene(
     // Las pupilas se deslizan suavemente hacia el objetivo
     s.eyeLook.x += (lookX - s.eyeLook.x) * Math.min(1, dt * 9);
     s.eyeLook.y += (lookY - s.eyeLook.y) * Math.min(1, dt * 9);
+    // Gestos y acciones espontáneas cambian la cara un momento
+    const actMouth: MouthPose | null =
+      act === 'yawn' ? (actK > 0.15 && actK < 0.75 ? 'open' : 'half')
+      : act === 'sneeze' ? (actK < 0.45 ? 'half' : actK < 0.6 ? 'open' : 'happy')
+      : act === 'dizzy' ? 'wavy'
+      : act === 'tickle' || act === 'pat' || act === 'rub' || act === 'hug' || act === 'wave' || act === 'wiggle' || act === 'flip' ? 'happy'
+      : null;
+    const actEyes =
+      act === 'yawn' || act === 'dizzy' || (act === 'sneeze' && actK > 0.4 && actK < 0.65) ? 'closed'
+      : act === 'pat' || act === 'tickle' || act === 'rub' || act === 'hug' ? 'happy'
+      : null;
+    if (act === 'look') s.lookTarget.set(Math.sin(actK * Math.PI * 2) * 0.03, 0.005);
     face.update({
       lookX: s.eyeLook.x,
       lookY: s.eyeLook.y,
-      blink: sleepy ? 1 : 1 - blinkScale,
-      eyes: sleepy ? 'closed' : celebrate || love || (happy && s.joy > 0.3) ? 'happy' : 'open',
-      mouth: mouthPose,
+      blink: actEyes === 'closed' ? 0 : sleepy ? 1 : 1 - blinkScale,
+      eyes: actEyes ?? (sleepy ? 'closed' : celebrate || love || (happy && s.joy > 0.3) ? 'happy' : 'open'),
+      mouth: actMouth ?? mouthPose,
       browTilt: rage ? 0.5 : angry ? 0.35 : oops ? -0.35 : sad ? -0.3 : 0,
       browLift: celebrate || oops ? 0.35 : angry || rage ? -0.2 : 0,
     });
@@ -2201,6 +2368,44 @@ export function createPetScene(
 
     if (hatSpinner) hatSpinner.rotation.y += dt * (happy || s.jumpY > 0 ? 18 : 5);
     if (hatWobble) hatWobble.rotation.z = (hatWobble.userData.baseZ ??= hatWobble.rotation.z) + Math.sin(t * 3.4) * 0.08;
+    // Gestos del jugador y acciones espontáneas
+    if (act === 'tickle') {
+      root.rotation.z += Math.sin(t * 32) * 0.1 * (1 - actK);
+      armL.rotation.z = 1.1 + Math.sin(t * 20) * 0.3;
+      armR.rotation.z = -1.1 - Math.sin(t * 20) * 0.3;
+    } else if (act === 'pat') {
+      armL.rotation.z = 0.9;
+      armR.rotation.z = -0.9;
+    } else if (act === 'flip') {
+      root.rotation.x -= Math.min(1, actK * 1.6) * Math.PI * 2;
+    } else if (act === 'hug' || act === 'rub') {
+      armL.rotation.z = 1.75 + Math.sin(t * 3) * 0.08;
+      armR.rotation.z = -1.75 - Math.sin(t * 3) * 0.08;
+      root.rotation.z += Math.sin(t * 4) * 0.06;
+    } else if (act === 'dizzy') {
+      root.rotation.z += Math.sin(t * 5) * 0.16 * (1 - actK * 0.5);
+      root.rotation.y += Math.sin(t * 3) * 0.2;
+      armL.rotation.z = 0.4 + Math.sin(t * 5) * 0.3;
+      armR.rotation.z = -0.4 + Math.sin(t * 5) * 0.3;
+    } else if (act === 'yawn') {
+      const up = Math.sin(Math.min(1, actK * 1.4) * Math.PI);
+      armL.rotation.z = 0.55 + up * 1.3;
+      armR.rotation.z = -0.55 - up * 1.3;
+    } else if (act === 'wave') {
+      armR.rotation.z = -1.55 - Math.sin(t * 10) * 0.45;
+    } else if (act === 'wiggle') {
+      root.rotation.z += Math.sin(t * 8) * 0.12;
+      armL.rotation.z = 0.9 + Math.sin(t * 8) * 0.5;
+      armR.rotation.z = -0.9 + Math.sin(t * 8) * 0.5;
+    }
+    dizzyStars.visible = act === 'dizzy';
+    if (act === 'dizzy') {
+      dizzyStars.children.forEach((st, i) => {
+        const a = t * 4 + (i / dizzyStars.children.length) * Math.PI * 2;
+        st.position.set(Math.cos(a) * headInfo.w * 0.75, Math.sin(a * 2) * 0.05, Math.sin(a) * headInfo.d * 0.6);
+        st.rotation.z = t * 6;
+      });
+    }
     buddyProps.animate(t, armR, happy || talking ? 1 : 0);
     // Orejas, branquias y copetes que se mecen solos (más rápido si está contento)
     buddy?.wobble.forEach((w) => {
@@ -2293,6 +2498,23 @@ export function createPetScene(
     }
   };
 
+  if (options.focus !== 'face' && !scenario && !inHouse) {
+    // Encuadre automático: la mascota (con gorro, globo, alas…) y su isla llenan el espacio,
+    // con aire para saltar y sin que se corte nada.
+    root.updateMatrixWorld(true);
+    islandPedestal.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const isle = new THREE.Box3().setFromObject(islandPedestal);
+    const top = Math.max(box.max.y + stageLift, 0.95) + 0.5;
+    const bottom = Math.min(-1.3, isle.min.y);
+    const halfW = Math.max(1.3, Math.abs(box.min.x), box.max.x, Math.abs(isle.min.x) * 0.92, isle.max.x * 0.92) + 0.08;
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const center = (top + bottom) / 2;
+    const dist = Math.max((top - bottom) / 2 / tanHalf, halfW / (tanHalf * camera.aspect)) * 1.12;
+    camera.position.set(0, center + dist * 0.12, dist);
+    camera.lookAt(0, center, 0);
+  }
+
   return {
     scene,
     camera,
@@ -2324,6 +2546,49 @@ export function createPetScene(
     lookAt: (x, y) => {
       s.pointer.set(Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y)));
       s.pointerAt = s.now;
+    },
+    poke: (x, y) => {
+      s.lastInput = s.now;
+      if (y > 0.2) {
+        // Caricia en la cabeza: se aplasta contento y suelta corazones
+        startAct('pat', 1.2);
+        s.squash = 0.8;
+        react('love', 1.4);
+      } else if (y < -0.45) {
+        startAct('tickle', 1.1);
+        s.joy = 1;
+      } else if (Math.abs(x) > 0.55) {
+        s.spin = 1;
+        s.joy = 0.8;
+      } else {
+        s.joy = 1.3;
+        s.squash = 0.74;
+        s.launchAt = s.now + 0.09;
+        s.launchV = 2.8;
+      }
+    },
+    flip: () => {
+      s.lastInput = s.now;
+      startAct('flip', 0.9);
+      s.squash = 0.72;
+      s.launchAt = s.now + 0.08;
+      s.launchV = 3.9;
+    },
+    hug: () => {
+      s.lastInput = s.now;
+      startAct('hug', 2.2);
+      s.squash = 0.86;
+      react('love', 2.4);
+    },
+    rub: () => {
+      s.lastInput = s.now;
+      if (s.act !== 'rub' || s.now > s.actUntil) startAct('rub', 2.4);
+      else s.actUntil = s.now + 2.4;
+      react('love', 2.6);
+    },
+    dizzy: () => {
+      s.lastInput = s.now;
+      startAct('dizzy', 2.6);
     },
     drag: (dx, dy) => {
       s.dragging = true;

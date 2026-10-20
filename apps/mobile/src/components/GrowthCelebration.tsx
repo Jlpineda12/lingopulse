@@ -75,17 +75,25 @@ export function GrowthCelebration() {
                 );
               })
             : null}
-          <Pet3D
-            key={shownStage}
-            config={pet}
-            mood={phase === 'after' ? 'celebrate' : 'happy'}
-            stage={shownStage}
-            growth={phase === 'before' ? 1 : 0}
-            reactKey={phase === 'before' ? 1 : 0}
-            size={250}
-            backgroundColor="transparent"
+          {hatched ? (
+            // Eclosión en 3D: el huevo tiembla, se agrieta, la tapa sale volando y aparece el bebé
+            <Pet3D key="hatch" config={pet} mood="happy" stage="baby" hatching size={260} backgroundColor="transparent" />
+          ) : (
+            <Pet3D
+              key={shownStage}
+              config={pet}
+              mood={phase === 'after' ? 'celebrate' : 'happy'}
+              stage={shownStage}
+              growth={phase === 'before' ? 1 : 0}
+              reactKey={phase === 'before' ? 1 : 0}
+              size={250}
+              backgroundColor="transparent"
+            />
+          )}
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.flash, { opacity: hatched ? flash.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }) : flash }]}
           />
-          <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flash }]} />
         </View>
 
         {phase === 'before' ? (

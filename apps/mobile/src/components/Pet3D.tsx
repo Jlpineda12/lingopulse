@@ -49,6 +49,8 @@ interface Pet3DProps {
   focus?: 'face' | 'body';
   /** Isla temática (decorado + invitado + acción). */
   scenario?: { theme: UnitSceneTheme; action: PetSceneAction; npc: SceneNpc };
+  /** Reproduce la eclosión (el huevo estalla y sale la mascota bebé). */
+  hatching?: boolean;
 }
 
 // Three.js llama a estas funciones de expo-gl que no implementa; silenciamos el ruido.
@@ -80,6 +82,7 @@ export function Pet3D({
   growth = 0,
   focus = 'body',
   scenario,
+  hatching = false,
 }: Pet3DProps) {
   const height = Math.round(size * aspectRatio);
   const handleRef = useRef<PetSceneHandle | null>(null);
@@ -90,7 +93,7 @@ export function Pet3D({
   // El huevo solo se reconstruye cuando cambia una grieta (cuartos de progreso), no con cada punto de XP.
   const growthStep = Math.floor(growth * 8);
   const configKey =
-    JSON.stringify(config) + (house ? JSON.stringify(house) : '') + `|${stage}|${growthStep}|${focus}|${scenario ? `${scenario.theme}:${scenario.action}:${scenario.npc}` : ''}`;
+    JSON.stringify(config) + (house ? JSON.stringify(house) : '') + `|${stage}|${growthStep}|${focus}|${hatching}|${scenario ? `${scenario.theme}:${scenario.action}:${scenario.npc}` : ''}`;
   const mountRef = useRef<View | null>(null);
 
   useEffect(() => {
@@ -113,6 +116,71 @@ export function Pet3D({
     handleRef.current = h;
   };
 
+  /**
+   * Gestos sobre la mascota (web y nativo): tocar (cabeza = caricia, barriga = cosquillas,
+   * lado = giro), doble toque = voltereta, mantener = abrazo, frotar = mimos, agitar = mareo.
+   */
+  const gestures = useMemo(() => {
+    const g = { x: 0, y: 0, t: 0, moved: 0, lastTap: 0, flips: 0, lastSign: 0, flipWindow: 0, shake: 0, lastMoveT: 0, longFired: false, timer: null as ReturnType<typeof setTimeout> | null };
+    const norm = (x: number, y: number, w: number, hgt: number) => ({ nx: (x - w / 2) / (w / 2), ny: -(y - hgt * 0.5) / (hgt / 2) });
+    return {
+      down(x: number, y: number) {
+        const now = Date.now();
+        Object.assign(g, { x, y, t: now, moved: 0, flips: 0, lastSign: 0, flipWindow: now, shake: 0, lastMoveT: now, longFired: false });
+        if (g.timer) clearTimeout(g.timer);
+        g.timer = setTimeout(() => {
+          if (g.moved < 10) {
+            g.longFired = true;
+            handleRef.current?.hug();
+            haptic('success');
+          }
+        }, 550);
+      },
+      move(dx: number, dy: number) {
+        const now = Date.now();
+        g.moved += Math.abs(dx) + Math.abs(dy);
+        // Frotar: varios cambios de dirección seguidos
+        const sign = Math.abs(dx) > 1.5 ? Math.sign(dx) : 0;
+        if (sign && g.lastSign && sign !== g.lastSign) g.flips += 1;
+        if (sign) g.lastSign = sign;
+        if (now - g.flipWindow > 1400) {
+          g.flipWindow = now;
+          g.flips = 0;
+        }
+        if (g.flips >= 4) {
+          g.flips = 0;
+          handleRef.current?.rub();
+          haptic('light');
+        }
+        // Agitar: velocidad alta sostenida
+        const speed = (Math.abs(dx) + Math.abs(dy)) / Math.max(1, now - g.lastMoveT);
+        g.lastMoveT = now;
+        g.shake = speed > 2.2 ? g.shake + 1 : Math.max(0, g.shake - 0.5);
+        if (g.shake > 10) {
+          g.shake = -30;
+          handleRef.current?.dizzy();
+          haptic('medium');
+        }
+      },
+      up(x: number, y: number, w: number, hgt: number) {
+        if (g.timer) clearTimeout(g.timer);
+        g.timer = null;
+        if (g.longFired || g.moved >= 8) return false;
+        const now = Date.now();
+        const h = handleRef.current;
+        if (now - g.lastTap < 320) {
+          h?.flip();
+          g.lastTap = 0;
+        } else {
+          const { nx, ny } = norm(x, y, w, hgt);
+          h?.poke(nx, ny);
+          g.lastTap = now;
+        }
+        return true;
+      },
+    };
+  }, []);
+
   /** Las pupilas siguen el dedo: coordenadas relativas a la cabeza (≈ 35 % de la altura). */
   const lookAtTouch = (x: number, y: number) =>
     handleRef.current?.lookAt((x - size / 2) / (size / 2), -(y - height * 0.35) / (height / 2));
@@ -124,23 +192,26 @@ export function Pet3D({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 4,
         onPanResponderTerminationRequest: () => true,
-        onPanResponderGrant: (e) => lookAtTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
+        onPanResponderGrant: (e) => {
+          lookAtTouch(e.nativeEvent.locationX, e.nativeEvent.locationY);
+          gestures.down(e.nativeEvent.locationX, e.nativeEvent.locationY);
+        },
         onPanResponderMove: (e, g) => {
           const h = handleRef.current as (PetSceneHandle & { _last?: { x: number; y: number } }) | null;
           if (!h) return;
           lookAtTouch(e.nativeEvent.locationX, e.nativeEvent.locationY);
           const last = h._last ?? { x: 0, y: 0 };
+          gestures.move(g.dx - last.x, g.dy - last.y);
           h.drag(g.dx - last.x, g.dy - last.y);
           h._last = { x: g.dx, y: g.dy };
         },
-        onPanResponderRelease: (_e, g) => {
+        onPanResponderRelease: (e) => {
           const h = handleRef.current as (PetSceneHandle & { _last?: { x: number; y: number } }) | null;
           if (h) {
             h._last = undefined;
             h.release();
           }
-          if (Math.abs(g.dx) + Math.abs(g.dy) < 8) {
-            handleRef.current?.joy();
+          if (gestures.up(e.nativeEvent.locationX, e.nativeEvent.locationY, size, height)) {
             haptic('medium');
             onTapRef.current?.();
           }
@@ -177,18 +248,22 @@ export function Pet3D({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
 
-    const h = createPetScene(config, size / height, { house, stage, growth: growthStep / 8, focus, scenario });
+    const h = createPetScene(config, size / height, { house, stage, growth: growthStep / 8, focus, scenario, hatching });
     attach(h);
 
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
-    let moved = 0;
+    const local = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
     const down = (e: PointerEvent) => {
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
-      moved = 0;
+      const p = local(e);
+      gestures.down(p.x, p.y);
       canvas.style.cursor = 'grabbing';
     };
     const move = (e: PointerEvent) => {
@@ -200,20 +275,18 @@ export function Pet3D({
       if (!dragging) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
-      moved += Math.abs(dx) + Math.abs(dy);
+      gestures.move(dx, dy);
       h.drag(dx, dy);
       lastX = e.clientX;
       lastY = e.clientY;
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       if (!dragging) return;
       dragging = false;
       canvas.style.cursor = 'grab';
       h.release();
-      if (moved < 8) {
-        h.joy();
-        onTapRef.current?.();
-      }
+      const p = local(e);
+      if (gestures.up(p.x, p.y, size, height)) onTapRef.current?.();
     };
     canvas.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
@@ -298,7 +371,7 @@ export function Pet3D({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
 
-    const h = createPetScene(config, w / hgt, { house, stage, growth: growthStep / 8, focus, scenario });
+    const h = createPetScene(config, w / hgt, { house, stage, growth: growthStep / 8, focus, scenario, hatching });
     attach(h);
 
     let raf = 0;
